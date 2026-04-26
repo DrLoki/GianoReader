@@ -264,6 +264,20 @@ body {
   color: var(--text-muted); font-style: italic; font-size: 0.9em;
 }
 
+/* ── No-book placeholder ── */
+#no-book-placeholder {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  background: var(--surface);
+}
+#no-book-placeholder.hidden { display: none; }
+#no-book-placeholder img {
+  width: clamp(120px, 60vw, 1200px);
+  opacity: 0.20;
+  user-select: none;
+}
+
 /* ── Loading overlay ── */
 #loading-overlay {
   position: absolute; inset: 0;

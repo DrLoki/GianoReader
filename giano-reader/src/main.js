@@ -37,6 +37,7 @@ const translationLangLabel = document.getElementById('translation-lang-label');
 const translationStatus    = document.getElementById('translation-status');
 const loadingOverlay       = document.getElementById('loading-overlay');
 const loadingText          = document.getElementById('loading-text');
+const noBookPlaceholder    = document.getElementById('no-book-placeholder');
 const tocList              = document.getElementById('toc-list');
 const tocPlaceholder       = document.getElementById('toc-placeholder');
 const bookInfo             = document.getElementById('book-info');
@@ -65,12 +66,15 @@ darkModeChk.addEventListener('change', () => {
 });
 
 // ── Utilità UI ─────────────────────────────────────────────────────────────
-function showLoading(msg = 'Caricamento...') {
+function showLoading(msg = 'Loading...') {
   loadingText.textContent = msg;
   loadingOverlay.classList.remove('hidden');
 }
 function hideLoading() {
   loadingOverlay.classList.add('hidden');
+}
+function hideNoBookPlaceholder() {
+  noBookPlaceholder.classList.add('hidden');
 }
 function setTranslationStatus(msg) {
   translationStatus.textContent = msg;
@@ -92,7 +96,7 @@ async function showAlert(msg) {
 
 // Estrae un messaggio leggibile da qualsiasi tipo di errore (string, Error, oggetto Tauri)
 function errMsg(err) {
-  if (!err) return 'Errore sconosciuto';
+  if (!err) return 'Unknown error';
   if (typeof err === 'string') return err;
   if (err.message) return err.message;
   try { return JSON.stringify(err); } catch { return String(err); }
@@ -113,7 +117,7 @@ function updateProgress() {
   const pct = total === 1 ? 0 : (currentSpineIndex / (total - 1)) * 100;
   progressFill.style.width = `${pct}%`;
   progressThumb.style.left = `${pct}%`;
-  pageInfo.textContent = `Cap. ${currentSpineIndex + 1} / ${total}`;
+  pageInfo.textContent = `Ch. ${currentSpineIndex + 1} / ${total}`;
   prevBtn.disabled = currentSpineIndex <= 0;
   nextBtn.disabled = currentSpineIndex >= total - 1;
 }
@@ -156,7 +160,7 @@ function buildProgressTicks(spineItems, tocItems) {
     const label = labelMap[href]
       || labelMap[item.href]
       || href.split('/').pop().replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')
-      || `Cap. ${i + 1}`;
+      || `Ch. ${i + 1}`;
     tick.dataset.label = label;
 
     tick.addEventListener('click', e => { e.stopPropagation(); displayChapter(i); });
@@ -261,7 +265,7 @@ async function translateCurrentChapter(startPct = 0) {
   translationLangLabel.textContent = langSelect.options[langSelect.selectedIndex].text;
 
   if (!currentChapterParagraphs.length) {
-    renderTranslationPlaceholder('Nessun testo da tradurre.');
+    renderTranslationPlaceholder('No text to translate.');
     return;
   }
 
@@ -371,10 +375,10 @@ openBtn.addEventListener('click', async () => {
     const ext = fileName.split('.').pop().toLowerCase();
     if (ext === 'epub') await loadEpub(fileData, fileName);
     else if (['mobi','azw','azw3'].includes(ext)) await loadMobi(fileData, fileName);
-    else await showAlert('Formato non supportato. Usa EPUB o MOBI/AZW.');
+    else await showAlert('Unsupported format. Please use EPUB or MOBI/AZW.');
   } catch (err) {
     console.error('[open]', err);
-    await showAlert('Errore apertura: ' + errMsg(err));
+    await showAlert('Error opening file: ' + errMsg(err));
   }
 });
 
@@ -395,7 +399,8 @@ function pickFileViaInput() {
 
 // ── Carica EPUB ────────────────────────────────────────────────────────────
 async function loadEpub(arrayBuffer, filePath = '') {
-  showLoading('Caricamento EPUB...');
+  showLoading('Loading EPUB...');
+  hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
     if (book) { book.destroy(); book = null; rendition = null; }
@@ -406,7 +411,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
     await book.ready;
 
     const meta = await book.loaded.metadata;
-    bookTitle.textContent  = meta.title   || 'Titolo sconosciuto';
+    bookTitle.textContent  = meta.title   || 'Unknown title';
     bookAuthor.textContent = meta.creator || '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
@@ -455,7 +460,7 @@ async function displayChapter(index, scrollPct = 0) {
   currentSpineIndex = index;
   currentChapterParagraphs = [];
   renderOriginal([]);
-  renderTranslationPlaceholder('Caricamento capitolo...');
+  renderTranslationPlaceholder('Loading chapter...');
   updateProgress();
 
   const item = currentSpineItems[index];
@@ -477,7 +482,7 @@ async function displayChapter(index, scrollPct = 0) {
     if (currentSpineIndex !== myIndex) return;
     console.error('[nav] errore:', err);
     renderOriginal([]);
-    renderTranslationPlaceholder('Errore caricamento capitolo: ' + errMsg(err));
+    renderTranslationPlaceholder('Error loading chapter: ' + errMsg(err));
   }
 }
 
@@ -508,13 +513,14 @@ async function loadChapterDocument(spineItem) {
 
 // ── Carica MOBI ────────────────────────────────────────────────────────────
 async function loadMobi(arrayBuffer, filePath = '') {
-  showLoading('Caricamento MOBI...');
+  showLoading('Loading MOBI...');
+  hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
     if (book) { book.destroy(); book = null; rendition = null; }
     currentSpineItems = [];
     const { title, htmlContent } = await parseMobi(arrayBuffer);
-    bookTitle.textContent  = title || 'Titolo sconosciuto';
+    bookTitle.textContent  = title || 'Unknown title';
     bookAuthor.textContent = '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
@@ -624,7 +630,7 @@ function saveBookmarks(bms) {
 // Restituisce la label del capitolo corrente dalla progress bar
 function getChapterLabel(index) {
   const tick = progressTicks.querySelector(`[data-idx="${index}"]`);
-  return tick?.dataset.label || `Capitolo ${index + 1}`;
+  return tick?.dataset.label || `Chapter ${index + 1}`;
 }
 
 // Aggiunge un segnalibro per il capitolo corrente
@@ -668,7 +674,7 @@ function renderBookmarks() {
         <span class="bm-title" title="${escapeHtml(bm.bookTitle || bm.fileName)}">${escapeHtml(bm.bookTitle || bm.fileName)}</span>
         <span class="bm-chapter">${escapeHtml(bm.chapterLabel)}${bm.scrollPct != null ? ` · ${bm.scrollPct}%` : ''}</span>
       </span>
-      <button class="bm-delete" title="Elimina segnalibro" data-id="${bm.id}">✕</button>
+      <button class="bm-delete" title="Delete bookmark" data-id="${bm.id}">✕</button>
     `;
     li.querySelector('.bm-info').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
     li.querySelector('.bm-icon').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
@@ -708,9 +714,9 @@ bmExportBtn.addEventListener('click', async () => {
       });
       if (!filePath) return;
       await writeTextFile(filePath, json);
-      await showAlert(`Segnalibri esportati in:\n${filePath}`);
+      await showAlert(`Bookmarks exported to:\n${filePath}`);
     } catch (err) {
-      await showAlert('Errore esportazione: ' + errMsg(err));
+      await showAlert('Export error: ' + errMsg(err));
     }
   } else {
     const blob = new Blob([json], { type: 'application/json' });
@@ -720,7 +726,7 @@ bmExportBtn.addEventListener('click', async () => {
     a.download = 'giano-bookmarks.json';
     a.click();
     URL.revokeObjectURL(url);
-    await showAlert('File salvato nella cartella Download del browser come "giano-bookmarks.json".');
+    await showAlert('File saved to the browser Downloads folder as "giano-bookmarks.json".');
   }
 });
 
@@ -733,15 +739,15 @@ bmImportInput.addEventListener('change', async () => {
   try {
     const text = await file.text();
     const imported = JSON.parse(text);
-    if (!Array.isArray(imported)) throw new Error('Formato non valido');
+    if (!Array.isArray(imported)) throw new Error('Invalid format');
     const existing = loadBookmarks();
     const existingIds = new Set(existing.map(b => b.id));
     const toAdd = imported.filter(b => b && b.id && !existingIds.has(b.id));
     saveBookmarks([...existing, ...toAdd]);
     renderBookmarks();
-    await showAlert(`Importati ${toAdd.length} segnalibri (${imported.length - toAdd.length} già presenti ignorati).`);
+    await showAlert(`Imported ${toAdd.length} bookmarks (${imported.length - toAdd.length} duplicates skipped).`);
   } catch (err) {
-    await showAlert('Errore importazione: ' + errMsg(err));
+    await showAlert('Import error: ' + errMsg(err));
   }
 });
 
@@ -801,19 +807,18 @@ async function openBookmark(bm) {
 
   if (!hasAbsolutePath) {
     if (isTauri) {
-      // Path non assoluto: chiedi subito dove si trova il file
+      // Path not absolute: ask user to locate the file
       const newPath = await askRelocate(bm);
       if (!newPath) return;
       updateBookmarkPath(bm, newPath);
-      // Ora bm.filePath è aggiornato, procedi con l'apertura
     } else {
-      await showAlert(`Apri manualmente il file "${bm.fileName}" e vai al capitolo: ${bm.chapterLabel}`);
+      await showAlert(`Please open the file "${bm.fileName}" manually and navigate to: ${bm.chapterLabel}`);
       return;
     }
   }
 
   if (!isTauri) {
-    await showAlert(`Apri manualmente il file "${bm.fileName}" e vai al capitolo: ${bm.chapterLabel}`);
+    await showAlert(`Please open the file "${bm.fileName}" manually and navigate to: ${bm.chapterLabel}`);
     return;
   }
 
@@ -868,16 +873,15 @@ async function loadBookmarkFile(bm) {
       restoreScrollPct(bm.scrollPct);
     }
   } catch (err) {
-    console.error('[bookmark] errore apertura:', err);
+    console.error('[bookmark] open error:', err);
     const msg = errMsg(err);
-    // Se il path è diventato inaccessibile (permessi, file spostato), offri rilocazione
     if (msg.includes('forbidden') || msg.includes('not allowed') || msg.includes('No such file') || msg.includes('os error')) {
       const newPath = await askRelocate(bm);
       if (!newPath) return;
       updateBookmarkPath(bm, newPath);
-      await loadBookmarkFile(bm); // riprova con il nuovo path
+      await loadBookmarkFile(bm);
     } else {
-      await showAlert('Errore apertura file: ' + msg);
+      await showAlert('Error opening file: ' + msg);
     }
   }
 }

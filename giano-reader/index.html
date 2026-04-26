@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,8 +13,8 @@
         <h1>🎭 Giano Reader</h1>
       </div>
       <div id="sidebar-controls">
-        <button id="open-btn">+ Apri libro</button>
-        <label for="lang-select">Lingua traduzione</label>
+        <button id="open-btn">+ Open book</button>
+        <label for="lang-select">Translation language</label>
         <select id="lang-select">
           <option value="it">🇮🇹 Italiano</option>
           <option value="en">🇬🇧 English</option>
@@ -26,24 +26,26 @@
           <option value="zh">🇨🇳 中文</option>
           <option value="ja">🇯🇵 日本語</option>
           <option value="ar">🇸🇦 العربية</option>
+          <option value="fil">🇵🇭 Filipino</option>
+          <option value="sq">🇦🇱 Shqip</option>
         </select>
       </div>
       <div id="book-info" class="hidden">
-        <img id="cover-img" src="" alt="Copertina" />
+        <img id="cover-img" src="" alt="Cover" />
         <div id="book-meta">
           <p id="book-title"></p>
           <p id="book-author"></p>
         </div>
       </div>
       <nav id="toc-container">
-        <p id="toc-placeholder">Nessun libro aperto</p>
+        <p id="toc-placeholder">No book open</p>
         <ul id="toc-list"></ul>
       </nav>
 
       <!-- Segnalibri in fondo alla sidebar -->
       <div id="bookmarks-bar">
-        <button id="bookmarks-open-btn" title="Apri segnalibri">🔖 Segnalibri</button>
-        <button id="add-bookmark-btn" title="Aggiungi segnalibro al capitolo corrente" disabled>★</button>
+        <button id="bookmarks-open-btn" title="Open bookmarks">🔖 Bookmarks</button>
+        <button id="add-bookmark-btn" title="Add bookmark at current position" disabled>★</button>
       </div>
     </aside>
 
@@ -53,27 +55,31 @@
         <div id="font-controls">
           <button id="font-dec">A-</button>
           <button id="font-inc">A+</button>
-          <label><input type="checkbox" id="dark-mode" checked /> Notte</label>
+          <label><input type="checkbox" id="dark-mode" checked /> Night</label>
         </div>
       </div>
 
       <!-- Layout sempre affiancato -->
       <div id="viewer-wrapper">
         <div id="original-panel">
-          <div id="original-header">Originale</div>
+          <div id="original-header">Original</div>
           <div id="original-viewer" class="text-panel"></div>
         </div>
         <div id="divider"></div>
         <div id="translation-panel">
           <div id="translation-header">
-            <span id="translation-lang-label">Traduzione</span>
+            <span id="translation-lang-label">Translation</span>
             <span id="translation-status"></span>
           </div>
           <div id="translation-viewer" class="text-panel"></div>
         </div>
         <div id="loading-overlay" class="hidden">
           <div class="spinner"></div>
-          <p id="loading-text">Caricamento...</p>
+          <p id="loading-text">Loading...</p>
+        </div>
+        <!-- Placeholder visibile quando nessun libro è aperto -->
+        <div id="no-book-placeholder">
+          <img src="/logo.png" alt="Giano Reader" />
         </div>
       </div>
 
@@ -98,15 +104,15 @@
   <div id="bookmarks-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-modal-title">
     <div class="modal-box modal-box--bookmarks">
       <div class="modal-header">
-        <h2 id="bm-modal-title">🔖 Segnalibri</h2>
-        <button id="bm-close-btn" class="modal-close" title="Chiudi">✕</button>
+        <h2 id="bm-modal-title">🔖 Bookmarks</h2>
+        <button id="bm-close-btn" class="modal-close" title="Close">✕</button>
       </div>
       <ul id="bookmarks-list">
-        <li id="bookmarks-placeholder">Nessun segnalibro salvato</li>
+        <li id="bookmarks-placeholder">No bookmarks saved</li>
       </ul>
       <div class="modal-footer">
-        <button id="bm-import-btn" title="Importa segnalibri da JSON">⬆️</button>
-        <button id="bm-export-btn" title="Esporta segnalibri in JSON">⬇️</button>
+        <button id="bm-import-btn" title="Import bookmarks from JSON">⬆️</button>
+        <button id="bm-export-btn" title="Export bookmarks to JSON">⬇️</button>
         <input type="file" id="bm-import-input" accept=".json" style="display:none" />
       </div>
     </div>
@@ -115,11 +121,11 @@
   <!-- Modal: file segnalibro non trovato -->
   <div id="bookmark-missing-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-missing-modal-title">
     <div class="modal-box">
-      <h2 id="bm-missing-modal-title">File non trovato</h2>
-      <p id="bm-modal-msg">Il file <strong id="bm-missing-name"></strong> non è stato trovato nella posizione salvata. Indica la nuova posizione del file.</p>
+      <h2 id="bm-missing-modal-title">File not found</h2>
+      <p id="bm-modal-msg">The file <strong id="bm-missing-name"></strong> was not found at the saved location. Please locate the file.</p>
       <div class="modal-actions">
-        <button id="bm-relocate-btn">Sfoglia...</button>
-        <button id="bm-cancel-btn" class="secondary">Annulla</button>
+        <button id="bm-relocate-btn">Browse...</button>
+        <button id="bm-cancel-btn" class="secondary">Cancel</button>
       </div>
     </div>
   </div>
