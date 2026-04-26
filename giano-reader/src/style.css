@@ -428,3 +428,140 @@ body {
   background: #3a3a3a; color: #ccc;
 }
 .modal-actions button:hover { opacity: 0.85; }
+
+/* ── Temi ── */
+body.theme-light {
+  --bg:          #f5f0e8;
+  --surface:     #fff;
+  --sidebar-bg:  #2c2c2c;
+  --text:        #222;
+  --text-muted:  #888;
+  --border:      #ddd;
+  --toolbar-bg:  #fff;
+  --progress-bg: #ddd;
+  --progress-fg: #c0392b;
+  --thumb-bg:    #555;
+  --scrollbar-track: #f0f0f0;
+  --scrollbar-thumb: #bbb;
+  --scrollbar-hover: #999;
+}
+
+body.theme-monokai {
+  --bg:          #272822;
+  --surface:     #1e1f1c;
+  --sidebar-bg:  #1e1f1c;
+  --accent:      #a6e22e;
+  --text:        #f8f8f2;
+  --text-muted:  #75715e;
+  --border:      #3e3d32;
+  --toolbar-bg:  #272822;
+  --progress-bg: #3e3d32;
+  --progress-fg: #a6e22e;
+  --thumb-bg:    #f8f8f2;
+  --scrollbar-track: #1e1f1c;
+  --scrollbar-thumb: #49483e;
+  --scrollbar-hover: #75715e;
+}
+
+body.theme-solarized-dark {
+  --bg:          #002b36;
+  --surface:     #073642;
+  --sidebar-bg:  #073642;
+  --accent:      #268bd2;
+  --text:        #839496;
+  --text-muted:  #586e75;
+  --border:      #073642;
+  --toolbar-bg:  #002b36;
+  --progress-bg: #073642;
+  --progress-fg: #268bd2;
+  --thumb-bg:    #839496;
+  --scrollbar-track: #002b36;
+  --scrollbar-thumb: #073642;
+  --scrollbar-hover: #586e75;
+}
+
+body.theme-nord {
+  --bg:          #2e3440;
+  --surface:     #3b4252;
+  --sidebar-bg:  #2e3440;
+  --accent:      #88c0d0;
+  --text:        #eceff4;
+  --text-muted:  #4c566a;
+  --border:      #434c5e;
+  --toolbar-bg:  #2e3440;
+  --progress-bg: #434c5e;
+  --progress-fg: #88c0d0;
+  --thumb-bg:    #eceff4;
+  --scrollbar-track: #2e3440;
+  --scrollbar-thumb: #434c5e;
+  --scrollbar-hover: #4c566a;
+}
+
+body.theme-sepia {
+  --bg:          #f4ecd8;
+  --surface:     #fdf6e3;
+  --sidebar-bg:  #3a2e22;
+  --accent:      #8b5e3c;
+  --text:        #3a2e22;
+  --text-muted:  #9e8c76;
+  --border:      #d6c9a8;
+  --toolbar-bg:  #f4ecd8;
+  --progress-bg: #d6c9a8;
+  --progress-fg: #8b5e3c;
+  --thumb-bg:    #3a2e22;
+  --scrollbar-track: #f4ecd8;
+  --scrollbar-thumb: #c4b49a;
+  --scrollbar-hover: #9e8c76;
+}
+
+/* ── Sidebar header con gear ── */
+#sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+#settings-btn {
+  background: none; border: none;
+  color: #888; cursor: pointer;
+  font-size: 1rem; padding: 2px 4px;
+  border-radius: 3px; line-height: 1;
+}
+#settings-btn:hover { color: #e0e0e0; background: #2a2a2a; }
+
+/* ── Modal settings ── */
+.modal-box--settings {
+  max-width: 380px; width: 92%;
+}
+.settings-row {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 18px;
+}
+.settings-row:last-child { margin-bottom: 0; }
+.settings-row label {
+  font-size: 0.78rem; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.settings-row select {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--bg); color: var(--text);
+  font-size: 0.88rem; cursor: pointer;
+}
+
+/* ── RTL support (Arabic) ── */
+html.rtl #app                { flex-direction: row-reverse; }
+html.rtl #sidebar            { border-right: none; border-left: 1px solid var(--border); }
+html.rtl #toc-list li a      { border-left: none; border-right: 3px solid transparent; }
+html.rtl #toc-list li a.active { border-right-color: var(--accent); }
+html.rtl #toc-list li a:hover  { border-right-color: var(--accent); }
+html.rtl #bookmarks-bar      { flex-direction: row-reverse; }
+html.rtl .bookmark-item      { flex-direction: row-reverse; border-left: none; border-right: 3px solid transparent; }
+html.rtl .bookmark-item:hover { border-right-color: var(--accent); }
+html.rtl #toolbar            { flex-direction: row-reverse; }
+html.rtl #font-controls      { flex-direction: row-reverse; }
+html.rtl #viewer-wrapper     { flex-direction: row-reverse; }
+html.rtl #progress-bar-wrap  { flex-direction: row-reverse; }
+html.rtl .modal-header       { flex-direction: row-reverse; }
+html.rtl .modal-footer       { flex-direction: row-reverse; }
+html.rtl .modal-actions      { flex-direction: row-reverse; }
+html.rtl .settings-row select { text-align: right; }
+html.rtl #page-info          { text-align: left; }
+html.rtl .text-panel         { direction: rtl; text-align: right; }

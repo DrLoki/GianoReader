@@ -1,6 +1,8 @@
 import ePub from 'epubjs';
 import { translateParagraphs } from './translator.js';
 import { parseMobi } from './mobi.js';
+import { t } from './i18n.js';
+import { RTL_LANGS } from './i18n.js';
 
 // ── Stato applicazione ─────────────────────────────────────────────────────
 let book = null;                    // istanza epubjs corrente
@@ -30,7 +32,6 @@ const progressTooltip      = document.getElementById('progress-tooltip');
 const langSelect           = document.getElementById('lang-select');
 const fontDec              = document.getElementById('font-dec');
 const fontInc              = document.getElementById('font-inc');
-const darkModeChk          = document.getElementById('dark-mode');
 const originalViewer       = document.getElementById('original-viewer');
 const translationViewer    = document.getElementById('translation-viewer');
 const translationLangLabel = document.getElementById('translation-lang-label');
@@ -58,16 +59,104 @@ const bookmarkMissingModal = document.getElementById('bookmark-missing-modal');
 const bmMissingName        = document.getElementById('bm-missing-name');
 const bmRelocateBtn        = document.getElementById('bm-relocate-btn');
 const bmCancelBtn          = document.getElementById('bm-cancel-btn');
+// Settings
+const settingsBtn          = document.getElementById('settings-btn');
+const settingsModal        = document.getElementById('settings-modal');
+const settingsCloseBtn     = document.getElementById('settings-close-btn');
+const uiLangSelect         = document.getElementById('ui-lang-select');
+const themeSelect          = document.getElementById('theme-select');
 
-// ── Dark mode ──────────────────────────────────────────────────────────────
-// body ha già class="dark" nell'HTML; il checkbox è checked di default
-darkModeChk.addEventListener('change', () => {
-  document.body.classList.toggle('dark', darkModeChk.checked);
+// ── Settings ───────────────────────────────────────────────────────────────
+const SETTINGS_KEY = 'giano-reader-settings';
+const THEMES = ['dark', 'light', 'monokai', 'solarized-dark', 'nord', 'sepia'];
+
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch { return {}; }
+}
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+function applyTheme(theme) {
+  document.body.classList.remove('dark', ...THEMES.map(t => `theme-${t}`));
+  if (theme === 'dark') {
+    document.body.classList.add('dark');
+  } else {
+    document.body.classList.add(`theme-${theme}`);
+  }
+}
+
+function applyUiLang(lang) {
+  document.documentElement.lang = lang;
+  // RTL support
+  const isRtl = RTL_LANGS.has(lang);
+  document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
+  document.documentElement.classList.toggle('rtl', isRtl);
+  // Sidebar
+  openBtn.textContent                                    = t(lang, 'openBook');
+  document.querySelector('label[for="lang-select"]').textContent = t(lang, 'translationLanguage');
+  tocPlaceholder.textContent                             = t(lang, 'noBookOpen');
+  bookmarksOpenBtn.textContent                           = t(lang, 'bookmarks');
+  addBookmarkBtn.title                                   = t(lang, 'addBookmark');
+  bookmarksOpenBtn.title                                 = t(lang, 'openBookmarks');
+  // Viewer headers
+  document.getElementById('original-header').textContent = t(lang, 'original');
+  // Settings modal labels
+  document.querySelector('label[for="ui-lang-select"]').textContent = t(lang, 'interfaceLanguage');
+  document.querySelector('label[for="theme-select"]').textContent   = t(lang, 'theme');
+  document.getElementById('settings-modal-title').textContent       = '⚙️ ' + t(lang, 'settings');
+  settingsCloseBtn.title                                             = t(lang, 'close');
+  // Bookmarks modal
+  document.getElementById('bm-modal-title').textContent    = t(lang, 'bookmarks');
+  bmCloseBtn.title                                          = t(lang, 'close');
+  bmImportBtn.title                                         = t(lang, 'importBookmarks');
+  bmExportBtn.title                                         = t(lang, 'exportBookmarks');
+  bookmarksPlaceholder.textContent                          = t(lang, 'noBookmarksSaved');
+  // Missing file modal
+  document.getElementById('bm-missing-modal-title').textContent = t(lang, 'fileNotFound');
+  bmRelocateBtn.textContent                                      = t(lang, 'browse');
+  bmCancelBtn.textContent                                        = t(lang, 'cancel');
+  // Progress bar buttons
+  prevBtn.title = 'Previous chapter';
+  nextBtn.title = 'Next chapter';
+  settingsBtn.title = t(lang, 'settings');
+}
+
+// Init from saved settings
+(function initSettings() {
+  const s = loadSettings();
+  const theme = s.theme || 'dark';
+  const uiLang = s.uiLang || 'en';
+  applyTheme(theme);
+  themeSelect.value = theme;
+  uiLangSelect.value = uiLang;
+  applyUiLang(uiLang);
+})();
+
+themeSelect.addEventListener('change', () => {
+  const s = loadSettings();
+  s.theme = themeSelect.value;
+  saveSettings(s);
+  applyTheme(s.theme);
 });
 
+uiLangSelect.addEventListener('change', () => {
+  const s = loadSettings();
+  s.uiLang = uiLangSelect.value;
+  saveSettings(s);
+  applyUiLang(s.uiLang);
+});
+
+settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.add('hidden'); });
+
+// Shorthand: translate using current UI language
+function ui(key, vars) { return t(loadSettings().uiLang || 'en', key, vars); }
+
 // ── Utilità UI ─────────────────────────────────────────────────────────────
-function showLoading(msg = 'Loading...') {
-  loadingText.textContent = msg;
+function showLoading(msg) {
+  loadingText.textContent = msg || ui('loading');
   loadingOverlay.classList.remove('hidden');
 }
 function hideLoading() {
@@ -243,7 +332,7 @@ function bindSyncScroll() {
 function renderOriginal(paragraphs) {
   originalViewer.innerHTML = paragraphs.length
     ? paragraphsToHtml(paragraphs)
-    : '<p class="placeholder">Nessun contenuto</p>';
+    : `<p class="placeholder">${ui('noContent')}</p>`;
   originalViewer.scrollTop = 0;
 }
 function renderTranslationPlaceholder(msg) {
@@ -265,7 +354,7 @@ async function translateCurrentChapter(startPct = 0) {
   translationLangLabel.textContent = langSelect.options[langSelect.selectedIndex].text;
 
   if (!currentChapterParagraphs.length) {
-    renderTranslationPlaceholder('No text to translate.');
+    renderTranslationPlaceholder(ui('noTextToTranslate'));
     return;
   }
 
@@ -375,10 +464,10 @@ openBtn.addEventListener('click', async () => {
     const ext = fileName.split('.').pop().toLowerCase();
     if (ext === 'epub') await loadEpub(fileData, fileName);
     else if (['mobi','azw','azw3'].includes(ext)) await loadMobi(fileData, fileName);
-    else await showAlert('Unsupported format. Please use EPUB or MOBI/AZW.');
+    else await showAlert(ui('unsupportedFormat'));
   } catch (err) {
     console.error('[open]', err);
-    await showAlert('Error opening file: ' + errMsg(err));
+    await showAlert(ui('errorOpening') + errMsg(err));
   }
 });
 
@@ -399,7 +488,7 @@ function pickFileViaInput() {
 
 // ── Carica EPUB ────────────────────────────────────────────────────────────
 async function loadEpub(arrayBuffer, filePath = '') {
-  showLoading('Loading EPUB...');
+  showLoading(ui('loadingEpub'));
   hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
@@ -411,7 +500,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
     await book.ready;
 
     const meta = await book.loaded.metadata;
-    bookTitle.textContent  = meta.title   || 'Unknown title';
+    bookTitle.textContent  = meta.title   || ui('unknownTitle');
     bookAuthor.textContent = meta.creator || '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
@@ -460,7 +549,7 @@ async function displayChapter(index, scrollPct = 0) {
   currentSpineIndex = index;
   currentChapterParagraphs = [];
   renderOriginal([]);
-  renderTranslationPlaceholder('Loading chapter...');
+  renderTranslationPlaceholder(ui('loadingChapter'));
   updateProgress();
 
   const item = currentSpineItems[index];
@@ -482,7 +571,7 @@ async function displayChapter(index, scrollPct = 0) {
     if (currentSpineIndex !== myIndex) return;
     console.error('[nav] errore:', err);
     renderOriginal([]);
-    renderTranslationPlaceholder('Error loading chapter: ' + errMsg(err));
+    renderTranslationPlaceholder(ui('errorChapter') + errMsg(err));
   }
 }
 
@@ -513,14 +602,14 @@ async function loadChapterDocument(spineItem) {
 
 // ── Carica MOBI ────────────────────────────────────────────────────────────
 async function loadMobi(arrayBuffer, filePath = '') {
-  showLoading('Loading MOBI...');
+  showLoading(ui('loadingMobi'));
   hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
     if (book) { book.destroy(); book = null; rendition = null; }
     currentSpineItems = [];
     const { title, htmlContent } = await parseMobi(arrayBuffer);
-    bookTitle.textContent  = title || 'Unknown title';
+    bookTitle.textContent  = title || ui('unknownTitle');
     bookAuthor.textContent = '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
@@ -714,9 +803,9 @@ bmExportBtn.addEventListener('click', async () => {
       });
       if (!filePath) return;
       await writeTextFile(filePath, json);
-      await showAlert(`Bookmarks exported to:\n${filePath}`);
+      await showAlert(ui('exportedTo') + filePath);
     } catch (err) {
-      await showAlert('Export error: ' + errMsg(err));
+      await showAlert(ui('exportError') + errMsg(err));
     }
   } else {
     const blob = new Blob([json], { type: 'application/json' });
@@ -726,7 +815,7 @@ bmExportBtn.addEventListener('click', async () => {
     a.download = 'giano-bookmarks.json';
     a.click();
     URL.revokeObjectURL(url);
-    await showAlert('File saved to the browser Downloads folder as "giano-bookmarks.json".');
+    await showAlert(ui('savedToDownloads'));
   }
 });
 
@@ -739,15 +828,15 @@ bmImportInput.addEventListener('change', async () => {
   try {
     const text = await file.text();
     const imported = JSON.parse(text);
-    if (!Array.isArray(imported)) throw new Error('Invalid format');
+    if (!Array.isArray(imported)) throw new Error(ui('invalidFormat'));
     const existing = loadBookmarks();
     const existingIds = new Set(existing.map(b => b.id));
     const toAdd = imported.filter(b => b && b.id && !existingIds.has(b.id));
     saveBookmarks([...existing, ...toAdd]);
     renderBookmarks();
-    await showAlert(`Imported ${toAdd.length} bookmarks (${imported.length - toAdd.length} duplicates skipped).`);
+    await showAlert(ui('importedMsg', { added: toAdd.length, skipped: imported.length - toAdd.length }));
   } catch (err) {
-    await showAlert('Import error: ' + errMsg(err));
+    await showAlert(ui('importError') + errMsg(err));
   }
 });
 
@@ -759,6 +848,8 @@ function deleteBookmark(id) {
 // Mostra la modal di rilocazione e restituisce il nuovo path scelto, o null se annullato
 async function askRelocate(bm) {
   bmMissingName.textContent = bm.fileName;
+  document.getElementById('bm-modal-msg').innerHTML =
+    t(loadSettings().uiLang || 'en', 'fileNotFoundMsg', { name: `<strong>${escapeHtml(bm.fileName)}</strong>` });
   bookmarkMissingModal.classList.remove('hidden');
 
   return new Promise(resolve => {
@@ -881,7 +972,7 @@ async function loadBookmarkFile(bm) {
       updateBookmarkPath(bm, newPath);
       await loadBookmarkFile(bm);
     } else {
-      await showAlert('Error opening file: ' + msg);
+      await showAlert(ui('errorOpening') + msg);
     }
   }
 }

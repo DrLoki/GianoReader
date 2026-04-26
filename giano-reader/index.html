@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Giano Reader</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body class="dark">
@@ -11,6 +12,7 @@
     <aside id="sidebar">
       <div id="sidebar-header">
         <h1>🎭 Giano Reader</h1>
+        <button id="settings-btn" title="Settings">⚙️</button>
       </div>
       <div id="sidebar-controls">
         <button id="open-btn">+ Open book</button>
@@ -50,12 +52,11 @@
     </aside>
 
     <main id="reader-area">
-      <!-- Toolbar: font + dark mode -->
+      <!-- Toolbar: font -->
       <div id="toolbar">
         <div id="font-controls">
           <button id="font-dec">A-</button>
           <button id="font-inc">A+</button>
-          <label><input type="checkbox" id="dark-mode" checked /> Night</label>
         </div>
       </div>
 
@@ -126,6 +127,44 @@
       <div class="modal-actions">
         <button id="bm-relocate-btn">Browse...</button>
         <button id="bm-cancel-btn" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: settings -->
+  <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-box modal-box--settings">
+      <div class="modal-header">
+        <h2 id="settings-modal-title">⚙️ Settings</h2>
+        <button id="settings-close-btn" class="modal-close" title="Close">✕</button>
+      </div>
+      <div class="settings-row">
+        <label for="ui-lang-select">Interface language</label>
+        <select id="ui-lang-select">
+          <option value="en">🇬🇧 English</option>
+          <option value="it">🇮🇹 Italiano</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="pt">🇵🇹 Português</option>
+          <option value="ru">🇷🇺 Русский</option>
+          <option value="zh">🇨🇳 中文</option>
+          <option value="ja">🇯🇵 日本語</option>
+          <option value="ar">🇸🇦 العربية</option>
+          <option value="fil">🇵🇭 Filipino</option>
+          <option value="sq">🇦🇱 Shqip</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label for="theme-select">Theme</label>
+        <select id="theme-select">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="monokai">Monokai</option>
+          <option value="solarized-dark">Solarized Dark</option>
+          <option value="nord">Nord</option>
+          <option value="sepia">Sepia</option>
+        </select>
       </div>
     </div>
   </div>
