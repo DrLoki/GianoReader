@@ -1,6 +1,7 @@
 export const translations = {
   en: {
     viewToggle:          'Toggle original view',
+    hideTranslation:     'Hide/show translation panel',
     syncDisabled:        '⚠ scroll sync off',
     openBook:            '+ Open book',
     translationLanguage: 'Translation language',
@@ -42,6 +43,7 @@ export const translations = {
   },
   it: {
     viewToggle:          'Mostra vista originale',
+    hideTranslation:     'Nascondi/mostra pannello traduzione',
     syncDisabled:        '⚠ sync scroll disattivato',
     openBook:            '+ Apri libro',
     translationLanguage: 'Lingua di traduzione',
@@ -83,6 +85,7 @@ export const translations = {
   },
   fr: {
     viewToggle:          'Afficher vue originale',
+    hideTranslation:     'Masquer/afficher le panneau de traduction',
     syncDisabled:        '⚠ sync défilement désactivé',
     openBook:            '+ Ouvrir un livre',
     translationLanguage: 'Langue de traduction',
@@ -124,6 +127,7 @@ export const translations = {
   },
   de: {
     viewToggle:          'Originalansicht umschalten',
+    hideTranslation:     'Übersetzungsbereich ein-/ausblenden',
     syncDisabled:        '⚠ Scroll-Sync deaktiviert',
     openBook:            '+ Buch öffnen',
     translationLanguage: 'Übersetzungssprache',
@@ -165,6 +169,7 @@ export const translations = {
   },
   es: {
     viewToggle:          'Alternar vista original',
+    hideTranslation:     'Ocultar/mostrar panel de traducción',
     syncDisabled:        '⚠ sincronización desactivada',
     openBook:            '+ Abrir libro',
     translationLanguage: 'Idioma de traducción',
@@ -206,6 +211,7 @@ export const translations = {
   },
   pt: {
     viewToggle:          'Alternar vista original',
+    hideTranslation:     'Ocultar/mostrar painel de tradução',
     syncDisabled:        '⚠ sincronização desativada',
     openBook:            '+ Abrir livro',
     translationLanguage: 'Idioma de tradução',
@@ -247,6 +253,7 @@ export const translations = {
   },
   ru: {
     viewToggle:          'Переключить оригинальный вид',
+    hideTranslation:     'Скрыть/показать панель перевода',
     syncDisabled:        '⚠ синхронизация отключена',
     openBook:            '+ Открыть книгу',
     translationLanguage: 'Язык перевода',
@@ -288,6 +295,7 @@ export const translations = {
   },
   zh: {
     viewToggle:          '切换原始视图',
+    hideTranslation:     '隐藏/显示翻译面板',
     syncDisabled:        '⚠ 滚动同步已关闭',
     openBook:            '+ 打开书籍',
     translationLanguage: '翻译语言',
@@ -329,6 +337,7 @@ export const translations = {
   },
   ja: {
     viewToggle:          '元の表示に切り替え',
+    hideTranslation:     '翻訳パネルを表示/非表示',
     syncDisabled:        '⚠ スクロール同期オフ',
     openBook:            '+ 本を開く',
     translationLanguage: '翻訳言語',
@@ -370,6 +379,7 @@ export const translations = {
   },
   ar: {
     viewToggle:          'تبديل العرض الأصلي',
+    hideTranslation:     'إخفاء/إظهار لوحة الترجمة',
     syncDisabled:        '⚠ مزامنة التمرير معطلة',
     openBook:            '+ فتح كتاب',
     translationLanguage: 'لغة الترجمة',
@@ -411,6 +421,7 @@ export const translations = {
   },
   fil: {
     viewToggle:          'I-toggle ang orihinal na view',
+    hideTranslation:     'Itago/ipakita ang panel ng pagsasalin',
     syncDisabled:        '⚠ naka-off ang scroll sync',
     openBook:            '+ Buksan ang libro',
     translationLanguage: 'Wika ng pagsasalin',
@@ -452,6 +463,7 @@ export const translations = {
   },
   sq: {
     viewToggle:          'Kalo pamjen origjinale',
+    hideTranslation:     'Fshih/shfaq panelin e përkthimit',
     syncDisabled:        '⚠ sinkronizimi i lëvizjes çaktivizuar',
     openBook:            '+ Hap librin',
     translationLanguage: 'Gjuha e përkthimit',

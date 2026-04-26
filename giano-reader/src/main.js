@@ -10,7 +10,6 @@ let currentSpineItems = [];         // lista capitoli spine EPUB
 let currentSpineIndex = 0;          // indice capitolo corrente
 let currentMobiHtml = null;         // HTML grezzo per MOBI
 let currentChapterParagraphs = [];  // paragrafi del capitolo corrente
-let fontSize = 16;
 let syncingScroll = false;          // lock per evitare loop nello scroll sincronizzato
 let translationAbortController = null;
 let lazyObserver = null;            // IntersectionObserver per traduzione lazy
@@ -30,8 +29,6 @@ const progressThumb        = document.getElementById('progress-thumb');
 const progressTicks        = document.getElementById('progress-ticks');
 const progressTooltip      = document.getElementById('progress-tooltip');
 const langSelect           = document.getElementById('lang-select');
-const fontDec              = document.getElementById('font-dec');
-const fontInc              = document.getElementById('font-inc');
 const originalViewer       = document.getElementById('original-viewer');
 const translationViewer    = document.getElementById('translation-viewer');
 const translationLangLabel = document.getElementById('translation-lang-label');
@@ -69,6 +66,20 @@ const themeSelect          = document.getElementById('theme-select');
 const viewToggleBtn        = document.getElementById('view-toggle-btn');
 const syncDisabledNotice   = document.getElementById('sync-disabled-notice');
 const originalNative       = document.getElementById('original-native');
+// Hide translation toggle (⇔) — nasconde/mostra il pannello di traduzione
+const hideTranslationBtn   = document.getElementById('hide-translation-btn');
+const translationPanel     = document.getElementById('translation-panel');
+const divider              = document.getElementById('divider');
+
+let translationHidden = false;
+
+hideTranslationBtn.addEventListener('click', () => {
+  translationHidden = !translationHidden;
+  translationPanel.classList.toggle('hidden', translationHidden);
+  divider.classList.toggle('hidden', translationHidden);
+  hideTranslationBtn.setAttribute('aria-pressed', String(translationHidden));
+  hideTranslationBtn.classList.toggle('active', translationHidden);
+});
 
 // ── Settings ───────────────────────────────────────────────────────────────
 const SETTINGS_KEY = 'giano-reader-settings';
@@ -128,6 +139,10 @@ function applyUiLang(lang) {
   if (viewToggleBtn) {
     viewToggleBtn.title = t(lang, 'viewToggle');
     viewToggleBtn.setAttribute('aria-label', t(lang, 'viewToggle'));
+  }
+  if (hideTranslationBtn) {
+    hideTranslationBtn.title = t(lang, 'hideTranslation');
+    hideTranslationBtn.setAttribute('aria-label', t(lang, 'hideTranslation'));
   }
   if (syncDisabledNotice) {
     syncDisabledNotice.textContent = t(lang, 'syncDisabled');
@@ -386,24 +401,34 @@ function applyThemeToMobiDiv(div) {
   if (fg) div.style.color = fg;
 }
 
+// Ritorna true se il capitolo è composto principalmente da immagini (nessun testo significativo)
+function _isImageOnlyChapter(spineItem) {
+  try {
+    const doc = spineItem.document;
+    if (!doc) return false;
+    const body = doc.body || doc.querySelector('body');
+    if (!body) return false;
+    const text = body.innerText || body.textContent || '';
+    const hasSignificantText = text.trim().replace(/\s+/g, ' ').length > 50;
+    const hasImages = body.querySelectorAll('img, svg').length > 0;
+    return hasImages && !hasSignificantText;
+  } catch (_) { return false; }
+}
+
 async function renderNativeView() {
   originalNative.innerHTML = '';
   if (book) {
     // EPUB: serializza il capitolo con risorse sostituite (blob URL) e inietta in srcdoc
     try {
       const spineItem = currentSpineItems[currentSpineIndex];
-      // section.render() applica gli hook di serializzazione che sostituiscono
-      // i path relativi con blob URL / base64 già risolti da book.replacements()
       const html = await spineItem.render(book.load.bind(book));
       const frame = document.createElement('iframe');
       frame.id = 'epub-native-frame';
       frame.className = 'native-frame';
-      // Stili minimi per adattare al tema corrente
       const bg  = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()   || '#1a1a1a';
       const fg  = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()  || '#e0e0e0';
       const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:Georgia,serif;line-height:1.8;padding:1rem;margin:0;}</style>`;
       frame.srcdoc = themeStyle + html;
-      frame.sandbox = 'allow-same-origin allow-scripts';
       originalNative.appendChild(frame);
     } catch (err) {
       console.error('[native] errore rendering EPUB:', err);
@@ -786,7 +811,7 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
-  const lineH = fontSize * 1.8;
+  const lineH = 16 * 1.8;
   const pageH = originalViewer.clientHeight * 0.9;
   let delta = 0;
   if (e.key === 'ArrowDown') { delta =  lineH * 3; e.preventDefault(); }
@@ -801,14 +826,6 @@ document.addEventListener('keydown', e => {
   translationViewer.scrollTop = Math.max(0, Math.min((originalViewer.scrollTop / origMax) * transMax, transMax));
   syncingScroll = false;
 });
-
-// ── Font size ──────────────────────────────────────────────────────────────
-fontDec.addEventListener('click', () => { fontSize = Math.max(10, fontSize - 2); applyFontSize(); });
-fontInc.addEventListener('click', () => { fontSize = Math.min(36, fontSize + 2); applyFontSize(); });
-function applyFontSize() {
-  originalViewer.style.fontSize    = `${fontSize}px`;
-  translationViewer.style.fontSize = `${fontSize}px`;
-}
 
 // ── Segnalibri ─────────────────────────────────────────────────────────────
 const BOOKMARKS_KEY = 'giano-reader-bookmarks';

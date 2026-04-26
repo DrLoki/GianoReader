@@ -107,22 +107,6 @@ body {
 /* ── Reader area ── */
 #reader-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
-/* Toolbar font/dark */
-#toolbar {
-  background: var(--toolbar-bg); border-bottom: 1px solid var(--border);
-  padding: 6px 16px;
-  display: flex; align-items: center; justify-content: flex-end;
-  flex-shrink: 0;
-}
-#font-controls { display: flex; align-items: center; gap: 10px; }
-#font-controls button {
-  background: none; border: 1px solid var(--border);
-  padding: 3px 9px; border-radius: 4px; cursor: pointer;
-  color: var(--text); font-size: 0.85rem;
-}
-#font-controls button:hover { background: var(--bg); }
-#font-controls label { font-size: 0.85rem; display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text); }
-
 /* ── Barra navigazione capitoli (footer) ── */
 #progress-bar-wrap {
   display: flex; align-items: center; gap: 8px;
@@ -231,6 +215,12 @@ body {
 }
 
 /* ── View toggle button ── */
+#original-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .view-toggle-btn {
   font-size: 0.75rem;
   padding: 2px 6px;
@@ -261,9 +251,13 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
   min-height: 0;
   background: var(--surface);
+}
+
+#epub-native-div {
+  min-width: max-content;
 }
 
 .native-frame {

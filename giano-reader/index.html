@@ -52,20 +52,15 @@
     </aside>
 
     <main id="reader-area">
-      <!-- Toolbar: font -->
-      <div id="toolbar">
-        <div id="font-controls">
-          <button id="font-dec">A-</button>
-          <button id="font-inc">A+</button>
-        </div>
-      </div>
-
       <!-- Layout sempre affiancato -->
       <div id="viewer-wrapper">
         <div id="original-panel">
           <div id="original-header">
             <span id="original-header-label">Original</span>
-            <button id="view-toggle-btn" class="view-toggle-btn" aria-pressed="false" disabled title="" aria-label="">📜</button>
+            <div id="original-header-actions">
+              <button id="hide-translation-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">⇔</button>
+              <button id="view-toggle-btn" class="view-toggle-btn" aria-pressed="false" disabled title="" aria-label="">📜</button>
+            </div>
           </div>
           <div id="original-viewer" class="text-panel"></div>
           <div id="original-native" class="hidden"></div>
