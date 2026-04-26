@@ -122,12 +122,12 @@ body {
 #font-controls button:hover { background: var(--bg); }
 #font-controls label { font-size: 0.85rem; display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text); }
 
-/* ── Barra navigazione capitoli ── */
+/* ── Barra navigazione capitoli (footer) ── */
 #progress-bar-wrap {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 16px;
   background: var(--toolbar-bg);
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 #progress-bar-wrap button {
@@ -288,62 +288,102 @@ body {
   overflow: hidden; visibility: hidden;
 }
 
-/* ── Segnalibri ── */
-#bookmarks-section {
+/* ── Segnalibri — barra in fondo alla sidebar ── */
+#bookmarks-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: var(--sidebar-bg);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
-#bookmarks-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 16px;
-  font-size: 0.78rem; color: #aaa;
-  letter-spacing: 0.04em;
+#bookmarks-open-btn {
+  flex: 1;
+  background: none; border: 1px solid var(--border);
+  padding: 5px 10px; border-radius: 4px;
+  cursor: pointer; font-size: 0.82rem; color: #ccc;
+  display: flex; align-items: center; gap: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+#bookmarks-open-btn:hover { background: #2a2a2a; color: #fff; }
+
 #add-bookmark-btn {
   background: var(--accent); color: #fff;
-  border: none; width: 20px; height: 20px;
-  border-radius: 3px; cursor: pointer;
+  border: none; width: 28px; height: 28px;
+  border-radius: 4px; cursor: pointer;
   font-size: 1rem; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  padding: 0;
+  padding: 0; flex-shrink: 0;
 }
 #add-bookmark-btn:disabled { opacity: 0.35; cursor: default; }
 #add-bookmark-btn:not(:disabled):hover { opacity: 0.8; }
 
+/* ── Modale segnalibri ── */
+.modal-box--bookmarks {
+  max-width: 520px; width: 92%;
+  display: flex; flex-direction: column;
+  max-height: 80vh;
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal-header h2 { font-size: 1rem; }
+.modal-close {
+  background: none; border: none; color: #888;
+  cursor: pointer; font-size: 1rem; padding: 2px 6px;
+  border-radius: 3px;
+}
+.modal-close:hover { color: var(--text); background: #3a3a3a; }
+
 #bookmarks-list {
   list-style: none;
-  max-height: 180px;
-  overflow-y: auto;
-  padding-bottom: 4px;
+  flex: 1; overflow-y: auto;
+  margin-bottom: 12px;
+  min-height: 60px;
 }
 #bookmarks-placeholder {
-  padding: 8px 16px;
-  font-size: 0.78rem; color: #555;
+  padding: 12px 4px;
+  font-size: 0.82rem; color: #555;
 }
 .bookmark-item {
   display: flex; align-items: center;
-  padding: 5px 16px; gap: 6px;
+  padding: 7px 4px; gap: 8px;
   cursor: pointer;
   border-left: 3px solid transparent;
+  border-radius: 3px;
   transition: background 0.1s;
 }
 .bookmark-item:hover { background: #2a2a2a; border-left-color: var(--accent); }
-.bookmark-item .bm-icon { font-size: 0.85rem; flex-shrink: 0; }
+.bookmark-item .bm-icon { font-size: 0.9rem; flex-shrink: 0; }
 .bookmark-item .bm-info { flex: 1; min-width: 0; }
 .bookmark-item .bm-title {
-  font-size: 0.78rem; color: #ddd;
+  display: block; font-size: 0.82rem; color: #ddd;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .bookmark-item .bm-chapter {
-  font-size: 0.7rem; color: #777;
+  display: block; font-size: 0.72rem; color: #777;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .bookmark-item .bm-delete {
   background: none; border: none; color: #555;
-  cursor: pointer; font-size: 0.85rem; padding: 0 2px;
+  cursor: pointer; font-size: 0.85rem; padding: 0 4px;
   flex-shrink: 0; line-height: 1;
 }
 .bookmark-item .bm-delete:hover { color: var(--accent); }
+
+.modal-footer {
+  display: flex; gap: 8px; justify-content: flex-end;
+  border-top: 1px solid var(--border); padding-top: 12px;
+}
+.modal-footer button {
+  width: 32px; height: 32px;
+  border-radius: 4px; border: 1px solid var(--border);
+  cursor: pointer; font-size: 1rem;
+  background: #2a2a2a; color: #ccc;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.modal-footer button:hover { background: #3a3a3a; color: #fff; }
 
 /* ── Modal ── */
 .modal-overlay {

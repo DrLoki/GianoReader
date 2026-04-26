@@ -40,15 +40,10 @@
         <ul id="toc-list"></ul>
       </nav>
 
-      <!-- Segnalibri -->
-      <div id="bookmarks-section">
-        <div id="bookmarks-header">
-          <span>🔖 Segnalibri</span>
-          <button id="add-bookmark-btn" title="Aggiungi segnalibro" disabled>+</button>
-        </div>
-        <ul id="bookmarks-list">
-          <li id="bookmarks-placeholder">Nessun segnalibro</li>
-        </ul>
+      <!-- Segnalibri in fondo alla sidebar -->
+      <div id="bookmarks-bar">
+        <button id="bookmarks-open-btn" title="Apri segnalibri">🔖 Segnalibri</button>
+        <button id="add-bookmark-btn" title="Aggiungi segnalibro al capitolo corrente" disabled>★</button>
       </div>
     </aside>
 
@@ -60,21 +55,6 @@
           <button id="font-inc">A+</button>
           <label><input type="checkbox" id="dark-mode" checked /> Notte</label>
         </div>
-      </div>
-
-      <!-- Barra navigazione capitoli -->
-      <div id="progress-bar-wrap">
-        <button id="prev-btn" disabled>&#8592;</button>
-        <div id="progress-track">
-          <div id="progress-fill"></div>
-          <div id="progress-thumb"></div>
-          <!-- tacche capitoli generate via JS -->
-          <div id="progress-ticks"></div>
-          <!-- tooltip hover -->
-          <div id="progress-tooltip"></div>
-        </div>
-        <button id="next-btn" disabled>&#8594;</button>
-        <span id="page-info">-</span>
       </div>
 
       <!-- Layout sempre affiancato -->
@@ -96,15 +76,46 @@
           <p id="loading-text">Caricamento...</p>
         </div>
       </div>
+
+      <!-- Barra navigazione capitoli in fondo -->
+      <div id="progress-bar-wrap">
+        <button id="prev-btn" disabled>&#8592;</button>
+        <div id="progress-track">
+          <div id="progress-fill"></div>
+          <div id="progress-thumb"></div>
+          <div id="progress-ticks"></div>
+          <div id="progress-tooltip"></div>
+        </div>
+        <button id="next-btn" disabled>&#8594;</button>
+        <span id="page-info">-</span>
+      </div>
     </main>
   </div>
 
   <div id="epub-hidden-mount" aria-hidden="true"></div>
 
+  <!-- Modal: segnalibri -->
+  <div id="bookmarks-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-modal-title">
+    <div class="modal-box modal-box--bookmarks">
+      <div class="modal-header">
+        <h2 id="bm-modal-title">🔖 Segnalibri</h2>
+        <button id="bm-close-btn" class="modal-close" title="Chiudi">✕</button>
+      </div>
+      <ul id="bookmarks-list">
+        <li id="bookmarks-placeholder">Nessun segnalibro salvato</li>
+      </ul>
+      <div class="modal-footer">
+        <button id="bm-import-btn" title="Importa segnalibri da JSON">⬆️</button>
+        <button id="bm-export-btn" title="Esporta segnalibri in JSON">⬇️</button>
+        <input type="file" id="bm-import-input" accept=".json" style="display:none" />
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: file segnalibro non trovato -->
-  <div id="bookmark-missing-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-modal-title">
+  <div id="bookmark-missing-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-missing-modal-title">
     <div class="modal-box">
-      <h2 id="bm-modal-title">File non trovato</h2>
+      <h2 id="bm-missing-modal-title">File non trovato</h2>
       <p id="bm-modal-msg">Il file <strong id="bm-missing-name"></strong> non è stato trovato nella posizione salvata. Indica la nuova posizione del file.</p>
       <div class="modal-actions">
         <button id="bm-relocate-btn">Sfoglia...</button>

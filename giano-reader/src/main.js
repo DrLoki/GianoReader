@@ -47,6 +47,12 @@ const coverImg             = document.getElementById('cover-img');
 const addBookmarkBtn       = document.getElementById('add-bookmark-btn');
 const bookmarksList        = document.getElementById('bookmarks-list');
 const bookmarksPlaceholder = document.getElementById('bookmarks-placeholder');
+const bookmarksModal       = document.getElementById('bookmarks-modal');
+const bookmarksOpenBtn     = document.getElementById('bookmarks-open-btn');
+const bmCloseBtn           = document.getElementById('bm-close-btn');
+const bmImportBtn          = document.getElementById('bm-import-btn');
+const bmExportBtn          = document.getElementById('bm-export-btn');
+const bmImportInput        = document.getElementById('bm-import-input');
 const bookmarkMissingModal = document.getElementById('bookmark-missing-modal');
 const bmMissingName        = document.getElementById('bm-missing-name');
 const bmRelocateBtn        = document.getElementById('bm-relocate-btn');
@@ -242,8 +248,9 @@ function renderTranslationPlaceholder(msg) {
 }
 
 // ── Traduzione lazy ────────────────────────────────────────────────────────
-// Traduce i paragrafi a chunk man mano che l'utente scorre verso il basso.
-async function translateCurrentChapter() {
+// startPct: percentuale di scroll da cui partire (0-100). Traduce prima il chunk
+// visibile a quella posizione, poi espande lazy verso il basso e verso l'alto.
+async function translateCurrentChapter(startPct = 0) {
   if (translationAbortController) translationAbortController.abort();
   if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
 
@@ -264,9 +271,9 @@ async function translateCurrentChapter() {
 
   const paragraphs = currentChapterParagraphs;
   const total = paragraphs.length;
+  const totalChunks = Math.ceil(total / LAZY_CHUNK);
 
-  // Crea subito tutti i <p> con il testo originale come placeholder visivo,
-  // così l'altezza del pannello è già corretta per lo scroll sincronizzato.
+  // Crea subito tutti i <p> con il testo originale come placeholder visivo
   const pEls = paragraphs.map((text, i) => {
     const p = document.createElement('p');
     p.dataset.idx = i;
@@ -279,18 +286,21 @@ async function translateCurrentChapter() {
   setTranslationStatus('');
   bindSyncScroll();
 
-  let nextChunk = 0;
-  const totalChunks = Math.ceil(total / LAZY_CHUNK);
+  // Chunk di partenza basato sulla percentuale di scroll
+  const startChunk = Math.min(
+    Math.floor((startPct / 100) * totalChunks),
+    totalChunks - 1
+  );
 
-  async function translateNextChunk() {
-    if (signal.aborted || nextChunk >= totalChunks) return;
-    const chunkIdx = nextChunk++;
+  // Traduce un chunk specifico per indice
+  const translatedChunks = new Set();
+  async function translateChunk(chunkIdx) {
+    if (signal.aborted || translatedChunks.has(chunkIdx) || chunkIdx < 0 || chunkIdx >= totalChunks) return;
+    translatedChunks.add(chunkIdx);
     const start = chunkIdx * LAZY_CHUNK;
     const end = Math.min(start + LAZY_CHUNK, total);
     const slice = paragraphs.slice(start, end);
-
-    setTranslationStatus(`${Math.round((chunkIdx / totalChunks) * 100)}%`);
-
+    setTranslationStatus(`${Math.round((translatedChunks.size / totalChunks) * 100)}%`);
     try {
       const translated = await translateParagraphs(slice, lang, signal);
       if (signal.aborted) return;
@@ -298,7 +308,7 @@ async function translateCurrentChapter() {
         pEls[start + i].textContent = translated[i] || slice[i];
         pEls[start + i].classList.remove('pending');
       }
-      if (nextChunk >= totalChunks) setTranslationStatus('');
+      if (translatedChunks.size >= totalChunks) setTranslationStatus('');
     } catch (err) {
       if (signal.aborted) return;
       console.error('[translate] errore chunk', chunkIdx, err);
@@ -309,27 +319,35 @@ async function translateCurrentChapter() {
     }
   }
 
-  // Traduce subito il primo chunk visibile
-  await translateNextChunk();
+  // Traduce il chunk visibile per primo, poi quelli precedenti (verso l'alto), poi lazy verso il basso
+  await translateChunk(startChunk);
   if (signal.aborted) return;
 
-  // Osserva l'ultimo paragrafo tradotto: quando entra in viewport, traduce il chunk successivo
-  if (nextChunk < totalChunks) {
+  // Traduce i chunk precedenti in background (verso l'alto), senza bloccare
+  for (let i = startChunk - 1; i >= 0; i--) {
+    translateChunk(i); // fire-and-forget
+  }
+
+  // Lazy verso il basso: osserva l'ultimo paragrafo del chunk corrente
+  let nextDownChunk = startChunk + 1;
+
+  function observeNextSentinel() {
+    if (nextDownChunk >= totalChunks) return;
+    const lastParagraphOfCurrent = pEls[Math.min(nextDownChunk * LAZY_CHUNK - 1, total - 1)];
+    if (!lastParagraphOfCurrent) return;
     lazyObserver = new IntersectionObserver(async (entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         lazyObserver.unobserve(entry.target);
-        await translateNextChunk();
+        await translateChunk(nextDownChunk++);
         if (signal.aborted) return;
-        const lastTranslated = nextChunk * LAZY_CHUNK - 1;
-        const sentinel = pEls[Math.min(lastTranslated, total - 1)];
-        if (nextChunk < totalChunks && sentinel) lazyObserver.observe(sentinel);
+        observeNextSentinel();
       }
     }, { root: translationViewer, threshold: 0.1 });
-
-    const firstSentinel = pEls[Math.min(LAZY_CHUNK - 1, total - 1)];
-    if (firstSentinel) lazyObserver.observe(firstSentinel);
+    lazyObserver.observe(lastParagraphOfCurrent);
   }
+
+  observeNextSentinel();
 }
 
 // ── Apertura file ──────────────────────────────────────────────────────────
@@ -429,7 +447,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
 }
 
 // ── Naviga a un capitolo (parsing diretto, senza iframe) ───────────────────
-async function displayChapter(index) {
+async function displayChapter(index, scrollPct = 0) {
   if (!book || !currentSpineItems.length) return;
   if (translationAbortController) translationAbortController.abort();
 
@@ -445,7 +463,7 @@ async function displayChapter(index) {
 
   try {
     const body = await loadChapterDocument(item);
-    if (currentSpineIndex !== myIndex) return; // navigazione sovrapposta
+    if (currentSpineIndex !== myIndex) return;
     if (!body) throw new Error('documento capitolo null');
 
     currentChapterParagraphs = extractParagraphs(body);
@@ -453,7 +471,8 @@ async function displayChapter(index) {
     renderOriginal(currentChapterParagraphs);
     updateProgress();
     updateActiveTick();
-    await translateCurrentChapter();
+    await translateCurrentChapter(scrollPct);
+    if (scrollPct > 0) restoreScrollPct(scrollPct);
   } catch (err) {
     if (currentSpineIndex !== myIndex) return;
     console.error('[nav] errore:', err);
@@ -612,6 +631,8 @@ function getChapterLabel(index) {
 addBookmarkBtn.addEventListener('click', async () => {
   if (!currentFilePath && !currentMobiHtml) return;
   const bms = loadBookmarks();
+  const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+  const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
   const bm = {
     id: Date.now(),
     filePath: currentFilePath || '',
@@ -621,19 +642,15 @@ addBookmarkBtn.addEventListener('click', async () => {
     bookTitle: bookTitle.textContent || '',
     chapterIndex: currentSpineIndex,
     chapterLabel: getChapterLabel(currentSpineIndex),
+    scrollPct,
     isMobi: !!currentMobiHtml && !book,
   };
-  // Evita duplicati (stesso file + stesso capitolo)
-  if (bms.some(b => b.filePath === bm.filePath && b.chapterIndex === bm.chapterIndex)) {
-    await showAlert('Segnalibro già presente per questo capitolo.');
-    return;
-  }
   bms.push(bm);
   saveBookmarks(bms);
   renderBookmarks();
 });
 
-// Renderizza la lista segnalibri nella sidebar
+// Renderizza la lista segnalibri nella modale
 function renderBookmarks() {
   const bms = loadBookmarks();
   bookmarksList.innerHTML = '';
@@ -649,12 +666,12 @@ function renderBookmarks() {
       <span class="bm-icon">🔖</span>
       <span class="bm-info">
         <span class="bm-title" title="${escapeHtml(bm.bookTitle || bm.fileName)}">${escapeHtml(bm.bookTitle || bm.fileName)}</span>
-        <span class="bm-chapter">${escapeHtml(bm.chapterLabel)}</span>
+        <span class="bm-chapter">${escapeHtml(bm.chapterLabel)}${bm.scrollPct != null ? ` · ${bm.scrollPct}%` : ''}</span>
       </span>
       <button class="bm-delete" title="Elimina segnalibro" data-id="${bm.id}">✕</button>
     `;
-    li.querySelector('.bm-info').addEventListener('click', () => openBookmark(bm));
-    li.querySelector('.bm-icon').addEventListener('click', () => openBookmark(bm));
+    li.querySelector('.bm-info').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
+    li.querySelector('.bm-icon').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
     li.querySelector('.bm-delete').addEventListener('click', e => {
       e.stopPropagation();
       deleteBookmark(bm.id);
@@ -662,6 +679,71 @@ function renderBookmarks() {
     bookmarksList.appendChild(li);
   }
 }
+
+// Apri/chiudi modale segnalibri
+function openBookmarksModal() {
+  renderBookmarks();
+  bookmarksModal.classList.remove('hidden');
+}
+function closeBookmarksModal() {
+  bookmarksModal.classList.add('hidden');
+}
+bookmarksOpenBtn.addEventListener('click', openBookmarksModal);
+bmCloseBtn.addEventListener('click', closeBookmarksModal);
+bookmarksModal.addEventListener('click', e => { if (e.target === bookmarksModal) closeBookmarksModal(); });
+
+// Esporta segnalibri come JSON
+bmExportBtn.addEventListener('click', async () => {
+  const bms = loadBookmarks();
+  const json = JSON.stringify(bms, null, 2);
+  const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+
+  if (isTauri) {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      const filePath = await save({
+        defaultPath: 'giano-bookmarks.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (!filePath) return;
+      await writeTextFile(filePath, json);
+      await showAlert(`Segnalibri esportati in:\n${filePath}`);
+    } catch (err) {
+      await showAlert('Errore esportazione: ' + errMsg(err));
+    }
+  } else {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'giano-bookmarks.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    await showAlert('File salvato nella cartella Download del browser come "giano-bookmarks.json".');
+  }
+});
+
+// Importa segnalibri da JSON (aggiunge a quelli esistenti, evita duplicati per id)
+bmImportBtn.addEventListener('click', () => bmImportInput.click());
+bmImportInput.addEventListener('change', async () => {
+  const file = bmImportInput.files[0];
+  if (!file) return;
+  bmImportInput.value = '';
+  try {
+    const text = await file.text();
+    const imported = JSON.parse(text);
+    if (!Array.isArray(imported)) throw new Error('Formato non valido');
+    const existing = loadBookmarks();
+    const existingIds = new Set(existing.map(b => b.id));
+    const toAdd = imported.filter(b => b && b.id && !existingIds.has(b.id));
+    saveBookmarks([...existing, ...toAdd]);
+    renderBookmarks();
+    await showAlert(`Importati ${toAdd.length} segnalibri (${imported.length - toAdd.length} già presenti ignorati).`);
+  } catch (err) {
+    await showAlert('Errore importazione: ' + errMsg(err));
+  }
+});
 
 function deleteBookmark(id) {
   saveBookmarks(loadBookmarks().filter(b => b.id !== id));
@@ -754,6 +836,18 @@ async function openBookmark(bm) {
   await loadBookmarkFile(bm);
 }
 
+// Ripristina la posizione di scroll salvata nel segnalibro
+function restoreScrollPct(pct) {
+  if (pct == null) return;
+  // Doppio rAF: assicura che il layout sia calcolato dopo il rendering dei paragrafi
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const max = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+    originalViewer.scrollTop = Math.round((pct / 100) * max);
+    const transMax = Math.max(1, translationViewer.scrollHeight - translationViewer.clientHeight);
+    translationViewer.scrollTop = Math.round((pct / 100) * transMax);
+  }));
+}
+
 // Legge il file dal disco e lo carica nel reader, poi naviga al capitolo salvato
 async function loadBookmarkFile(bm) {
   try {
@@ -764,12 +858,14 @@ async function loadBookmarkFile(bm) {
 
     if (ext === 'epub') {
       await loadEpub(fileData, bm.filePath);
-      // loadEpub naviga al primo capitolo con contenuto; sovrascriviamo con quello del segnalibro
       if (bm.chapterIndex > 0 && bm.chapterIndex < currentSpineItems.length) {
-        await displayChapter(bm.chapterIndex);
+        await displayChapter(bm.chapterIndex, bm.scrollPct ?? 0);
+      } else if (bm.scrollPct > 0) {
+        restoreScrollPct(bm.scrollPct);
       }
     } else if (['mobi','azw','azw3'].includes(ext)) {
       await loadMobi(fileData, bm.filePath);
+      restoreScrollPct(bm.scrollPct);
     }
   } catch (err) {
     console.error('[bookmark] errore apertura:', err);

@@ -5,10 +5,13 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     "dialog:allow-message",
     "fs:allow-read-file",
     "fs:allow-read-dir",
     "fs:allow-exists",
+    "fs:allow-write-file",
+    "fs:allow-write-text-file",
     "fs:scope-home-recursive",
     "fs:scope-desktop-recursive",
     "fs:scope-download-recursive",
