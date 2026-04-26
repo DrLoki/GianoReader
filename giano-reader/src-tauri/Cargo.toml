@@ -1,0 +1,32 @@
+[package]
+name = "giano-reader"
+version = "0.2.0"
+description = "Giano Reader con traduzione"
+authors = []
+edition = "2021"
+
+[package.metadata.bundle]
+name = "Giano Reader"
+identifier = "com.dev.giano-reader"
+icon = ["icons/32x32.png", "icons/128x128.png", "icons/256x256.png", "icons/icon.ico"]
+
+[lib]
+name = "ebook_reader_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

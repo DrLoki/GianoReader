@@ -1,0 +1,23 @@
+{
+  "name": "giano-reader",
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-fs": "^2.5.0",
+    "epubjs": "^0.3.93"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/cli": "^2",
+    "vite": "^6"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "^0.8.13"
+  }
+}

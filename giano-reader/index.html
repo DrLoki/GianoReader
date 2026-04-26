@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Giano Reader</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body class="dark">
+  <div id="app">
+    <aside id="sidebar">
+      <div id="sidebar-header">
+        <h1>🎭 Giano Reader</h1>
+      </div>
+      <div id="sidebar-controls">
+        <button id="open-btn">+ Apri libro</button>
+        <label for="lang-select">Lingua traduzione</label>
+        <select id="lang-select">
+          <option value="it">🇮🇹 Italiano</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="pt">🇵🇹 Português</option>
+          <option value="ru">🇷🇺 Русский</option>
+          <option value="zh">🇨🇳 中文</option>
+          <option value="ja">🇯🇵 日本語</option>
+          <option value="ar">🇸🇦 العربية</option>
+        </select>
+      </div>
+      <div id="book-info" class="hidden">
+        <img id="cover-img" src="" alt="Copertina" />
+        <div id="book-meta">
+          <p id="book-title"></p>
+          <p id="book-author"></p>
+        </div>
+      </div>
+      <nav id="toc-container">
+        <p id="toc-placeholder">Nessun libro aperto</p>
+        <ul id="toc-list"></ul>
+      </nav>
+
+      <!-- Segnalibri -->
+      <div id="bookmarks-section">
+        <div id="bookmarks-header">
+          <span>🔖 Segnalibri</span>
+          <button id="add-bookmark-btn" title="Aggiungi segnalibro" disabled>+</button>
+        </div>
+        <ul id="bookmarks-list">
+          <li id="bookmarks-placeholder">Nessun segnalibro</li>
+        </ul>
+      </div>
+    </aside>
+
+    <main id="reader-area">
+      <!-- Toolbar: font + dark mode -->
+      <div id="toolbar">
+        <div id="font-controls">
+          <button id="font-dec">A-</button>
+          <button id="font-inc">A+</button>
+          <label><input type="checkbox" id="dark-mode" checked /> Notte</label>
+        </div>
+      </div>
+
+      <!-- Barra navigazione capitoli -->
+      <div id="progress-bar-wrap">
+        <button id="prev-btn" disabled>&#8592;</button>
+        <div id="progress-track">
+          <div id="progress-fill"></div>
+          <div id="progress-thumb"></div>
+          <!-- tacche capitoli generate via JS -->
+          <div id="progress-ticks"></div>
+          <!-- tooltip hover -->
+          <div id="progress-tooltip"></div>
+        </div>
+        <button id="next-btn" disabled>&#8594;</button>
+        <span id="page-info">-</span>
+      </div>
+
+      <!-- Layout sempre affiancato -->
+      <div id="viewer-wrapper">
+        <div id="original-panel">
+          <div id="original-header">Originale</div>
+          <div id="original-viewer" class="text-panel"></div>
+        </div>
+        <div id="divider"></div>
+        <div id="translation-panel">
+          <div id="translation-header">
+            <span id="translation-lang-label">Traduzione</span>
+            <span id="translation-status"></span>
+          </div>
+          <div id="translation-viewer" class="text-panel"></div>
+        </div>
+        <div id="loading-overlay" class="hidden">
+          <div class="spinner"></div>
+          <p id="loading-text">Caricamento...</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="epub-hidden-mount" aria-hidden="true"></div>
+
+  <!-- Modal: file segnalibro non trovato -->
+  <div id="bookmark-missing-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-modal-title">
+    <div class="modal-box">
+      <h2 id="bm-modal-title">File non trovato</h2>
+      <p id="bm-modal-msg">Il file <strong id="bm-missing-name"></strong> non è stato trovato nella posizione salvata. Indica la nuova posizione del file.</p>
+      <div class="modal-actions">
+        <button id="bm-relocate-btn">Sfoglia...</button>
+        <button id="bm-cancel-btn" class="secondary">Annulla</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

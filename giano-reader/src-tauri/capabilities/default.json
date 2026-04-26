@@ -1,0 +1,17 @@
+{
+  "identifier": "default",
+  "description": "Permessi default per Giano Reader",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "fs:allow-read-file",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "fs:scope-home-recursive",
+    "fs:scope-desktop-recursive",
+    "fs:scope-download-recursive",
+    "fs:scope-document-recursive"
+  ]
+}
