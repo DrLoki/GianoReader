@@ -1,4 +1,5 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
+.hidden { display: none !important; }
 
 /* ── Variabili — dark di default ── */
 :root {
@@ -226,6 +227,67 @@ body {
   border-bottom: 1px solid var(--border);
   font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0;
   letter-spacing: 0.05em; text-transform: uppercase;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+/* ── View toggle button ── */
+.view-toggle-btn {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: 0;
+  flex-shrink: 0;
+}
+.view-toggle-btn:hover:not(:disabled) { opacity: 0.8; background: var(--surface); }
+.view-toggle-btn.active,
+.view-toggle-btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.view-toggle-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── Original native container ── */
+#original-native {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.native-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  display: block;
+  min-height: 0;
+}
+
+.native-mobi {
+  padding: var(--panel-pad);
+  color: var(--text);
+  background: var(--surface);
+  overflow-wrap: break-word;
+}
+
+/* ── Sync disabled notice ── */
+.sync-notice {
+  font-size: 0.7rem;
+  color: #e67e22;
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 #divider { width: 3px; background: var(--border); flex-shrink: 0; }

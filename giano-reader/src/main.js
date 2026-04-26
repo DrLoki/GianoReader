@@ -6,7 +6,6 @@ import { RTL_LANGS } from './i18n.js';
 
 // ── Stato applicazione ─────────────────────────────────────────────────────
 let book = null;                    // istanza epubjs corrente
-let rendition = null;               // non più usato, mantenuto per compatibilità
 let currentSpineItems = [];         // lista capitoli spine EPUB
 let currentSpineIndex = 0;          // indice capitolo corrente
 let currentMobiHtml = null;         // HTML grezzo per MOBI
@@ -16,6 +15,7 @@ let syncingScroll = false;          // lock per evitare loop nello scroll sincro
 let translationAbortController = null;
 let lazyObserver = null;            // IntersectionObserver per traduzione lazy
 let currentFilePath = null;         // path assoluto del file aperto (solo Tauri)
+let currentViewMode = 'text';       // 'text' | 'original'
 
 const LAZY_CHUNK = 12; // paragrafi per chunk di traduzione lazy
 
@@ -65,6 +65,10 @@ const settingsModal        = document.getElementById('settings-modal');
 const settingsCloseBtn     = document.getElementById('settings-close-btn');
 const uiLangSelect         = document.getElementById('ui-lang-select');
 const themeSelect          = document.getElementById('theme-select');
+// View toggle (📜) — commuta tra Text_Mode e Original_Mode
+const viewToggleBtn        = document.getElementById('view-toggle-btn');
+const syncDisabledNotice   = document.getElementById('sync-disabled-notice');
+const originalNative       = document.getElementById('original-native');
 
 // ── Settings ───────────────────────────────────────────────────────────────
 const SETTINGS_KEY = 'giano-reader-settings';
@@ -100,7 +104,7 @@ function applyUiLang(lang) {
   addBookmarkBtn.title                                   = t(lang, 'addBookmark');
   bookmarksOpenBtn.title                                 = t(lang, 'openBookmarks');
   // Viewer headers
-  document.getElementById('original-header').textContent = t(lang, 'original');
+  document.getElementById('original-header-label').textContent = t(lang, 'original');
   // Settings modal labels
   document.querySelector('label[for="ui-lang-select"]').textContent = t(lang, 'interfaceLanguage');
   document.querySelector('label[for="theme-select"]').textContent   = t(lang, 'theme');
@@ -120,6 +124,14 @@ function applyUiLang(lang) {
   prevBtn.title = 'Previous chapter';
   nextBtn.title = 'Next chapter';
   settingsBtn.title = t(lang, 'settings');
+  // View toggle & sync notice
+  if (viewToggleBtn) {
+    viewToggleBtn.title = t(lang, 'viewToggle');
+    viewToggleBtn.setAttribute('aria-label', t(lang, 'viewToggle'));
+  }
+  if (syncDisabledNotice) {
+    syncDisabledNotice.textContent = t(lang, 'syncDisabled');
+  }
 }
 
 // Init from saved settings
@@ -328,6 +340,92 @@ function bindSyncScroll() {
   };
 }
 
+// ── View mode ──────────────────────────────────────────────────────────────
+function setViewMode(mode, { skipRender = false } = {}) {
+  currentViewMode = mode;
+  const isOriginal = mode === 'original';
+
+  // Mostra/nasconde i contenitori
+  originalViewer.classList.toggle('hidden', isOriginal);
+  originalNative.classList.toggle('hidden', !isOriginal);
+
+  // Stato visivo del toggle
+  viewToggleBtn.setAttribute('aria-pressed', String(isOriginal));
+  viewToggleBtn.classList.toggle('active', isOriginal);
+
+  // Scroll sync
+  if (isOriginal) {
+    originalViewer.onscroll = null;
+    translationViewer.onscroll = null;
+    // Renderizza il contenuto nativo per il capitolo corrente (EPUB o MOBI)
+    if (!skipRender && (book && currentSpineItems.length || !book && currentMobiHtml)) {
+      renderNativeView();
+    }
+  } else {
+    bindSyncScroll();
+    // Ricarica il capitolo corrente per aggiornare testo e traduzione
+    if (!skipRender) {
+      if (book && currentSpineItems.length) {
+        displayChapter(currentSpineIndex);
+      } else if (currentMobiHtml) {
+        renderOriginal(currentChapterParagraphs);
+        translateCurrentChapter();
+      }
+    }
+  }
+
+  // Avviso nel pannello di traduzione
+  syncDisabledNotice.classList.toggle('hidden', !isOriginal);
+}
+
+// ── Native view rendering ──────────────────────────────────────────────────
+function applyThemeToMobiDiv(div) {
+  const bg  = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
+  const fg  = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
+  if (bg) div.style.background = bg;
+  if (fg) div.style.color = fg;
+}
+
+async function renderNativeView() {
+  originalNative.innerHTML = '';
+  if (book) {
+    // EPUB: serializza il capitolo con risorse sostituite (blob URL) e inietta in srcdoc
+    try {
+      const spineItem = currentSpineItems[currentSpineIndex];
+      // section.render() applica gli hook di serializzazione che sostituiscono
+      // i path relativi con blob URL / base64 già risolti da book.replacements()
+      const html = await spineItem.render(book.load.bind(book));
+      const frame = document.createElement('iframe');
+      frame.id = 'epub-native-frame';
+      frame.className = 'native-frame';
+      // Stili minimi per adattare al tema corrente
+      const bg  = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()   || '#1a1a1a';
+      const fg  = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()  || '#e0e0e0';
+      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:Georgia,serif;line-height:1.8;padding:1rem;margin:0;}</style>`;
+      frame.srcdoc = themeStyle + html;
+      frame.sandbox = 'allow-same-origin allow-scripts';
+      originalNative.appendChild(frame);
+    } catch (err) {
+      console.error('[native] errore rendering EPUB:', err);
+      originalNative.innerHTML = `<p class="placeholder">${ui('errorChapter')}${errMsg(err)}</p>`;
+    }
+  } else if (currentMobiHtml) {
+    // MOBI: inietta HTML grezzo in un div
+    const div = document.createElement('div');
+    div.id = 'mobi-native-div';
+    div.className = 'native-mobi';
+    div.innerHTML = currentMobiHtml;
+    applyThemeToMobiDiv(div);
+    originalNative.appendChild(div);
+  } else {
+    originalNative.innerHTML = `<p class="placeholder">${ui('noContent')}</p>`;
+  }
+}
+
+viewToggleBtn.addEventListener('click', () => {
+  setViewMode(currentViewMode === 'text' ? 'original' : 'text');
+});
+
 // ── Render pannelli testo ──────────────────────────────────────────────────
 function renderOriginal(paragraphs) {
   originalViewer.innerHTML = paragraphs.length
@@ -492,7 +590,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
   hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
-    if (book) { book.destroy(); book = null; rendition = null; }
+    if (book) { book.destroy(); book = null; }
     currentMobiHtml = null;
     currentChapterParagraphs = [];
 
@@ -513,7 +611,6 @@ async function loadEpub(arrayBuffer, filePath = '') {
 
     const nav = await book.loaded.navigation;
     renderToc(nav.toc);
-    rendition = null;
 
     updateProgress();
     buildProgressTicks(currentSpineItems, nav.toc);
@@ -534,6 +631,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
         if ((body?.textContent?.trim() || '').length > 500) { bestIndex = i; break; }
       }
     }
+    setViewMode('text');
+    viewToggleBtn.disabled = false;
     await displayChapter(bestIndex >= 0 ? bestIndex : 0);
   } finally {
     hideLoading();
@@ -562,11 +661,15 @@ async function displayChapter(index, scrollPct = 0) {
 
     currentChapterParagraphs = extractParagraphs(body);
     if (currentSpineIndex !== myIndex) return;
-    renderOriginal(currentChapterParagraphs);
     updateProgress();
     updateActiveTick();
-    await translateCurrentChapter(scrollPct);
-    if (scrollPct > 0) restoreScrollPct(scrollPct);
+    if (currentViewMode === 'original') {
+      await renderNativeView();
+    } else {
+      renderOriginal(currentChapterParagraphs);
+      await translateCurrentChapter(scrollPct);
+      if (scrollPct > 0) restoreScrollPct(scrollPct);
+    }
   } catch (err) {
     if (currentSpineIndex !== myIndex) return;
     console.error('[nav] errore:', err);
@@ -606,7 +709,7 @@ async function loadMobi(arrayBuffer, filePath = '') {
   hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
-    if (book) { book.destroy(); book = null; rendition = null; }
+    if (book) { book.destroy(); book = null; }
     currentSpineItems = [];
     const { title, htmlContent } = await parseMobi(arrayBuffer);
     bookTitle.textContent  = title || ui('unknownTitle');
@@ -624,6 +727,8 @@ async function loadMobi(arrayBuffer, filePath = '') {
     progressFill.style.width = '100%';
     progressThumb.style.left = '100%';
     addBookmarkBtn.disabled = false;
+    setViewMode('text');
+    viewToggleBtn.disabled = false;
     renderOriginal(currentChapterParagraphs);
     await translateCurrentChapter();
   } finally {
@@ -953,7 +1058,12 @@ async function loadBookmarkFile(bm) {
     const ext = bm.filePath.split('.').pop().toLowerCase();
 
     if (ext === 'epub') {
+      const previousViewMode = currentViewMode;
       await loadEpub(fileData, bm.filePath);
+      // Ripristina la modalità prima di displayChapter così prende il branch giusto
+      if (previousViewMode === 'original') {
+        setViewMode('original', { skipRender: true });
+      }
       if (bm.chapterIndex > 0 && bm.chapterIndex < currentSpineItems.length) {
         await displayChapter(bm.chapterIndex, bm.scrollPct ?? 0);
       } else if (bm.scrollPct > 0) {

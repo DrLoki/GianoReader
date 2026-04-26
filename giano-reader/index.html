@@ -63,14 +63,19 @@
       <!-- Layout sempre affiancato -->
       <div id="viewer-wrapper">
         <div id="original-panel">
-          <div id="original-header">Original</div>
+          <div id="original-header">
+            <span id="original-header-label">Original</span>
+            <button id="view-toggle-btn" class="view-toggle-btn" aria-pressed="false" disabled title="" aria-label="">📜</button>
+          </div>
           <div id="original-viewer" class="text-panel"></div>
+          <div id="original-native" class="hidden"></div>
         </div>
         <div id="divider"></div>
         <div id="translation-panel">
           <div id="translation-header">
             <span id="translation-lang-label">Translation</span>
             <span id="translation-status"></span>
+            <span id="sync-disabled-notice" class="hidden sync-notice"></span>
           </div>
           <div id="translation-viewer" class="text-panel"></div>
         </div>

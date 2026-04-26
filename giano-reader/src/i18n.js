@@ -1,5 +1,7 @@
 export const translations = {
   en: {
+    viewToggle:          'Toggle original view',
+    syncDisabled:        '⚠ scroll sync off',
     openBook:            '+ Open book',
     translationLanguage: 'Translation language',
     noBookOpen:          'No book open',
@@ -39,6 +41,8 @@ export const translations = {
     invalidFormat:       'Invalid format',
   },
   it: {
+    viewToggle:          'Mostra vista originale',
+    syncDisabled:        '⚠ sync scroll disattivato',
     openBook:            '+ Apri libro',
     translationLanguage: 'Lingua di traduzione',
     noBookOpen:          'Nessun libro aperto',
@@ -78,6 +82,8 @@ export const translations = {
     invalidFormat:       'Formato non valido',
   },
   fr: {
+    viewToggle:          'Afficher vue originale',
+    syncDisabled:        '⚠ sync défilement désactivé',
     openBook:            '+ Ouvrir un livre',
     translationLanguage: 'Langue de traduction',
     noBookOpen:          'Aucun livre ouvert',
@@ -117,6 +123,8 @@ export const translations = {
     invalidFormat:       'Format invalide',
   },
   de: {
+    viewToggle:          'Originalansicht umschalten',
+    syncDisabled:        '⚠ Scroll-Sync deaktiviert',
     openBook:            '+ Buch öffnen',
     translationLanguage: 'Übersetzungssprache',
     noBookOpen:          'Kein Buch geöffnet',
@@ -156,6 +164,8 @@ export const translations = {
     invalidFormat:       'Ungültiges Format',
   },
   es: {
+    viewToggle:          'Alternar vista original',
+    syncDisabled:        '⚠ sincronización desactivada',
     openBook:            '+ Abrir libro',
     translationLanguage: 'Idioma de traducción',
     noBookOpen:          'Ningún libro abierto',
@@ -195,6 +205,8 @@ export const translations = {
     invalidFormat:       'Formato no válido',
   },
   pt: {
+    viewToggle:          'Alternar vista original',
+    syncDisabled:        '⚠ sincronização desativada',
     openBook:            '+ Abrir livro',
     translationLanguage: 'Idioma de tradução',
     noBookOpen:          'Nenhum livro aberto',
@@ -234,6 +246,8 @@ export const translations = {
     invalidFormat:       'Formato inválido',
   },
   ru: {
+    viewToggle:          'Переключить оригинальный вид',
+    syncDisabled:        '⚠ синхронизация отключена',
     openBook:            '+ Открыть книгу',
     translationLanguage: 'Язык перевода',
     noBookOpen:          'Книга не открыта',
@@ -273,6 +287,8 @@ export const translations = {
     invalidFormat:       'Неверный формат',
   },
   zh: {
+    viewToggle:          '切换原始视图',
+    syncDisabled:        '⚠ 滚动同步已关闭',
     openBook:            '+ 打开书籍',
     translationLanguage: '翻译语言',
     noBookOpen:          '未打开书籍',
@@ -312,6 +328,8 @@ export const translations = {
     invalidFormat:       '格式无效',
   },
   ja: {
+    viewToggle:          '元の表示に切り替え',
+    syncDisabled:        '⚠ スクロール同期オフ',
     openBook:            '+ 本を開く',
     translationLanguage: '翻訳言語',
     noBookOpen:          '本が開かれていません',
@@ -351,6 +369,8 @@ export const translations = {
     invalidFormat:       '無効な形式',
   },
   ar: {
+    viewToggle:          'تبديل العرض الأصلي',
+    syncDisabled:        '⚠ مزامنة التمرير معطلة',
     openBook:            '+ فتح كتاب',
     translationLanguage: 'لغة الترجمة',
     noBookOpen:          'لا يوجد كتاب مفتوح',
@@ -390,6 +410,8 @@ export const translations = {
     invalidFormat:       'تنسيق غير صالح',
   },
   fil: {
+    viewToggle:          'I-toggle ang orihinal na view',
+    syncDisabled:        '⚠ naka-off ang scroll sync',
     openBook:            '+ Buksan ang libro',
     translationLanguage: 'Wika ng pagsasalin',
     noBookOpen:          'Walang bukas na libro',
@@ -429,6 +451,8 @@ export const translations = {
     invalidFormat:       'Di-wastong format',
   },
   sq: {
+    viewToggle:          'Kalo pamjen origjinale',
+    syncDisabled:        '⚠ sinkronizimi i lëvizjes çaktivizuar',
     openBook:            '+ Hap librin',
     translationLanguage: 'Gjuha e përkthimit',
     noBookOpen:          'Asnjë libër i hapur',
