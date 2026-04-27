@@ -147,6 +147,9 @@ function applyUiLang(lang) {
   if (syncDisabledNotice) {
     syncDisabledNotice.textContent = t(lang, 'syncDisabled');
   }
+  // Settings about footer
+  document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.6.2' });
 }
 
 // Init from saved settings
@@ -427,7 +430,7 @@ async function renderNativeView() {
       frame.className = 'native-frame';
       const bg  = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()   || '#1a1a1a';
       const fg  = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()  || '#e0e0e0';
-      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:Georgia,serif;line-height:1.8;padding:1rem;margin:0;}</style>`;
+      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:Georgia,serif;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}</style>`;
       frame.srcdoc = themeStyle + html;
       originalNative.appendChild(frame);
     } catch (err) {

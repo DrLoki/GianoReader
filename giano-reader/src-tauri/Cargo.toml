@@ -1,13 +1,13 @@
 [package]
 name = "giano-reader"
-version = "0.6.1"
+version = "0.6.2"
 description = "Giano Reader con traduzione"
-authors = []
+authors = ["Giampaolo Bolzonella <giampaolo.bolzonella@gmail.com>"]
 edition = "2021"
 
 [package.metadata.bundle]
 name = "Giano Reader"
-identifier = "com.dev.giano-reader"
+identifier = "com.drloki.giano-reader"
 icon = ["icons/32x32.png", "icons/128x128.png", "icons/256x256.png", "icons/icon.ico"]
 
 [lib]
@@ -23,6 +23,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [profile.release]
 panic = "abort"

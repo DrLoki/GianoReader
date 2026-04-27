@@ -40,6 +40,8 @@ export const translations = {
     importedMsg:         'Imported {added} bookmarks ({skipped} duplicates skipped).',
     importError:         'Import error: ',
     invalidFormat:       'Invalid format',
+    developedBy:         'Developed by {author}',
+    version:             'Ver.: {version}',
   },
   it: {
     viewToggle:          'Mostra vista originale',
@@ -82,6 +84,8 @@ export const translations = {
     importedMsg:         'Importati {added} segnalibri ({skipped} duplicati ignorati).',
     importError:         'Errore importazione: ',
     invalidFormat:       'Formato non valido',
+    developedBy:         'Sviluppato da {author}',
+    version:             'Ver.: {version}',
   },
   fr: {
     viewToggle:          'Afficher vue originale',
@@ -124,6 +128,8 @@ export const translations = {
     importedMsg:         '{added} signets importés ({skipped} doublons ignorés).',
     importError:         'Erreur d\'importation : ',
     invalidFormat:       'Format invalide',
+    developedBy:         'Développé par {author}',
+    version:             'Ver.: {version}',
   },
   de: {
     viewToggle:          'Originalansicht umschalten',
@@ -166,6 +172,8 @@ export const translations = {
     importedMsg:         '{added} Lesezeichen importiert ({skipped} Duplikate übersprungen).',
     importError:         'Importfehler: ',
     invalidFormat:       'Ungültiges Format',
+    developedBy:         'Entwickelt von {author}',
+    version:             'Ver.: {version}',
   },
   es: {
     viewToggle:          'Alternar vista original',
@@ -208,6 +216,8 @@ export const translations = {
     importedMsg:         '{added} marcadores importados ({skipped} duplicados omitidos).',
     importError:         'Error de importación: ',
     invalidFormat:       'Formato no válido',
+    developedBy:         'Desarrollado por {author}',
+    version:             'Ver.: {version}',
   },
   pt: {
     viewToggle:          'Alternar vista original',
@@ -250,6 +260,8 @@ export const translations = {
     importedMsg:         '{added} marcadores importados ({skipped} duplicatas ignoradas).',
     importError:         'Erro de importação: ',
     invalidFormat:       'Formato inválido',
+    developedBy:         'Desenvolvido por {author}',
+    version:             'Ver.: {version}',
   },
   ru: {
     viewToggle:          'Переключить оригинальный вид',
@@ -292,6 +304,8 @@ export const translations = {
     importedMsg:         'Импортировано {added} закладок ({skipped} дубликатов пропущено).',
     importError:         'Ошибка импорта: ',
     invalidFormat:       'Неверный формат',
+    developedBy:         'Разработано {author}',
+    version:             'Вер.: {version}',
   },
   zh: {
     viewToggle:          '切换原始视图',
@@ -334,6 +348,8 @@ export const translations = {
     importedMsg:         '已导入 {added} 个书签（跳过 {skipped} 个重复项）。',
     importError:         '导入错误：',
     invalidFormat:       '格式无效',
+    developedBy:         '开发者：{author}',
+    version:             '版本：{version}',
   },
   ja: {
     viewToggle:          '元の表示に切り替え',
@@ -376,6 +392,8 @@ export const translations = {
     importedMsg:         '{added} 件のブックマークをインポートしました（{skipped} 件の重複をスキップ）。',
     importError:         'インポートエラー：',
     invalidFormat:       '無効な形式',
+    developedBy:         '開発者：{author}',
+    version:             'バージョン：{version}',
   },
   ar: {
     viewToggle:          'تبديل العرض الأصلي',
@@ -418,6 +436,8 @@ export const translations = {
     importedMsg:         'تم استيراد {added} إشارة ({skipped} مكررة تم تخطيها).',
     importError:         'خطأ في الاستيراد: ',
     invalidFormat:       'تنسيق غير صالح',
+    developedBy:         'طوّره {author}',
+    version:             'الإصدار: {version}',
   },
   fil: {
     viewToggle:          'I-toggle ang orihinal na view',
@@ -460,6 +480,8 @@ export const translations = {
     importedMsg:         'Na-import ang {added} bookmark ({skipped} duplicate ang nilaktawan).',
     importError:         'Error sa pag-import: ',
     invalidFormat:       'Di-wastong format',
+    developedBy:         'Ginawa ni {author}',
+    version:             'Bersyon: {version}',
   },
   sq: {
     viewToggle:          'Kalo pamjen origjinale',
@@ -502,6 +524,8 @@ export const translations = {
     importedMsg:         '{added} faqerojtës u importuan ({skipped} dublikatë u anashkaluan).',
     importError:         'Gabim importi: ',
     invalidFormat:       'Format i pavlefshëm',
+    developedBy:         'Zhvilluar nga {author}',
+    version:             'Ver.: {version}',
   },
 };
 
