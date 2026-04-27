@@ -1,14 +1,11 @@
 import ePub from 'epubjs';
 import { translateParagraphs } from './translator.js';
-import { parseMobi } from './mobi.js';
-import { t } from './i18n.js';
-import { RTL_LANGS } from './i18n.js';
+import { t, RTL_LANGS } from './i18n.js';
 
 // ── Stato applicazione ─────────────────────────────────────────────────────
 let book = null;                    // istanza epubjs corrente
 let currentSpineItems = [];         // lista capitoli spine EPUB
 let currentSpineIndex = 0;          // indice capitolo corrente
-let currentMobiHtml = null;         // HTML grezzo per MOBI
 let currentChapterParagraphs = [];  // paragrafi del capitolo corrente
 let syncingScroll = false;          // lock per evitare loop nello scroll sincronizzato
 let translationAbortController = null;
@@ -62,11 +59,11 @@ const settingsModal        = document.getElementById('settings-modal');
 const settingsCloseBtn     = document.getElementById('settings-close-btn');
 const uiLangSelect         = document.getElementById('ui-lang-select');
 const themeSelect          = document.getElementById('theme-select');
-// View toggle (📜) — commuta tra Text_Mode e Original_Mode
+// View toggle — commuta tra Text_Mode e Original_Mode
 const viewToggleBtn        = document.getElementById('view-toggle-btn');
 const syncDisabledNotice   = document.getElementById('sync-disabled-notice');
 const originalNative       = document.getElementById('original-native');
-// Hide translation toggle (⇔) — nasconde/mostra il pannello di traduzione
+// Hide translation toggle — nasconde/mostra il pannello di traduzione
 const hideTranslationBtn   = document.getElementById('hide-translation-btn');
 const translationPanel     = document.getElementById('translation-panel');
 const divider              = document.getElementById('divider');
@@ -80,6 +77,106 @@ hideTranslationBtn.addEventListener('click', () => {
   hideTranslationBtn.setAttribute('aria-pressed', String(translationHidden));
   hideTranslationBtn.classList.toggle('active', translationHidden);
 });
+
+// ── Custom flag dropdown ───────────────────────────────────────────────────
+const FLAG_MAP = {
+  it: 'it', en: 'gb', fr: 'fr', de: 'de', es: 'es',
+  pt: 'pt', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
+  fil: 'ph', sq: 'al',
+};
+
+function createFlagSelect(selectEl) {
+  const options = Array.from(selectEl.options).map(o => ({
+    value: o.value,
+    label: o.text.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim(),
+  }));
+
+  // Wrapper
+  const wrapper = document.createElement('div');
+  wrapper.className = 'flag-select-wrapper';
+  selectEl.parentNode.insertBefore(wrapper, selectEl);
+  selectEl.style.display = 'none';
+  wrapper.appendChild(selectEl);
+
+  // Trigger button
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'flag-select-trigger';
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+
+  // Dropdown list
+  const dropdown = document.createElement('ul');
+  dropdown.className = 'flag-select-dropdown hidden';
+  dropdown.setAttribute('role', 'listbox');
+
+  function flagImg(value) {
+    const code = FLAG_MAP[value];
+    return code ? `<img src="/flags/${code}.svg" class="flag-img" alt="${code}" />` : '';
+  }
+
+  function renderTrigger(value) {
+    const opt = options.find(o => o.value === value) || options[0];
+    trigger.innerHTML = `${flagImg(opt.value)}<span>${opt.label}</span>`;
+  }
+
+  function close() {
+    dropdown.classList.add('hidden');
+    trigger.setAttribute('aria-expanded', 'false');
+  }
+
+  function open() {
+    dropdown.classList.remove('hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+  }
+
+  options.forEach(opt => {
+    const li = document.createElement('li');
+    li.className = 'flag-select-option';
+    li.setAttribute('role', 'option');
+    li.dataset.value = opt.value;
+    li.innerHTML = `${flagImg(opt.value)}<span>${opt.label}</span>`;
+    li.addEventListener('click', () => {
+      selectEl.value = opt.value;
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      renderTrigger(opt.value);
+      dropdown.querySelectorAll('.flag-select-option').forEach(el =>
+        el.classList.toggle('selected', el.dataset.value === opt.value)
+      );
+      close();
+    });
+    dropdown.appendChild(li);
+  });
+
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    dropdown.classList.contains('hidden') ? open() : close();
+  });
+
+  document.addEventListener('click', close);
+  dropdown.addEventListener('click', e => e.stopPropagation());
+
+  wrapper.appendChild(trigger);
+  wrapper.appendChild(dropdown);
+
+  // Sync esterno: quando selectEl.value cambia programmaticamente
+  const origValueSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+  Object.defineProperty(selectEl, 'value', {
+    get() { return selectEl.options[selectEl.selectedIndex]?.value ?? ''; },
+    set(v) {
+      origValueSetter.call(selectEl, v);
+      renderTrigger(v);
+      dropdown.querySelectorAll('.flag-select-option').forEach(el =>
+        el.classList.toggle('selected', el.dataset.value === v)
+      );
+    },
+  });
+
+  renderTrigger(selectEl.value);
+  dropdown.querySelectorAll('.flag-select-option').forEach(el =>
+    el.classList.toggle('selected', el.dataset.value === selectEl.value)
+  );
+}
 
 // ── Settings ───────────────────────────────────────────────────────────────
 const SETTINGS_KEY = 'giano-reader-settings';
@@ -111,7 +208,7 @@ function applyUiLang(lang) {
   openBtn.textContent                                    = t(lang, 'openBook');
   document.querySelector('label[for="lang-select"]').textContent = t(lang, 'translationLanguage');
   tocPlaceholder.textContent                             = t(lang, 'noBookOpen');
-  bookmarksOpenBtn.textContent                           = t(lang, 'bookmarks');
+  bookmarksOpenBtn.innerHTML                             = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'bookmarks');
   addBookmarkBtn.title                                   = t(lang, 'addBookmark');
   bookmarksOpenBtn.title                                 = t(lang, 'openBookmarks');
   // Viewer headers
@@ -119,10 +216,10 @@ function applyUiLang(lang) {
   // Settings modal labels
   document.querySelector('label[for="ui-lang-select"]').textContent = t(lang, 'interfaceLanguage');
   document.querySelector('label[for="theme-select"]').textContent   = t(lang, 'theme');
-  document.getElementById('settings-modal-title').textContent       = '⚙️ ' + t(lang, 'settings');
+  document.getElementById('settings-modal-title').innerHTML         = '<img src="/icons/gear.svg" class="icon" alt="" /> ' + t(lang, 'settings');
   settingsCloseBtn.title                                             = t(lang, 'close');
   // Bookmarks modal
-  document.getElementById('bm-modal-title').textContent    = t(lang, 'bookmarks');
+  document.getElementById('bm-modal-title').innerHTML      = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'bookmarks');
   bmCloseBtn.title                                          = t(lang, 'close');
   bmImportBtn.title                                         = t(lang, 'importBookmarks');
   bmExportBtn.title                                         = t(lang, 'exportBookmarks');
@@ -149,7 +246,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.6.2' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.6.3' });
 }
 
 // Init from saved settings
@@ -161,6 +258,9 @@ function applyUiLang(lang) {
   themeSelect.value = theme;
   uiLangSelect.value = uiLang;
   applyUiLang(uiLang);
+  // Sostituisce i select lingua con dropdown custom (bandiere emoji)
+  createFlagSelect(langSelect);
+  createFlagSelect(uiLangSelect);
 })();
 
 themeSelect.addEventListener('change', () => {
@@ -243,12 +343,11 @@ function updateProgress() {
 
 // Click sulla barra → naviga al capitolo corrispondente
 progressTrack.addEventListener('click', e => {
+  if (e.target.classList.contains('progress-tick')) return;
   if (!currentSpineItems.length) return;
-  if (e.target.classList.contains('progress-tick')) return; // gestito dal tick
-  const rect = progressTrack.getBoundingClientRect();
+  const rect  = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const idx = Math.round(ratio * (currentSpineItems.length - 1));
-  displayChapter(idx);
+  displayChapter(Math.round(ratio * (currentSpineItems.length - 1)));
 });
 
 // Costruisce le tacche sulla progress bar dopo il caricamento del libro
@@ -289,7 +388,7 @@ function buildProgressTicks(spineItems, tocItems) {
   });
 }
 
-function showTooltip(anchor, label, pct) {
+function showTooltip(tick, label, pct) {
   progressTooltip.textContent = label;
   progressTooltip.style.left = `${pct}%`;
   progressTooltip.classList.add('visible');
@@ -300,18 +399,18 @@ function hideTooltip() {
 
 // Evidenzia la tacca del capitolo corrente
 function updateActiveTick() {
-  progressTicks.querySelectorAll('.progress-tick').forEach(t => {
-    t.classList.toggle('active', parseInt(t.dataset.idx) === currentSpineIndex);
+  progressTicks.querySelectorAll('.progress-tick').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.idx) === currentSpineIndex);
   });
 }
 
 // Tooltip sull'hover generico sulla barra
 progressTrack.addEventListener('mousemove', e => {
   if (!currentSpineItems.length) return;
-  const rect = progressTrack.getBoundingClientRect();
+  const rect  = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const idx = Math.round(ratio * (currentSpineItems.length - 1));
-  const tick = progressTicks.querySelector(`[data-idx="${idx}"]`);
+  const idx   = Math.round(ratio * (currentSpineItems.length - 1));
+  const tick  = progressTicks.querySelector(`[data-idx="${idx}"]`);
   if (tick) showTooltip(tick, tick.dataset.label, parseFloat(tick.style.left));
 });
 progressTrack.addEventListener('mouseleave', hideTooltip);
@@ -324,7 +423,7 @@ function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Estrae paragrafi da un nodo DOM (body di un capitolo EPUB o div MOBI)
+// Estrae paragrafi da un nodo DOM (body di un capitolo EPUB)
 function extractParagraphs(body) {
   const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'];
   const blocks = body.querySelectorAll?.(selectors.join(', '));
@@ -375,20 +474,13 @@ function setViewMode(mode, { skipRender = false } = {}) {
   if (isOriginal) {
     originalViewer.onscroll = null;
     translationViewer.onscroll = null;
-    // Renderizza il contenuto nativo per il capitolo corrente (EPUB o MOBI)
-    if (!skipRender && (book && currentSpineItems.length || !book && currentMobiHtml)) {
+    if (!skipRender && book && currentSpineItems.length) {
       renderNativeView();
     }
   } else {
     bindSyncScroll();
-    // Ricarica il capitolo corrente per aggiornare testo e traduzione
-    if (!skipRender) {
-      if (book && currentSpineItems.length) {
-        displayChapter(currentSpineIndex);
-      } else if (currentMobiHtml) {
-        renderOriginal(currentChapterParagraphs);
-        translateCurrentChapter();
-      }
+    if (!skipRender && book && currentSpineItems.length) {
+      displayChapter(currentSpineIndex);
     }
   }
 
@@ -397,31 +489,9 @@ function setViewMode(mode, { skipRender = false } = {}) {
 }
 
 // ── Native view rendering ──────────────────────────────────────────────────
-function applyThemeToMobiDiv(div) {
-  const bg  = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
-  const fg  = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
-  if (bg) div.style.background = bg;
-  if (fg) div.style.color = fg;
-}
-
-// Ritorna true se il capitolo è composto principalmente da immagini (nessun testo significativo)
-function _isImageOnlyChapter(spineItem) {
-  try {
-    const doc = spineItem.document;
-    if (!doc) return false;
-    const body = doc.body || doc.querySelector('body');
-    if (!body) return false;
-    const text = body.innerText || body.textContent || '';
-    const hasSignificantText = text.trim().replace(/\s+/g, ' ').length > 50;
-    const hasImages = body.querySelectorAll('img, svg').length > 0;
-    return hasImages && !hasSignificantText;
-  } catch (_) { return false; }
-}
-
 async function renderNativeView() {
   originalNative.innerHTML = '';
   if (book) {
-    // EPUB: serializza il capitolo con risorse sostituite (blob URL) e inietta in srcdoc
     try {
       const spineItem = currentSpineItems[currentSpineIndex];
       const html = await spineItem.render(book.load.bind(book));
@@ -437,14 +507,6 @@ async function renderNativeView() {
       console.error('[native] errore rendering EPUB:', err);
       originalNative.innerHTML = `<p class="placeholder">${ui('errorChapter')}${errMsg(err)}</p>`;
     }
-  } else if (currentMobiHtml) {
-    // MOBI: inietta HTML grezzo in un div
-    const div = document.createElement('div');
-    div.id = 'mobi-native-div';
-    div.className = 'native-mobi';
-    div.innerHTML = currentMobiHtml;
-    applyThemeToMobiDiv(div);
-    originalNative.appendChild(div);
   } else {
     originalNative.innerHTML = `<p class="placeholder">${ui('noContent')}</p>`;
   }
@@ -477,7 +539,8 @@ async function translateCurrentChapter(startPct = 0) {
   const signal = translationAbortController.signal;
 
   const lang = langSelect.value;
-  translationLangLabel.textContent = langSelect.options[langSelect.selectedIndex].text;
+  const rawLabel = langSelect.options[langSelect.selectedIndex].text;
+  translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
 
   if (!currentChapterParagraphs.length) {
     renderTranslationPlaceholder(ui('noTextToTranslate'));
@@ -576,9 +639,9 @@ openBtn.addEventListener('click', async () => {
     if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
       const { open }     = await import('@tauri-apps/plugin-dialog');
       const { readFile } = await import('@tauri-apps/plugin-fs');
-      const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub','mobi','azw','azw3'] }] });
+      const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub'] }] });
       if (!selected) return;
-      fileName = selected; // in Tauri è il path assoluto completo
+      fileName = selected;
       const raw = await readFile(selected);
       fileData = raw.buffer ?? raw;
     } else {
@@ -589,7 +652,6 @@ openBtn.addEventListener('click', async () => {
     }
     const ext = fileName.split('.').pop().toLowerCase();
     if (ext === 'epub') await loadEpub(fileData, fileName);
-    else if (['mobi','azw','azw3'].includes(ext)) await loadMobi(fileData, fileName);
     else await showAlert(ui('unsupportedFormat'));
   } catch (err) {
     console.error('[open]', err);
@@ -602,7 +664,7 @@ function pickFileViaInput() {
   return new Promise(resolve => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.epub,.mobi,.azw,.azw3';
+    input.accept = '.epub';
     input.onchange = async () => {
       const file = input.files[0];
       if (!file) return resolve(null);
@@ -619,7 +681,6 @@ async function loadEpub(arrayBuffer, filePath = '') {
   currentFilePath = filePath || null;
   try {
     if (book) { book.destroy(); book = null; }
-    currentMobiHtml = null;
     currentChapterParagraphs = [];
 
     book = ePub(arrayBuffer);
@@ -731,39 +792,6 @@ async function loadChapterDocument(spineItem) {
   return null;
 }
 
-// ── Carica MOBI ────────────────────────────────────────────────────────────
-async function loadMobi(arrayBuffer, filePath = '') {
-  showLoading(ui('loadingMobi'));
-  hideNoBookPlaceholder();
-  currentFilePath = filePath || null;
-  try {
-    if (book) { book.destroy(); book = null; }
-    currentSpineItems = [];
-    const { title, htmlContent } = await parseMobi(arrayBuffer);
-    bookTitle.textContent  = title || ui('unknownTitle');
-    bookAuthor.textContent = '';
-    bookInfo.classList.remove('hidden');
-    tocPlaceholder.style.display = 'none';
-    tocList.innerHTML = '';
-    currentMobiHtml = htmlContent;
-    const tmp = document.createElement('div');
-    tmp.innerHTML = htmlContent;
-    currentChapterParagraphs = extractParagraphs(tmp);
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    pageInfo.textContent = 'MOBI';
-    progressFill.style.width = '100%';
-    progressThumb.style.left = '100%';
-    addBookmarkBtn.disabled = false;
-    setViewMode('text');
-    viewToggleBtn.disabled = false;
-    renderOriginal(currentChapterParagraphs);
-    await translateCurrentChapter();
-  } finally {
-    hideLoading();
-  }
-}
-
 // ── Indice (TOC) ───────────────────────────────────────────────────────────
 function renderToc(items, parent = tocList) {
   parent.innerHTML = '';
@@ -849,7 +877,7 @@ function getChapterLabel(index) {
 
 // Aggiunge un segnalibro per il capitolo corrente
 addBookmarkBtn.addEventListener('click', async () => {
-  if (!currentFilePath && !currentMobiHtml) return;
+  if (!currentFilePath) return;
   const bms = loadBookmarks();
   const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
   const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
@@ -863,7 +891,6 @@ addBookmarkBtn.addEventListener('click', async () => {
     chapterIndex: currentSpineIndex,
     chapterLabel: getChapterLabel(currentSpineIndex),
     scrollPct,
-    isMobi: !!currentMobiHtml && !book,
   };
   bms.push(bm);
   saveBookmarks(bms);
@@ -883,12 +910,12 @@ function renderBookmarks() {
     const li = document.createElement('li');
     li.className = 'bookmark-item';
     li.innerHTML = `
-      <span class="bm-icon">🔖</span>
+      <span class="bm-icon"><img src="/icons/book-bookmark.svg" class="icon" alt="" /></span>
       <span class="bm-info">
         <span class="bm-title" title="${escapeHtml(bm.bookTitle || bm.fileName)}">${escapeHtml(bm.bookTitle || bm.fileName)}</span>
         <span class="bm-chapter">${escapeHtml(bm.chapterLabel)}${bm.scrollPct != null ? ` · ${bm.scrollPct}%` : ''}</span>
       </span>
-      <button class="bm-delete" title="Delete bookmark" data-id="${bm.id}">✕</button>
+      <button class="bm-delete" title="Delete bookmark" data-id="${bm.id}"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
     `;
     li.querySelector('.bm-info').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
     li.querySelector('.bm-icon').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
@@ -986,7 +1013,7 @@ async function askRelocate(bm) {
       bookmarkMissingModal.classList.add('hidden');
       try {
         const { open } = await import('@tauri-apps/plugin-dialog');
-        const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub','mobi','azw','azw3'] }] });
+        const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub'] }] });
         resolve(selected || null);
       } catch (err) {
         console.error('[bookmark] errore dialog rilocazione:', err);
@@ -1080,7 +1107,6 @@ async function loadBookmarkFile(bm) {
     if (ext === 'epub') {
       const previousViewMode = currentViewMode;
       await loadEpub(fileData, bm.filePath);
-      // Ripristina la modalità prima di displayChapter così prende il branch giusto
       if (previousViewMode === 'original') {
         setViewMode('original', { skipRender: true });
       }
@@ -1089,9 +1115,8 @@ async function loadBookmarkFile(bm) {
       } else if (bm.scrollPct > 0) {
         restoreScrollPct(bm.scrollPct);
       }
-    } else if (['mobi','azw','azw3'].includes(ext)) {
-      await loadMobi(fileData, bm.filePath);
-      restoreScrollPct(bm.scrollPct);
+    } else {
+      await showAlert(ui('unsupportedFormat'));
     }
   } catch (err) {
     console.error('[bookmark] open error:', err);

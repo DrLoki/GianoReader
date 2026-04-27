@@ -12,7 +12,7 @@
     <aside id="sidebar">
       <div id="sidebar-header">
         <button id="open-btn">Open book</button>
-        <button id="settings-btn" title="Settings">⚙️</button>
+        <button id="settings-btn" title="Settings"><img src="/icons/gear.svg" class="icon" alt="" /></button>
       </div>
       <div id="sidebar-controls">
         <label for="lang-select">Translation language</label>
@@ -45,8 +45,8 @@
 
       <!-- Segnalibri in fondo alla sidebar -->
       <div id="bookmarks-bar">
-        <button id="bookmarks-open-btn" title="Open bookmarks">🔖 Bookmarks</button>
-        <button id="add-bookmark-btn" title="Add bookmark at current position" disabled>★</button>
+        <button id="bookmarks-open-btn" title="Open bookmarks"><img src="/icons/book-bookmark.svg" class="icon" alt="" /> Bookmarks</button>
+        <button id="add-bookmark-btn" title="Add bookmark at current position" disabled><img src="/icons/star.svg" class="icon" alt="" /></button>
       </div>
     </aside>
 
@@ -57,8 +57,8 @@
           <div id="original-header">
             <span id="original-header-label">Original</span>
             <div id="original-header-actions">
-              <button id="hide-translation-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">⇔</button>
-              <button id="view-toggle-btn" class="view-toggle-btn" aria-pressed="false" disabled title="" aria-label="">📜</button>
+              <button id="hide-translation-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label=""><img src="/icons/arrows-left-right-to-line.svg" class="icon" alt="" /></button>
+              <button id="view-toggle-btn" class="view-toggle-btn" aria-pressed="false" disabled title="" aria-label=""><img src="/icons/file-image.svg" class="icon" alt="" /></button>
             </div>
           </div>
           <div id="original-viewer" class="text-panel"></div>
@@ -104,15 +104,15 @@
   <div id="bookmarks-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-modal-title">
     <div class="modal-box modal-box--bookmarks">
       <div class="modal-header">
-        <h2 id="bm-modal-title">🔖 Bookmarks</h2>
-        <button id="bm-close-btn" class="modal-close" title="Close">✕</button>
+        <h2 id="bm-modal-title"><img src="/icons/book-bookmark.svg" class="icon" alt="" /> Bookmarks</h2>
+        <button id="bm-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
       </div>
       <ul id="bookmarks-list">
         <li id="bookmarks-placeholder">No bookmarks saved</li>
       </ul>
       <div class="modal-footer">
-        <button id="bm-import-btn" title="Import bookmarks from JSON">⬆️</button>
-        <button id="bm-export-btn" title="Export bookmarks to JSON">⬇️</button>
+        <button id="bm-import-btn" title="Import bookmarks from JSON"><img src="/icons/upload.svg" class="icon" alt="" /></button>
+        <button id="bm-export-btn" title="Export bookmarks to JSON"><img src="/icons/download.svg" class="icon" alt="" /></button>
         <input type="file" id="bm-import-input" accept=".json" style="display:none" />
       </div>
     </div>
@@ -134,8 +134,8 @@
   <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
     <div class="modal-box modal-box--settings">
       <div class="modal-header">
-        <h2 id="settings-modal-title">⚙️ Settings</h2>
-        <button id="settings-close-btn" class="modal-close" title="Close">✕</button>
+        <h2 id="settings-modal-title"><img src="/icons/gear.svg" class="icon" alt="" /> Settings</h2>
+        <button id="settings-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
       </div>
       <div class="settings-row">
         <label for="ui-lang-select">Interface language</label>

@@ -23,21 +23,6 @@
   --panel-pad:   36px 48px;
 }
 
-body:not(.dark) {
-  --bg:          #f5f0e8;
-  --surface:     #fff;
-  --sidebar-bg:  #2c2c2c;
-  --text:        #222;
-  --text-muted:  #888;
-  --border:      #ddd;
-  --toolbar-bg:  #fff;
-  --progress-bg: #ddd;
-  --progress-fg: #c0392b;
-  --thumb-bg:    #555;
-  --scrollbar-track: #f0f0f0;
-  --scrollbar-thumb: #bbb;
-  --scrollbar-hover: #999;
-}
 
 /* ── Scrollbar uniformi (Webkit) ── */
 ::-webkit-scrollbar              { width: 7px; height: 7px; }
@@ -77,12 +62,6 @@ body {
 }
 #open-btn:hover { opacity: 0.85; }
 #sidebar-controls label { font-size: 0.78rem; color: #aaa; }
-#lang-select {
-  width: 100%; padding: 6px 8px;
-  border: 1px solid #555; border-radius: 4px;
-  background: #2a2a2a; color: #e0e0e0;
-  font-size: 0.85rem; cursor: pointer;
-}
 
 #book-info {
   padding: 12px 16px; display: flex; gap: 10px; align-items: center;
@@ -94,6 +73,12 @@ body {
 #book-author { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
 
 #toc-container { flex: 1; overflow-y: auto; padding: 6px 0; }
+
+/* Sidebar scrollbar — uses sidebar-specific vars so light/sepia themes stay dark */
+#sidebar ::-webkit-scrollbar              { width: 7px; }
+#sidebar ::-webkit-scrollbar-track        { background: var(--sidebar-scrollbar-track, var(--scrollbar-track)); }
+#sidebar ::-webkit-scrollbar-thumb        { background: var(--sidebar-scrollbar-thumb, var(--scrollbar-thumb)); border-radius: 4px; }
+#sidebar ::-webkit-scrollbar-thumb:hover  { background: var(--sidebar-scrollbar-hover, var(--scrollbar-hover)); }
 #toc-placeholder { padding: 16px; font-size: 0.82rem; color: #555; }
 #toc-list { list-style: none; }
 #toc-list li a {
@@ -257,23 +242,12 @@ body {
   background: var(--surface);
 }
 
-#epub-native-div {
-  width: 100%;
-}
-
 .native-frame {
   flex: 1;
   width: 100%;
   border: none;
   display: block;
   min-height: 0;
-}
-
-.native-mobi {
-  padding: var(--panel-pad);
-  color: var(--text);
-  background: var(--surface);
-  overflow-wrap: break-word;
 }
 
 /* ── Sync disabled notice ── */
@@ -501,6 +475,9 @@ body.theme-light {
   --scrollbar-track: #f0f0f0;
   --scrollbar-thumb: #bbb;
   --scrollbar-hover: #999;
+  --sidebar-scrollbar-track: #3a3a3a;
+  --sidebar-scrollbar-thumb: #666;
+  --sidebar-scrollbar-hover: #888;
 }
 
 body.theme-monokai {
@@ -569,6 +546,9 @@ body.theme-sepia {
   --scrollbar-track: #f4ecd8;
   --scrollbar-thumb: #c4b49a;
   --scrollbar-hover: #9e8c76;
+  --sidebar-scrollbar-track: #4a3c2e;
+  --sidebar-scrollbar-thumb: #7a6550;
+  --sidebar-scrollbar-hover: #9e8c76;
 }
 
 /* ── Sidebar header con gear ── */
@@ -633,3 +613,130 @@ html.rtl .modal-actions      { flex-direction: row-reverse; }
 html.rtl .settings-row select { text-align: right; }
 html.rtl #page-info          { text-align: left; }
 html.rtl .text-panel         { direction: rtl; text-align: right; }
+
+/* ── SVG icons ── */
+:root {
+  --icon-filter-on-dark:    brightness(0) invert(1);   /* white — accent buttons */
+  --icon-filter-on-surface: brightness(0) invert(1);   /* white — dark toolbars */
+  --icon-filter-muted:      brightness(0) invert(0.6); /* muted white — sidebar/modal */
+}
+
+body.theme-light,
+body.theme-sepia {
+  --icon-filter-on-surface: brightness(0);             /* black — light toolbars */
+  --icon-filter-muted:      brightness(0) opacity(0.5);
+}
+
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  filter: var(--icon-filter-on-surface);
+}
+
+/* Accent buttons: always white */
+#settings-btn .icon,
+#add-bookmark-btn .icon {
+  filter: var(--icon-filter-on-dark) !important;
+}
+
+/* Sidebar is always dark — white/muted icons regardless of theme */
+#bookmarks-open-btn .icon,
+.bm-icon .icon {
+  filter: brightness(0) invert(0.7) !important;
+}
+
+/* Modal-box is always dark (#242424) */
+.modal-header .icon {
+  filter: brightness(0) invert(0.85) !important;
+}
+
+/* Active toggle: accent bg → white icon */
+.view-toggle-btn.active .icon,
+.view-toggle-btn[aria-pressed="true"] .icon {
+  filter: var(--icon-filter-on-dark) !important;
+}
+
+/* ── Custom flag dropdown ── */
+.flag-select-wrapper {
+  position: relative;
+  width: 100%;
+}
+.flag-select-trigger {
+  width: 100%;
+  padding: 6px 28px 6px 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  position: relative;
+  text-align: left;
+}
+.flag-select-trigger::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 4px solid transparent;
+  border-top-color: #aaa;
+  margin-top: 2px;
+}
+.flag-select-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.flag-select-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  z-index: 200;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.flag-select-dropdown.hidden { display: none; }
+.flag-select-option {
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  color: #e0e0e0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.flag-select-option:hover { background: #3a3a3a; }
+.flag-select-option.selected { background: #333; color: #fff; }
+.flag-img {
+  width: 20px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Settings modal: dropdown on dark modal-box background */
+.modal-box .flag-select-trigger {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+.modal-box .flag-select-dropdown {
+  background: var(--bg);
+  border-color: var(--border);
+}
+.modal-box .flag-select-option { color: var(--text); }
+.modal-box .flag-select-option:hover { background: var(--surface); }
+.modal-box .flag-select-option.selected { background: var(--surface); }
