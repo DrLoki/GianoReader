@@ -59,6 +59,9 @@ const settingsModal        = document.getElementById('settings-modal');
 const settingsCloseBtn     = document.getElementById('settings-close-btn');
 const uiLangSelect         = document.getElementById('ui-lang-select');
 const themeSelect          = document.getElementById('theme-select');
+const fontFamilySelect     = document.getElementById('font-family-select');
+const fontSizeRange        = document.getElementById('font-size-range');
+const fontSizeValue        = document.getElementById('font-size-value');
 // View toggle — commuta tra Text_Mode e Original_Mode
 const viewToggleBtn        = document.getElementById('view-toggle-btn');
 const syncDisabledNotice   = document.getElementById('sync-disabled-notice');
@@ -198,6 +201,16 @@ function applyTheme(theme) {
   }
 }
 
+function applyFont(family) {
+  document.documentElement.style.setProperty('--reader-font-family', family);
+}
+
+function applyFontSize(size) {
+  document.documentElement.style.setProperty('--font-size', size + 'px');
+  if (fontSizeValue) fontSizeValue.textContent = size + 'px';
+  if (fontSizeRange) fontSizeRange.value = size;
+}
+
 function applyUiLang(lang) {
   document.documentElement.lang = lang;
   // RTL support
@@ -216,6 +229,8 @@ function applyUiLang(lang) {
   // Settings modal labels
   document.querySelector('label[for="ui-lang-select"]').textContent = t(lang, 'interfaceLanguage');
   document.querySelector('label[for="theme-select"]').textContent   = t(lang, 'theme');
+  document.querySelector('label[for="font-family-select"]').textContent = t(lang, 'fontFamily');
+  document.querySelector('label[for="font-size-range"]').textContent    = t(lang, 'fontSize');
   document.getElementById('settings-modal-title').innerHTML         = '<img src="/icons/gear.svg" class="icon" alt="" /> ' + t(lang, 'settings');
   settingsCloseBtn.title                                             = t(lang, 'close');
   // Bookmarks modal
@@ -246,7 +261,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.6.3' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.6.4' });
 }
 
 // Init from saved settings
@@ -258,6 +273,13 @@ function applyUiLang(lang) {
   themeSelect.value = theme;
   uiLangSelect.value = uiLang;
   applyUiLang(uiLang);
+  // Font family
+  const fontFamily = s.fontFamily || 'Georgia, serif';
+  applyFont(fontFamily);
+  if (fontFamilySelect) fontFamilySelect.value = fontFamily;
+  // Font size
+  const fontSize = s.fontSize || 16;
+  applyFontSize(fontSize);
   // Sostituisce i select lingua con dropdown custom (bandiere emoji)
   createFlagSelect(langSelect);
   createFlagSelect(uiLangSelect);
@@ -275,6 +297,24 @@ uiLangSelect.addEventListener('change', () => {
   s.uiLang = uiLangSelect.value;
   saveSettings(s);
   applyUiLang(s.uiLang);
+});
+
+fontFamilySelect.addEventListener('change', () => {
+  const s = loadSettings();
+  s.fontFamily = fontFamilySelect.value;
+  saveSettings(s);
+  applyFont(s.fontFamily);
+});
+
+fontSizeRange.addEventListener('input', () => {
+  const size = parseInt(fontSizeRange.value, 10);
+  fontSizeValue.textContent = size + 'px';
+  document.documentElement.style.setProperty('--font-size', size + 'px');
+});
+fontSizeRange.addEventListener('change', () => {
+  const s = loadSettings();
+  s.fontSize = parseInt(fontSizeRange.value, 10);
+  saveSettings(s);
 });
 
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
@@ -417,26 +457,56 @@ progressTrack.addEventListener('mouseleave', hideTooltip);
 
 // ── Utilità testo ──────────────────────────────────────────────────────────
 function paragraphsToHtml(paragraphs) {
-  return paragraphs.filter(p => p.trim()).map(p => `<p>${escapeHtml(p)}</p>`).join('');
+  return paragraphs.filter(p => (p.text || p).trim()).map(p => {
+    const html = p.html !== undefined ? p.html : escapeHtml(p);
+    return `<p>${html}</p>`;
+  }).join('');
 }
 function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Serializza il contenuto inline di un elemento preservando link e formattazione base,
+// ma rimuovendo attributi pericolosi. Usato per il pannello originale in modalità testo.
+function safeInnerHtml(el) {
+  const clone = el.cloneNode(true);
+  // Rimuovi script e stili inline
+  clone.querySelectorAll('script, style').forEach(n => n.remove());
+  // Normalizza i link: mantieni solo href, gestisci il click via JS
+  clone.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    // Rimuovi tutti gli attributi tranne href
+    Array.from(a.attributes).forEach(attr => {
+      if (attr.name !== 'href') a.removeAttribute(attr.name);
+    });
+    a.setAttribute('data-epub-href', href);
+    a.removeAttribute('href');
+    a.style.cursor = 'pointer';
+  });
+  // Rimuovi attributi di stile/evento da tutti gli altri elementi
+  clone.querySelectorAll('*').forEach(n => {
+    ['onclick','onmouseover','onerror','onload'].forEach(ev => n.removeAttribute(ev));
+  });
+  return clone.innerHTML;
+}
+
 // Estrae paragrafi da un nodo DOM (body di un capitolo EPUB)
+// Restituisce oggetti { text, html } — text per la traduzione, html per il rendering
 function extractParagraphs(body) {
   const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'];
   const blocks = body.querySelectorAll?.(selectors.join(', '));
   if (blocks && blocks.length > 0) {
     const r = [];
     blocks.forEach(el => {
-      const t = (el.textContent || '').trim();
-      if (t) r.push(t);
+      const text = (el.textContent || '').trim();
+      if (text) r.push({ text, html: safeInnerHtml(el) });
     });
     if (r.length) return r;
   }
   // Fallback: split per newline (funziona anche su XMLDocument)
-  return (body.textContent || '').split('\n').map(l => l.trim()).filter(l => l.length > 2);
+  return (body.textContent || '').split('\n')
+    .map(l => l.trim()).filter(l => l.length > 2)
+    .map(text => ({ text, html: escapeHtml(text) }));
 }
 
 // ── Scroll sincronizzato tra i due pannelli ────────────────────────────────
@@ -500,8 +570,19 @@ async function renderNativeView() {
       frame.className = 'native-frame';
       const bg  = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()   || '#1a1a1a';
       const fg  = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()  || '#e0e0e0';
-      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:Georgia,serif;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}</style>`;
-      frame.srcdoc = themeStyle + html;
+      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:Georgia,serif;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}a{color:inherit;}</style>`;
+      // Script iniettato nell'iframe: intercetta tutti i click sui link e li
+      // comunica al parent tramite postMessage invece di navigare l'iframe.
+      const interceptScript = `<script>
+        document.addEventListener('click', function(e) {
+          var a = e.target.closest('a');
+          if (!a) return;
+          e.preventDefault();
+          var href = a.getAttribute('href') || '';
+          window.parent.postMessage({ type: 'epub-link', href: href }, '*');
+        });
+      <\/script>`;
+      frame.srcdoc = themeStyle + interceptScript + html;
       originalNative.appendChild(frame);
     } catch (err) {
       console.error('[native] errore rendering EPUB:', err);
@@ -516,12 +597,72 @@ viewToggleBtn.addEventListener('click', () => {
   setViewMode(currentViewMode === 'text' ? 'original' : 'text');
 });
 
+// ── Gestione link cliccati nell'iframe (modalità originale) ───────────────
+window.addEventListener('message', e => {
+  if (!e.data || e.data.type !== 'epub-link') return;
+  const href = e.data.href || '';
+  if (!href || href.startsWith('http://') || href.startsWith('https://')) return;
+
+  // Separa file e ancora: "chapter02.xhtml#note-1" → file="chapter02.xhtml", anchor="note-1"
+  const [filePart, anchor] = href.split('#');
+
+  if (filePart) {
+    // Link a un altro capitolo (con o senza ancora)
+    const idx = currentSpineItems.findIndex(i =>
+      i.href === filePart || i.href?.endsWith(filePart) || filePart?.endsWith(i.href)
+    );
+    if (idx >= 0) {
+      displayChapter(idx).then(() => {
+        if (anchor) scrollToAnchor(anchor);
+      });
+    }
+  } else if (anchor) {
+    // Link a un'ancora nello stesso capitolo
+    scrollToAnchor(anchor);
+  }
+});
+
+// Scrolla all'elemento con id/name corrispondente all'ancora nell'iframe corrente
+function scrollToAnchor(anchor) {
+  const frame = document.getElementById('epub-native-frame');
+  if (!frame || !frame.contentDocument) return;
+  const target = frame.contentDocument.getElementById(anchor)
+    || frame.contentDocument.querySelector(`[name="${anchor}"]`);
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 // ── Render pannelli testo ──────────────────────────────────────────────────
 function renderOriginal(paragraphs) {
   originalViewer.innerHTML = paragraphs.length
     ? paragraphsToHtml(paragraphs)
     : `<p class="placeholder">${ui('noContent')}</p>`;
   originalViewer.scrollTop = 0;
+
+  // Gestione click sui link interni EPUB nel pannello testo
+  originalViewer.querySelectorAll('a[data-epub-href]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const href = a.getAttribute('data-epub-href') || '';
+      if (!href || href.startsWith('http://') || href.startsWith('https://')) return;
+      const [filePart, anchor] = href.split('#');
+      if (filePart) {
+        const idx = currentSpineItems.findIndex(i =>
+          i.href === filePart || i.href?.endsWith(filePart) || filePart?.endsWith(i.href)
+        );
+        if (idx >= 0) {
+          displayChapter(idx).then(() => {
+            if (anchor) {
+              const target = originalViewer.querySelector(`[id="${anchor}"], [name="${anchor}"]`);
+              if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          });
+        }
+      } else if (anchor) {
+        const target = originalViewer.querySelector(`[id="${anchor}"], [name="${anchor}"]`);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
 }
 function renderTranslationPlaceholder(msg) {
   translationViewer.innerHTML = `<p class="placeholder">${msg}</p>`;
@@ -556,7 +697,8 @@ async function translateCurrentChapter(startPct = 0) {
   const totalChunks = Math.ceil(total / LAZY_CHUNK);
 
   // Crea subito tutti i <p> con il testo originale come placeholder visivo
-  const pEls = paragraphs.map((text, i) => {
+  const pEls = paragraphs.map((para, i) => {
+    const text = para.text !== undefined ? para.text : para;
     const p = document.createElement('p');
     p.dataset.idx = i;
     p.className = 'pending';
@@ -581,7 +723,7 @@ async function translateCurrentChapter(startPct = 0) {
     translatedChunks.add(chunkIdx);
     const start = chunkIdx * LAZY_CHUNK;
     const end = Math.min(start + LAZY_CHUNK, total);
-    const slice = paragraphs.slice(start, end);
+    const slice = paragraphs.slice(start, end).map(p => p.text !== undefined ? p.text : p);
     setTranslationStatus(`${Math.round((translatedChunks.size / totalChunks) * 100)}%`);
     try {
       const translated = await translateParagraphs(slice, lang, signal);
@@ -595,7 +737,8 @@ async function translateCurrentChapter(startPct = 0) {
       if (signal.aborted) return;
       console.error('[translate] errore chunk', chunkIdx, err);
       for (let i = start; i < end; i++) {
-        pEls[i].textContent = paragraphs[i];
+        const fallback = paragraphs[i].text !== undefined ? paragraphs[i].text : paragraphs[i];
+        pEls[i].textContent = fallback;
         pEls[i].classList.remove('pending');
       }
     }
@@ -1134,3 +1277,57 @@ async function loadBookmarkFile(bm) {
 
 // Inizializza la lista segnalibri all'avvio
 renderBookmarks();
+
+// ── Persistenza geometria finestra (solo Tauri) ────────────────────────────
+const WINDOW_STATE_KEY = 'giano-reader-window-state';
+
+async function saveWindowState() {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    const win = getCurrentWindow();
+    const isMaximized = await win.isMaximized();
+    const state = { maximized: isMaximized };
+    if (!isMaximized) {
+      const { x, y } = await win.outerPosition();
+      const { width, height } = await win.outerSize();
+      // outerPosition/outerSize restituiscono valori in pixel fisici; convertiamo in logici
+      const factor = await win.scaleFactor();
+      state.x      = Math.round(x / factor);
+      state.y      = Math.round(y / factor);
+      state.width  = Math.round(width  / factor);
+      state.height = Math.round(height / factor);
+    }
+    localStorage.setItem(WINDOW_STATE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.warn('[window-state] save error:', err);
+  }
+}
+
+async function restoreWindowState() {
+  try {
+    const raw = localStorage.getItem(WINDOW_STATE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    const { getCurrentWindow, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/window');
+    const win = getCurrentWindow();
+    if (state.maximized) {
+      await win.maximize();
+    } else {
+      if (state.width  && state.height) await win.setSize(new LogicalSize(state.width, state.height));
+      if (state.x != null && state.y != null) await win.setPosition(new LogicalPosition(state.x, state.y));
+    }
+  } catch (err) {
+    console.warn('[window-state] restore error:', err);
+  }
+}
+
+if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+  // Ripristina geometria appena possibile
+  restoreWindowState();
+
+  // Salva geometria prima della chiusura
+  window.addEventListener('beforeunload', saveWindowState);
+
+  // Salva anche periodicamente (ogni 5s) per catturare ridimensionamenti/spostamenti
+  setInterval(saveWindowState, 5000);
+}

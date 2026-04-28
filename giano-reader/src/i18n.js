@@ -41,6 +41,8 @@ export const translations = {
     invalidFormat:       'Invalid format',
     developedBy:         'Developed by {author}',
     version:             'Ver.: {version}',
+    fontFamily:          'Font',
+    fontSize:            'Font size',
   },
   it: {
     viewToggle:          'Mostra vista originale',
@@ -84,6 +86,8 @@ export const translations = {
     invalidFormat:       'Formato non valido',
     developedBy:         'Sviluppato da {author}',
     version:             'Ver.: {version}',
+    fontFamily:          'Carattere',
+    fontSize:            'Dimensione testo',
   },
   fr: {
     viewToggle:          'Afficher vue originale',
