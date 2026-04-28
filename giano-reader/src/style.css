@@ -680,7 +680,8 @@ body.theme-sepia {
 }
 
 /* Modal-box is always dark (#242424) */
-.modal-header .icon {
+.modal-header .icon,
+.modal-footer .icon {
   filter: brightness(0) invert(0.85) !important;
 }
 
