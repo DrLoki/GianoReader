@@ -11,13 +11,17 @@ Desktop EPUB reader with integrated side-by-side translation powered by Google T
 - Chapter navigation with progress bar and chapter tick marks
 - Side-by-side translation (original + translated) with synchronized scroll
 - Lazy translation: starts from your current reading position, expands downward as you scroll
+- Original EPUB view mode (rendered in an iframe with native styling)
 - Bookmarks with chapter and scroll position, import/export as JSON
+- Library: scan folders for EPUB files, store metadata and covers, filter by status
+- Book detail panel: editable title, author, publisher, year, language, status, personal notes
 - 6 themes: Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia
-- Text zoom (A+ / A-)
-- Book cover and metadata display
+- Custom font family and font size controls
+- Configurable folder scan depth (1–10 levels)
 - UI language support with RTL (Arabic)
 - SVG icons (Font Awesome 6 Free) instead of emoji
 - Language dropdowns with SVG flag images (compatible with WebView2 on Windows)
+- Window geometry persistence across restarts (Tauri only)
 
 ## Supported translation languages
 
@@ -52,9 +56,10 @@ giano-reader/
 │       ├── it.svg, gb.svg, fr.svg, de.svg, es.svg, pt.svg
 │       ├── ru.svg, cn.svg, jp.svg, sa.svg, ph.svg, al.svg
 ├── src/
-│   ├── main.js             # All frontend logic: reader, UI, bookmarks, scroll sync
+│   ├── main.js             # All frontend logic: reader, UI, bookmarks, library, scroll sync
 │   ├── translator.js       # Google Translate integration (chunked, lazy)
 │   ├── i18n.js             # UI translations (12 languages); exports t(lang, key, vars)
+│   ├── settings-utils.js   # Pure utility functions (no DOM); used by main.js and tests
 │   └── style.css           # All styles (dark mode via body.dark)
 └── src-tauri/
     ├── Cargo.toml
@@ -74,6 +79,12 @@ giano-reader/
 Uses the unofficial Google Translate public endpoint (`translate.googleapis.com`) — no API key required. Text is split into ~4500-character chunks and translated lazily: the visible block first, then subsequent ones as you scroll. When opening a bookmark, translation starts directly from the saved position.
 
 > **Note:** The unofficial endpoint is suitable for personal use only. For commercial or high-volume use, the [official Google Cloud Translation API](https://cloud.google.com/translate) is recommended.
+
+---
+
+## Library
+
+The library scans local folders for EPUB files and stores metadata (title, author, publisher, year, language, description, cover thumbnail, estimated page count, file size) in `localStorage`. Books can be filtered by reading status (To read / Reading / Read) and searched by title or author. The scan depth (1–10 folder levels) is configurable in Settings.
 
 ---
 

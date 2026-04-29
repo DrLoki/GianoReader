@@ -67,8 +67,9 @@ body {
 }
 #open-btn {
   background: var(--accent); color: #fff;
-  border: none; padding: 8px 12px; border-radius: 4px;
+  border: none; padding: 0 12px; height: 34px; border-radius: 4px;
   cursor: pointer; font-size: 0.9rem; text-align: center;
+  display: flex; align-items: center; justify-content: center;
 }
 #open-btn:hover { opacity: 0.85; }
 #sidebar-controls label { font-size: 0.78rem; color: #aaa; }
@@ -113,7 +114,7 @@ body {
 }
 #progress-bar-wrap button {
   background: none; border: 1px solid var(--border);
-  padding: 5px 13px; border-radius: 4px;
+  padding: 0 13px; height: 34px; border-radius: 4px;
   cursor: pointer; font-size: 1rem; color: var(--text);
   flex-shrink: 0;
 }
@@ -444,7 +445,7 @@ body {
 }
 /* Small icon-only buttons (bookmarks footer) */
 .modal-footer button:not(.btn-primary):not(.btn-danger) {
-  width: 32px; height: 32px;
+  width: 34px; height: 34px;
   border-radius: 4px; border: 1px solid var(--border);
   cursor: pointer; font-size: 1rem;
   background: #2a2a2a; color: #ccc;
@@ -474,9 +475,10 @@ body {
 .modal-box strong { color: var(--modal-strong); }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 .modal-actions button {
-  padding: 7px 18px; border-radius: 4px; border: none;
+  padding: 0 18px; height: 34px; border-radius: 4px; border: none;
   cursor: pointer; font-size: 0.85rem;
   background: var(--accent); color: #fff;
+  display: flex; align-items: center;
 }
 .modal-actions button.secondary {
   background: var(--modal-secondary); color: var(--modal-text);
@@ -621,10 +623,11 @@ body.theme-sepia {
 #settings-btn {
   background: var(--accent); border: none;
   color: #fff; cursor: pointer;
-  font-size: 1.1rem; padding: 7px 9px;
-  border-radius: 4px; line-height: 1;
+  width: 34px; height: 34px;
+  border-radius: 4px;
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
+  padding: 0;
 }
 #settings-btn:hover { opacity: 0.85; }
 
@@ -646,6 +649,19 @@ body.theme-sepia {
   border: 1px solid var(--border); border-radius: 4px;
   background: var(--bg); color: var(--text);
   font-size: 0.88rem; cursor: pointer;
+}
+.settings-row input[type="number"] {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--bg); color: var(--text);
+  font-size: 0.88rem; cursor: text;
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.settings-row input[type="number"]::-webkit-inner-spin-button,
+.settings-row input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
 }
 
 /* Font size slider row */
@@ -853,10 +869,11 @@ body.theme-sepia {
 #library-btn {
   background: var(--accent); border: none;
   color: #fff; cursor: pointer;
-  font-size: 1.1rem; padding: 7px 9px;
-  border-radius: 4px; line-height: 1;
+  width: 34px; height: 34px;
+  border-radius: 4px;
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
+  padding: 0;
 }
 #library-btn:hover { opacity: 0.85; }
 #library-btn svg.icon {
@@ -881,7 +898,7 @@ body.theme-sepia {
 }
 #lib-scan-btn {
   background: var(--accent); color: #fff;
-  border: none; padding: 7px 14px; border-radius: 4px;
+  border: none; padding: 0 14px; height: 34px; border-radius: 4px;
   cursor: pointer; font-size: 0.88rem;
   display: flex; align-items: center; gap: 6px;
 }
@@ -890,7 +907,7 @@ body.theme-sepia {
 #lib-scan-btn .icon { filter: var(--icon-filter-on-dark) !important; }
 
 #lib-import-btn, #lib-export-btn, #lib-clear-btn {
-  width: 32px; height: 32px;
+  width: 34px; height: 34px;
   border-radius: 4px; border: 1px solid var(--border);
   cursor: pointer; background: var(--modal-btn-bg); color: var(--modal-text);
   display: flex; align-items: center; justify-content: center;
@@ -1124,19 +1141,21 @@ html.rtl .lib-book-card { flex-direction: row-reverse; }
 }
 
 /* Action buttons */
+.btn-primary,
+.btn-danger {
+  border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+  padding: 0 18px; height: 34px;
+  display: flex; align-items: center; gap: 6px;
+}
 .btn-primary {
   background: var(--accent); color: #fff !important;
-  border: none; padding: 7px 18px; border-radius: 4px;
-  cursor: pointer; font-size: 0.85rem;
-  display: flex; align-items: center; gap: 6px;
+  border: none;
 }
 .btn-primary:hover { opacity: 0.85; }
 .btn-primary svg { stroke: #fff !important; flex-shrink: 0; }
 .btn-danger {
   background: none; color: #c0392b !important;
-  border: 1px solid #5a1a1a; padding: 7px 18px; border-radius: 4px;
-  cursor: pointer; font-size: 0.85rem;
-  display: flex; align-items: center; gap: 6px;
+  border: 1px solid #5a1a1a;
 }
 .btn-danger:hover { background: #c0392b !important; color: #fff !important; border-color: #c0392b; }
 .btn-danger svg { stroke: #c0392b !important; flex-shrink: 0; }

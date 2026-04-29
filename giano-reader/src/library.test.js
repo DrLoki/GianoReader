@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fc from 'fast-check';
 import { translations, t } from './i18n.js';
+import { clampSearchDepth } from './settings-utils.js';
 
 // ── In-memory localStorage mock ──────────────────────────────────────────
 function createLocalStorageMock() {
@@ -426,6 +427,166 @@ describe('Property 4: extractMetadata fallback on error', () => {
           expect(entry.author).toBe('');
           expect(entry.coverDataUrl).toBeNull();
           expect(entry.filePath).toBe(filePath);
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+// Feature: search-depth-setting, Property 5: completezza e correttezza delle traduzioni i18n
+describe('Property 5: completezza e correttezza delle traduzioni i18n (search-depth-setting)', () => {
+  const SUPPORTED_LANGS = ['en', 'it', 'fr', 'de', 'es', 'pt', 'ru', 'zh', 'ja', 'ar', 'fil', 'sq'];
+
+  it('t(lang, "searchDepth") returns a non-empty string different from the key for all supported languages', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...SUPPORTED_LANGS),
+        (lang) => {
+          const translation = t(lang, 'searchDepth');
+          expect(translation.length).toBeGreaterThan(0);
+          expect(translation).not.toBe('searchDepth');
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+// Feature: search-depth-setting, Property 2: clamping dei valori fuori range
+describe('Property 2: clamping dei valori fuori range (search-depth-setting)', () => {
+  it('clampSearchDepth always returns a value in [1, 10] for out-of-range inputs', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.integer({ max: 0 }),
+          fc.integer({ min: 11 }),
+          fc.constant(NaN)
+        ),
+        (v) => {
+          const clamped = clampSearchDepth(v);
+          expect(clamped).toBeGreaterThanOrEqual(1);
+          expect(clamped).toBeLessThanOrEqual(10);
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+// ── Settings helpers for search-depth-setting tests ───────────────────────
+const SETTINGS_KEY_SDS = 'giano-reader-settings';
+
+function makeSettingsFunctions(storage) {
+  function loadSettings() {
+    try { return JSON.parse(storage.getItem(SETTINGS_KEY_SDS) || '{}'); } catch { return {}; }
+  }
+  function saveSettings(s) {
+    storage.setItem(SETTINGS_KEY_SDS, JSON.stringify(s));
+  }
+  return { loadSettings, saveSettings };
+}
+
+// Feature: search-depth-setting, Property 1: round-trip di persistenza del valore
+describe('Property 1: round-trip di persistenza del valore searchDepth (search-depth-setting)', () => {
+  it('saveSettings({ searchDepth: v }) then loadSettings().searchDepth === v for any v in [1, 10]', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 10 }),
+        (v) => {
+          const storage = createLocalStorageMock();
+          const { loadSettings, saveSettings } = makeSettingsFunctions(storage);
+          saveSettings({ searchDepth: v });
+          const loaded = loadSettings();
+          expect(loaded.searchDepth).toBe(v);
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+// Feature: search-depth-setting, Property 3: preservazione delle impostazioni esistenti
+describe('Property 3: preservazione delle impostazioni esistenti (search-depth-setting)', () => {
+  it('saving searchDepth does not alter other settings fields', () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          theme: fc.constantFrom('dark', 'light', 'monokai', 'nord', 'sepia'),
+          uiLang: fc.constantFrom('en', 'it', 'fr', 'de'),
+          fontFamily: fc.string({ minLength: 1, maxLength: 50 }),
+          fontSize: fc.integer({ min: 12, max: 28 }),
+        }),
+        fc.integer({ min: 1, max: 10 }),
+        (existingSettings, newDepth) => {
+          const storage = createLocalStorageMock();
+          const { loadSettings, saveSettings } = makeSettingsFunctions(storage);
+          saveSettings(existingSettings);
+          const s = loadSettings();
+          s.searchDepth = newDepth;
+          saveSettings(s);
+          const result = loadSettings();
+          expect(result.theme).toBe(existingSettings.theme);
+          expect(result.uiLang).toBe(existingSettings.uiLang);
+          expect(result.fontFamily).toBe(existingSettings.fontFamily);
+          expect(result.fontSize).toBe(existingSettings.fontSize);
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+// Feature: search-depth-setting, Property 4: limite di profondità nella scansione
+describe('Property 4: limite di profondità nella scansione (search-depth-setting)', () => {
+  /**
+   * Generates a mock directory tree of the given depth.
+   * Each node has: { name, depth, children: [...], files: [{name, depth}] }
+   * Files at each level have a .epub extension.
+   */
+  function generateMockTree(treeDepth, currentDepth = 1) {
+    const files = [{ name: `book-d${currentDepth}.epub`, depth: currentDepth }];
+    const children = currentDepth < treeDepth
+      ? [generateMockTree(treeDepth, currentDepth + 1)]
+      : [];
+    return { name: `dir-d${currentDepth}`, depth: currentDepth, files, children };
+  }
+
+  /**
+   * Replicates the readDirRecursive logic using the mock tree.
+   * Returns objects { path, depth } for each .epub file found within maxDepth.
+   */
+  async function readDirRecursiveMock(node, maxDepth) {
+    const results = [];
+    async function walk(n, currentDepth) {
+      // Collect .epub files at this level
+      for (const file of n.files) {
+        if (file.name.toLowerCase().endsWith('.epub')) {
+          results.push({ path: `/${n.name}/${file.name}`, depth: currentDepth });
+        }
+      }
+      // Recurse into children only if within depth limit
+      if (currentDepth < maxDepth) {
+        for (const child of n.children) {
+          await walk(child, currentDepth + 1);
+        }
+      }
+    }
+    await walk(node, 1);
+    return results;
+  }
+
+  it('all returned files have depth <= maxDepth', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 10 }),
+        fc.integer({ min: 1, max: 6 }),
+        async (maxDepth, treeDepth) => {
+          const mockTree = generateMockTree(treeDepth);
+          const results = await readDirRecursiveMock(mockTree, maxDepth);
+          for (const file of results) {
+            expect(file.depth).toBeLessThanOrEqual(maxDepth);
+          }
         }
       ),
       { numRuns: 100 }

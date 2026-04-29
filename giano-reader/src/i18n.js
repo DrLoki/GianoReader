@@ -43,6 +43,7 @@ export const translations = {
     version:             'Ver.: {version}',
     fontFamily:          'Font',
     fontSize:            'Font size',
+    searchDepth:         'Search depth',
     library:             'Library',
     libraryTitle:        'Books in library: {count}',
     selectFolder:        'Select folder',
@@ -129,6 +130,7 @@ export const translations = {
     version:             'Ver.: {version}',
     fontFamily:          'Carattere',
     fontSize:            'Dimensione testo',
+    searchDepth:         'Profondità di ricerca',
     library:             'Libreria',
     libraryTitle:        'Libri presenti in libreria: {count}',
     selectFolder:        'Seleziona cartella',
@@ -249,6 +251,7 @@ export const translations = {
     personalNotes:       'Notes personnelles...',
     libSearchPlaceholder: 'Rechercher par titre ou auteur...',
     libFilterAll:         'Tous les statuts',
+    searchDepth:          'Profondeur de recherche',
   },
   de: {
     viewToggle:          'Originalansicht umschalten',
@@ -327,6 +330,7 @@ export const translations = {
     personalNotes:       'Persönliche Notizen...',
     libSearchPlaceholder: 'Nach Titel oder Autor suchen...',
     libFilterAll:         'Alle Status',
+    searchDepth:          'Suchtiefe',
   },
   es: {
     viewToggle:          'Alternar vista original',
@@ -405,6 +409,7 @@ export const translations = {
     personalNotes:       'Notas personales...',
     libSearchPlaceholder: 'Buscar por título o autor...',
     libFilterAll:         'Todos los estados',
+    searchDepth:          'Profundidad de búsqueda',
   },
   pt: {
     viewToggle:          'Alternar vista original',
@@ -483,6 +488,7 @@ export const translations = {
     personalNotes:       'Notas pessoais...',
     libSearchPlaceholder: 'Pesquisar por título ou autor...',
     libFilterAll:         'Todos os estados',
+    searchDepth:          'Profundidade de pesquisa',
   },
   ru: {
     viewToggle:          'Переключить оригинальный вид',
@@ -528,6 +534,7 @@ export const translations = {
     version:             'Вер.: {version}',
     libSearchPlaceholder: 'Поиск по названию или автору...',
     libFilterAll:         'Все статусы',
+    searchDepth:          'Глубина поиска',
   },
   zh: {
     viewToggle:          '切换原始视图',
@@ -573,6 +580,7 @@ export const translations = {
     version:             '版本：{version}',
     libSearchPlaceholder: '按标题或作者搜索...',
     libFilterAll:         '所有状态',
+    searchDepth:          '搜索深度',
   },
   ja: {
     viewToggle:          '元の表示に切り替え',
@@ -618,6 +626,7 @@ export const translations = {
     version:             'バージョン：{version}',
     libSearchPlaceholder: 'タイトルまたは著者で検索...',
     libFilterAll:         'すべてのステータス',
+    searchDepth:          '検索の深さ',
   },
   ar: {
     viewToggle:          'تبديل العرض الأصلي',
@@ -663,6 +672,7 @@ export const translations = {
     version:             'الإصدار: {version}',
     libSearchPlaceholder: 'البحث بالعنوان أو المؤلف...',
     libFilterAll:         'جميع الحالات',
+    searchDepth:          'عمق البحث',
   },
   fil: {
     viewToggle:          'I-toggle ang orihinal na view',
@@ -708,6 +718,7 @@ export const translations = {
     version:             'Bersyon: {version}',
     libSearchPlaceholder: 'Maghanap ayon sa pamagat o may-akda...',
     libFilterAll:         'Lahat ng status',
+    searchDepth:          'Lalim ng paghahanap',
   },
   sq: {
     viewToggle:          'Kalo pamjen origjinale',
@@ -753,6 +764,7 @@ export const translations = {
     version:             'Ver.: {version}',
     libSearchPlaceholder: 'Kërko sipas titullit ose autorit...',
     libFilterAll:         'Të gjitha statuset',
+    searchDepth:          'Thellësia e kërkimit',
   },
 };
 

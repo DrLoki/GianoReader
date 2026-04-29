@@ -1,6 +1,7 @@
 import ePub from 'epubjs';
 import { translateParagraphs } from './translator.js';
 import { t, RTL_LANGS } from './i18n.js';
+import { clampSearchDepth } from './settings-utils.js';
 
 // ── Stato applicazione ─────────────────────────────────────────────────────
 let book = null;                    // istanza epubjs corrente
@@ -62,6 +63,7 @@ const themeSelect          = document.getElementById('theme-select');
 const fontFamilySelect     = document.getElementById('font-family-select');
 const fontSizeRange        = document.getElementById('font-size-range');
 const fontSizeValue        = document.getElementById('font-size-value');
+const searchDepthInput     = document.getElementById('search-depth-input');
 // View toggle — commuta tra Text_Mode e Original_Mode
 const viewToggleBtn        = document.getElementById('view-toggle-btn');
 const syncDisabledNotice   = document.getElementById('sync-disabled-notice');
@@ -261,7 +263,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.1' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.2' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -290,6 +292,9 @@ function applyUiLang(lang) {
     if (opts[2]) opts[2].textContent = t(lang, 'statusReading');
     if (opts[3]) opts[3].textContent = t(lang, 'statusRead');
   }
+  // Search depth label
+  const _searchDepthLabel = document.getElementById('search-depth-label');
+  if (_searchDepthLabel) _searchDepthLabel.textContent = t(lang, 'searchDepth');
 }
 
 // Init from saved settings
@@ -308,6 +313,9 @@ function applyUiLang(lang) {
   // Font size
   const fontSize = s.fontSize || 16;
   applyFontSize(fontSize);
+  // Search depth
+  const searchDepth = s.searchDepth ?? 3;
+  if (searchDepthInput) searchDepthInput.value = searchDepth;
   // Sostituisce i select lingua con dropdown custom (bandiere emoji)
   createFlagSelect(langSelect);
   createFlagSelect(uiLangSelect);
@@ -344,6 +352,16 @@ fontSizeRange.addEventListener('change', () => {
   s.fontSize = parseInt(fontSizeRange.value, 10);
   saveSettings(s);
 });
+
+if (searchDepthInput) {
+  searchDepthInput.addEventListener('change', () => {
+    const clamped = clampSearchDepth(parseInt(searchDepthInput.value, 10));
+    searchDepthInput.value = clamped;
+    const s = loadSettings();
+    s.searchDepth = clamped;
+    saveSettings(s);
+  });
+}
 
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
@@ -613,7 +631,7 @@ async function renderNativeView() {
       frame.srcdoc = themeStyle + interceptScript + html;
       originalNative.appendChild(frame);
     } catch (err) {
-      console.error('[native] errore rendering EPUB:', err);
+      console.error('[native] rendering error:', err);
       originalNative.innerHTML = `<p class="placeholder">${ui('errorChapter')}${errMsg(err)}</p>`;
     }
   } else {
@@ -763,7 +781,8 @@ async function translateCurrentChapter(startPct = 0) {
       if (translatedChunks.size >= totalChunks) setTranslationStatus('');
     } catch (err) {
       if (signal.aborted) return;
-      console.error('[translate] errore chunk', chunkIdx, err);
+      console.error('[translate] chunk error', chunkIdx, err);
+      // Fallback: mostra il testo originale per i paragrafi del chunk fallito
       for (let i = start; i < end; i++) {
         const fallback = paragraphs[i].text !== undefined ? paragraphs[i].text : paragraphs[i];
         pEls[i].textContent = fallback;
@@ -854,51 +873,54 @@ async function loadEpub(arrayBuffer, filePath = '') {
     if (book) { book.destroy(); book = null; }
     currentChapterParagraphs = [];
 
+    // Nota: evitiamo intenzionalmente `book.ready` — può bloccarsi indefinitamente
+    // su certi EPUB (es. generati da Calibre) per un problema interno di JSZip.
+    // `book.loaded.metadata` si risolve non appena il manifest è parsato, che è
+    // tutto ciò di cui abbiamo bisogno prima di procedere.
     book = ePub(arrayBuffer);
-    await book.ready;
 
-    const meta = await book.loaded.metadata;
+    const meta = await Promise.race([
+      book.loaded.metadata,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('metadata timeout after 20s')), 20000)),
+    ]);
     bookTitle.textContent  = meta.title   || ui('unknownTitle');
     bookAuthor.textContent = meta.creator || '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
     try { const url = await book.coverUrl(); if (url) coverImg.src = url; } catch (_) {}
 
-    // Log all available metadata fields for discovery
-    console.log('[meta] available fields:', JSON.stringify({
-      title: meta.title, creator: meta.creator, publisher: meta.publisher,
-      language: meta.language, pubdate: meta.pubdate, description: meta.description,
-      rights: meta.rights, identifier: meta.identifier, modified_date: meta.modified_date,
-      layout: meta.layout, orientation: meta.orientation, flow: meta.flow,
-      viewport: meta.viewport, spread: meta.spread,
-    }, null, 2));
-
-    // Auto-add to library when a book is opened (only in Tauri where filePath is absolute)
+    // Auto-aggiunta alla libreria quando si apre un libro (solo in Tauri con path assoluto)
     if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
       autoAddToLibrary(arrayBuffer, filePath, meta);
     }
 
-    await book.loaded.spine;
+    await Promise.race([
+      book.loaded.spine,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('spine timeout after 10s')), 10000)),
+    ]);
     currentSpineItems = [];
     book.spine.each(item => currentSpineItems.push(item));
     currentSpineIndex = 0;
 
-    const nav = await book.loaded.navigation;
+    const nav = await Promise.race([
+      book.loaded.navigation,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('navigation timeout after 10s')), 10000)),
+    ]);
     renderToc(nav.toc);
 
     updateProgress();
     buildProgressTicks(currentSpineItems, nav.toc);
     addBookmarkBtn.disabled = false;
 
-    // Trova il primo capitolo con contenuto reale (salta copertina/frontmatter)
+    // Trova il primo capitolo con contenuto reale (salta copertina/frontmatter).
+    // Prima passa: cerca "chapter/capitolo" nel nome file.
     let bestIndex = -1;
-    // Prima passa: cerca "chapter/capitolo" nel nome file
     for (let i = 0; i < currentSpineItems.length; i++) {
       if (/chapter|capitolo|chap/i.test(currentSpineItems[i].href)) {
         bestIndex = i; break;
       }
     }
-    // Seconda passa: primo capitolo con più di 500 caratteri
+    // Seconda passa: primo spine item con più di 500 caratteri di testo.
     if (bestIndex < 0) {
       for (let i = 0; i < currentSpineItems.length; i++) {
         const body = await loadChapterDocument(currentSpineItems[i]);
@@ -946,7 +968,7 @@ async function displayChapter(index, scrollPct = 0) {
     }
   } catch (err) {
     if (currentSpineIndex !== myIndex) return;
-    console.error('[nav] errore:', err);
+    console.error('[nav] chapter load error:', err);
     renderOriginal([]);
     renderTranslationPlaceholder(ui('errorChapter') + errMsg(err));
   }
@@ -972,7 +994,7 @@ async function loadChapterDocument(spineItem) {
       return result; // fallback: usa il nodo radice
     }
   } catch (e) {
-    console.error('[nav] loadChapterDocument errore:', e);
+    console.error('[nav] loadChapterDocument error:', e);
   }
   return null;
 }
@@ -1201,7 +1223,7 @@ async function askRelocate(bm) {
         const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub'] }] });
         resolve(selected || null);
       } catch (err) {
-        console.error('[bookmark] errore dialog rilocazione:', err);
+        console.error('[bookmark] relocation dialog error:', err);
         resolve(null);
       }
     };
@@ -1411,24 +1433,28 @@ function removeEntry(id) {
   renderLibraryGrid();
 }
 
-async function readDirRecursive(dirPath) {
+async function readDirRecursive(dirPath, maxDepth = 3) {
   const { readDir } = await import('@tauri-apps/plugin-fs');
   const results = [];
-  async function walk(path) {
+  async function walk(path, currentDepth) {
     let entries;
     try { entries = await readDir(path); } catch { return; }
     for (const entry of entries) {
-      if (entry.isDirectory || entry.children !== undefined) {
-        await walk(entry.path || (path + '/' + entry.name));
+      const entryPath = entry.path || (path + '/' + entry.name);
+      const isDir = entry.isDirectory === true || entry.children !== undefined;
+      if (isDir) {
+        if (currentDepth < maxDepth) {
+          await walk(entryPath, currentDepth + 1);
+        }
       } else {
         const name = entry.name || '';
         if (name.toLowerCase().endsWith('.epub')) {
-          results.push(entry.path || (path + '/' + name));
+          results.push(entryPath);
         }
       }
     }
   }
-  await walk(dirPath);
+  await walk(dirPath, 1); // la cartella radice è il livello 1
   return results;
 }
 
@@ -1437,28 +1463,22 @@ async function extractMetadata(filePath) {
   const titleFallback = fileName.replace(/\.epub$/i, '');
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
   const addedAt = Date.now();
-  const t0 = performance.now();
-  const log = (msg) => console.log(`[lib] ${fileName} +${Math.round(performance.now()-t0)}ms — ${msg}`);
 
   try {
-    log('readFile start');
     const { readFile } = await import('@tauri-apps/plugin-fs');
     const raw = await readFile(filePath);
     const buffer = raw.buffer ?? raw;
-    const fileSize = buffer.byteLength; // bytes, stored for display
-    log(`readFile done (${Math.round(fileSize/1024)}KB)`);
+    const fileSize = buffer.byteLength;
 
-    // Pass ArrayBuffer directly — same as loadEpub(). Using a blob URL causes
-    // epubjs to fetch it internally via XHR which hangs in Tauri's WebView.
+    // Passiamo l'ArrayBuffer direttamente — come fa loadEpub().
+    // Usare un blob URL causa fetch interni via XHR che si bloccano in Tauri WebView.
     let epubBook;
     try {
-      log('ePub() init');
       epubBook = ePub(buffer);
       await Promise.race([
         epubBook.ready,
         new Promise((_, rej) => setTimeout(() => rej(new Error('epub ready timeout')), 8000)),
       ]);
-      log('ready');
 
       const meta = await Promise.race([
         epubBook.loaded.metadata,
@@ -1468,12 +1488,11 @@ async function extractMetadata(filePath) {
       const author = meta.creator || '';
       const publisher = meta.publisher || '';
       const language = meta.language || '';
-      const pubdate = meta.pubdate ? meta.pubdate.slice(0, 4) : ''; // just the year
+      const pubdate = meta.pubdate ? meta.pubdate.slice(0, 4) : '';
       const description = meta.description || '';
-      log(`metadata: "${title}" by ${author}`);
 
-      // Estimate page count from total character count across all spine items
-      // Standard publishing estimate: ~1800 chars per page
+      // Stima il numero di pagine dal totale dei caratteri nello spine.
+      // Stima editoriale standard: ~1800 caratteri per pagina.
       let pageCount = 0;
       try {
         await Promise.race([
@@ -1492,31 +1511,27 @@ async function extractMetadata(filePath) {
             const body = doc?.body || doc?.querySelector?.('body') || doc;
             if (body) totalChars += (body.textContent || '').length;
             if (typeof item.unload === 'function') item.unload();
-          } catch { /* skip this item */ }
+          } catch { /* salta questo item */ }
         }
         pageCount = totalChars > 0 ? Math.max(1, Math.round(totalChars / 1800)) : 0;
-        log(`page estimate: ~${pageCount} pages (${totalChars} chars)`);
-      } catch (e) { log(`page count error: ${e.message}`); }
+      } catch { /* stima pagine non disponibile */ }
 
-      // Get cover blob URL (same as loadEpub does)
+      // Ottieni la copertina come data URL (scalata a max 200px) per localStorage
       let coverDataUrl = null;
       try {
-        log('coverUrl() start');
         const coverBlobUrl = await Promise.race([
           epubBook.coverUrl(),
           new Promise((_, rej) => setTimeout(() => rej(new Error('cover timeout')), 5000)),
         ]);
-        log(`coverUrl() → ${coverBlobUrl ? coverBlobUrl.slice(0, 60) : 'null'}`);
 
         if (coverBlobUrl) {
-          // Convert to data URL via canvas BEFORE destroying the book
+          // Converti in data URL via canvas PRIMA di distruggere il libro
           coverDataUrl = await new Promise(resolve => {
             const img = new Image();
-            const timer = setTimeout(() => { log('img load timeout'); resolve(null); }, 5000);
+            const timer = setTimeout(() => resolve(null), 5000);
             img.onload = () => {
               clearTimeout(timer);
               try {
-                // Scale down to max 200px wide to keep localStorage size reasonable
                 const maxW = 200;
                 const scale = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
                 const w = Math.round(img.naturalWidth * scale);
@@ -1525,31 +1540,23 @@ async function extractMetadata(filePath) {
                 canvas.width = w;
                 canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
-                log(`cover converted (${Math.round(dataUrl.length/1024)}KB data URL)`);
-                resolve(dataUrl);
-              } catch (e) {
-                log(`canvas error: ${e.message}`);
-                resolve(null);
-              }
+                resolve(canvas.toDataURL('image/jpeg', 0.80));
+              } catch { resolve(null); }
             };
-            img.onerror = (e) => { clearTimeout(timer); log(`img onerror: ${e}`); resolve(null); };
+            img.onerror = () => { clearTimeout(timer); resolve(null); };
             img.src = coverBlobUrl;
           });
         }
-      } catch (e) { log(`cover error: ${e.message}`); coverDataUrl = null; }
+      } catch { coverDataUrl = null; }
 
-      // Destroy AFTER cover conversion is complete
+      // Distruggi DOPO la conversione della copertina
       epubBook.destroy();
-      log(`done — cover=${coverDataUrl ? 'yes' : 'no'}`);
       return { id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount, coverDataUrl, status: 'to-read', notes: '', addedAt };
     } catch (e) {
-      log(`inner error: ${e.message}`);
       try { epubBook?.destroy(); } catch {}
       return { id, filePath, fileName, title: titleFallback, author: '', fileSize: fileSize ?? 0, pageCount: 0, coverDataUrl: null, addedAt };
     }
-  } catch (e) {
-    log(`outer error: ${e.message}`);
+  } catch {
     return { id, filePath, fileName, title: titleFallback, author: '', fileSize: 0, pageCount: 0, coverDataUrl: null, addedAt };
   }
 }
@@ -1620,7 +1627,8 @@ async function scanFolder(rootPath) {
   libStatus.textContent = ui('libScanning');
   libStatus.classList.remove('hidden');
   try {
-    const epubPaths = await readDirRecursive(rootPath);
+    const maxDepth = loadSettings().searchDepth ?? 3;
+    const epubPaths = await readDirRecursive(rootPath, maxDepth);
     if (!epubPaths.length) {
       libStatus.textContent = ui('libNoEpubFound');
       return;
