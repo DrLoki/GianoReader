@@ -261,7 +261,24 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.6.4' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.0' });
+  // Library modal
+  const _libBtn = document.getElementById('library-btn');
+  const _libModalTitle = document.getElementById('library-modal-title');
+  const _libCloseBtn = document.getElementById('lib-close-btn');
+  const _libScanBtn = document.getElementById('lib-scan-btn');
+  const _libImportBtn = document.getElementById('lib-import-btn');
+  const _libExportBtn = document.getElementById('lib-export-btn');
+  const _libPlaceholder = document.getElementById('lib-placeholder');
+  if (_libBtn) _libBtn.title = t(lang, 'library');
+  if (_libModalTitle) _libModalTitle.innerHTML = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'library');
+  if (_libCloseBtn) _libCloseBtn.title = t(lang, 'close');
+  if (_libScanBtn) _libScanBtn.innerHTML = '<img src="/icons/upload.svg" class="icon" alt="" /> ' + t(lang, 'selectFolder');
+  if (_libImportBtn) _libImportBtn.title = t(lang, 'libImport');
+  if (_libExportBtn) _libExportBtn.title = t(lang, 'libExport');
+  if (_libPlaceholder) _libPlaceholder.textContent = t(lang, 'libEmpty');
+  const _libClearBtn = document.getElementById('lib-clear-btn');
+  if (_libClearBtn) _libClearBtn.title = t(lang, 'libClear');
 }
 
 // Init from saved settings
@@ -836,6 +853,20 @@ async function loadEpub(arrayBuffer, filePath = '') {
     tocPlaceholder.style.display = 'none';
     try { const url = await book.coverUrl(); if (url) coverImg.src = url; } catch (_) {}
 
+    // Log all available metadata fields for discovery
+    console.log('[meta] available fields:', JSON.stringify({
+      title: meta.title, creator: meta.creator, publisher: meta.publisher,
+      language: meta.language, pubdate: meta.pubdate, description: meta.description,
+      rights: meta.rights, identifier: meta.identifier, modified_date: meta.modified_date,
+      layout: meta.layout, orientation: meta.orientation, flow: meta.flow,
+      viewport: meta.viewport, spread: meta.spread,
+    }, null, 2));
+
+    // Auto-add to library when a book is opened (only in Tauri where filePath is absolute)
+    if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
+      autoAddToLibrary(arrayBuffer, filePath, meta);
+    }
+
     await book.loaded.spine;
     currentSpineItems = [];
     book.spine.each(item => currentSpineItems.push(item));
@@ -1289,13 +1320,12 @@ async function saveWindowState() {
     const state = { maximized: isMaximized };
     if (!isMaximized) {
       const { x, y } = await win.outerPosition();
-      const { width, height } = await win.outerSize();
-      // outerPosition/outerSize restituiscono valori in pixel fisici; convertiamo in logici
-      const factor = await win.scaleFactor();
-      state.x      = Math.round(x / factor);
-      state.y      = Math.round(y / factor);
-      state.width  = Math.round(width  / factor);
-      state.height = Math.round(height / factor);
+      const { width, height } = await win.innerSize();
+      // Store raw physical pixels — restored with PhysicalSize/PhysicalPosition
+      // to avoid scale-factor rounding drift that grows the window each restart
+      state.x = x; state.y = y;
+      state.width = width; state.height = height;
+      state.physical = true;
     }
     localStorage.setItem(WINDOW_STATE_KEY, JSON.stringify(state));
   } catch (err) {
@@ -1308,12 +1338,17 @@ async function restoreWindowState() {
     const raw = localStorage.getItem(WINDOW_STATE_KEY);
     if (!raw) return;
     const state = JSON.parse(raw);
-    const { getCurrentWindow, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/window');
+    const { getCurrentWindow, PhysicalSize, PhysicalPosition, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/window');
     const win = getCurrentWindow();
     if (state.maximized) {
       await win.maximize();
+    } else if (state.physical) {
+      // Restore using physical pixels — no scale factor conversion needed
+      if (state.width && state.height) await win.setSize(new PhysicalSize(state.width, state.height));
+      if (state.x != null && state.y != null) await win.setPosition(new PhysicalPosition(state.x, state.y));
     } else {
-      if (state.width  && state.height) await win.setSize(new LogicalSize(state.width, state.height));
+      // Legacy entries saved as logical pixels
+      if (state.width && state.height) await win.setSize(new LogicalSize(state.width, state.height));
       if (state.x != null && state.y != null) await win.setPosition(new LogicalPosition(state.x, state.y));
     }
   } catch (err) {
@@ -1331,3 +1366,629 @@ if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
   // Salva anche periodicamente (ogni 5s) per catturare ridimensionamenti/spostamenti
   setInterval(saveWindowState, 5000);
 }
+
+// ── Library ────────────────────────────────────────────────────────────────
+const LIBRARY_KEY = 'giano-reader-library';
+
+function loadLibrary() {
+  try { return JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveLibrary(entries) {
+  localStorage.setItem(LIBRARY_KEY, JSON.stringify(entries));
+}
+
+function addEntries(newEntries) {
+  const lib = loadLibrary();
+  const existingPaths = new Set(lib.map(e => e.filePath));
+  let added = 0, skipped = 0;
+  for (const entry of newEntries) {
+    if (existingPaths.has(entry.filePath)) {
+      skipped++;
+    } else {
+      lib.push(entry);
+      existingPaths.add(entry.filePath);
+      added++;
+    }
+  }
+  saveLibrary(lib);
+  return { added, skipped };
+}
+
+function removeEntry(id) {
+  saveLibrary(loadLibrary().filter(e => e.id !== id));
+  renderLibraryGrid();
+}
+
+async function readDirRecursive(dirPath) {
+  const { readDir } = await import('@tauri-apps/plugin-fs');
+  const results = [];
+  async function walk(path) {
+    let entries;
+    try { entries = await readDir(path); } catch { return; }
+    for (const entry of entries) {
+      if (entry.isDirectory || entry.children !== undefined) {
+        await walk(entry.path || (path + '/' + entry.name));
+      } else {
+        const name = entry.name || '';
+        if (name.toLowerCase().endsWith('.epub')) {
+          results.push(entry.path || (path + '/' + name));
+        }
+      }
+    }
+  }
+  await walk(dirPath);
+  return results;
+}
+
+async function extractMetadata(filePath) {
+  const fileName = filePath.split(/[\\/]/).pop();
+  const titleFallback = fileName.replace(/\.epub$/i, '');
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const addedAt = Date.now();
+  const t0 = performance.now();
+  const log = (msg) => console.log(`[lib] ${fileName} +${Math.round(performance.now()-t0)}ms — ${msg}`);
+
+  try {
+    log('readFile start');
+    const { readFile } = await import('@tauri-apps/plugin-fs');
+    const raw = await readFile(filePath);
+    const buffer = raw.buffer ?? raw;
+    const fileSize = buffer.byteLength; // bytes, stored for display
+    log(`readFile done (${Math.round(fileSize/1024)}KB)`);
+
+    // Pass ArrayBuffer directly — same as loadEpub(). Using a blob URL causes
+    // epubjs to fetch it internally via XHR which hangs in Tauri's WebView.
+    let epubBook;
+    try {
+      log('ePub() init');
+      epubBook = ePub(buffer);
+      await Promise.race([
+        epubBook.ready,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('epub ready timeout')), 8000)),
+      ]);
+      log('ready');
+
+      const meta = await Promise.race([
+        epubBook.loaded.metadata,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('metadata timeout')), 5000)),
+      ]);
+      const title = meta.title || titleFallback;
+      const author = meta.creator || '';
+      const publisher = meta.publisher || '';
+      const language = meta.language || '';
+      const pubdate = meta.pubdate ? meta.pubdate.slice(0, 4) : ''; // just the year
+      const description = meta.description || '';
+      log(`metadata: "${title}" by ${author}`);
+
+      // Estimate page count from total character count across all spine items
+      // Standard publishing estimate: ~1800 chars per page
+      let pageCount = 0;
+      try {
+        await Promise.race([
+          epubBook.loaded.spine,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('spine timeout')), 5000)),
+        ]);
+        let totalChars = 0;
+        const spineItems = [];
+        epubBook.spine.each(item => spineItems.push(item));
+        for (const item of spineItems) {
+          try {
+            const doc = await Promise.race([
+              item.load(epubBook.load.bind(epubBook)),
+              new Promise((_, rej) => setTimeout(() => rej(new Error('item timeout')), 3000)),
+            ]);
+            const body = doc?.body || doc?.querySelector?.('body') || doc;
+            if (body) totalChars += (body.textContent || '').length;
+            if (typeof item.unload === 'function') item.unload();
+          } catch { /* skip this item */ }
+        }
+        pageCount = totalChars > 0 ? Math.max(1, Math.round(totalChars / 1800)) : 0;
+        log(`page estimate: ~${pageCount} pages (${totalChars} chars)`);
+      } catch (e) { log(`page count error: ${e.message}`); }
+
+      // Get cover blob URL (same as loadEpub does)
+      let coverDataUrl = null;
+      try {
+        log('coverUrl() start');
+        const coverBlobUrl = await Promise.race([
+          epubBook.coverUrl(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('cover timeout')), 5000)),
+        ]);
+        log(`coverUrl() → ${coverBlobUrl ? coverBlobUrl.slice(0, 60) : 'null'}`);
+
+        if (coverBlobUrl) {
+          // Convert to data URL via canvas BEFORE destroying the book
+          coverDataUrl = await new Promise(resolve => {
+            const img = new Image();
+            const timer = setTimeout(() => { log('img load timeout'); resolve(null); }, 5000);
+            img.onload = () => {
+              clearTimeout(timer);
+              try {
+                // Scale down to max 200px wide to keep localStorage size reasonable
+                const maxW = 200;
+                const scale = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
+                const w = Math.round(img.naturalWidth * scale);
+                const h = Math.round(img.naturalHeight * scale);
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+                log(`cover converted (${Math.round(dataUrl.length/1024)}KB data URL)`);
+                resolve(dataUrl);
+              } catch (e) {
+                log(`canvas error: ${e.message}`);
+                resolve(null);
+              }
+            };
+            img.onerror = (e) => { clearTimeout(timer); log(`img onerror: ${e}`); resolve(null); };
+            img.src = coverBlobUrl;
+          });
+        }
+      } catch (e) { log(`cover error: ${e.message}`); coverDataUrl = null; }
+
+      // Destroy AFTER cover conversion is complete
+      epubBook.destroy();
+      log(`done — cover=${coverDataUrl ? 'yes' : 'no'}`);
+      return { id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount, coverDataUrl, status: 'to-read', notes: '', addedAt };
+    } catch (e) {
+      log(`inner error: ${e.message}`);
+      try { epubBook?.destroy(); } catch {}
+      return { id, filePath, fileName, title: titleFallback, author: '', fileSize: fileSize ?? 0, pageCount: 0, coverDataUrl: null, addedAt };
+    }
+  } catch (e) {
+    log(`outer error: ${e.message}`);
+    return { id, filePath, fileName, title: titleFallback, author: '', fileSize: 0, pageCount: 0, coverDataUrl: null, addedAt };
+  }
+}
+
+let scanInProgress = false;
+
+// Auto-add a book to the library when opened, extracting cover in background
+async function autoAddToLibrary(arrayBuffer, filePath, meta) {
+  try {
+    const lib = loadLibrary();
+    if (lib.some(e => e.filePath === filePath)) return; // already in library
+    const fileName = filePath.split(/[\\/]/).pop();
+    const title = meta.title || fileName.replace(/\.epub$/i, '');
+    const author = meta.creator || '';
+    const publisher = meta.publisher || '';
+    const language = meta.language || '';
+    const pubdate = meta.pubdate ? meta.pubdate.slice(0, 4) : '';
+    const description = meta.description || '';
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const addedAt = Date.now();
+    const fileSize = arrayBuffer.byteLength || 0;
+    // Add immediately without cover so the entry appears right away
+    addEntries([{ id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount: 0, coverDataUrl: null, status: 'to-read', notes: '', addedAt }]);
+    // Extract cover in background and update the entry
+    try {
+      const tmpBook = ePub(arrayBuffer);
+      await Promise.race([tmpBook.ready, new Promise((_, r) => setTimeout(() => r(new Error('t')), 8000))]);
+      const coverBlobUrl = await Promise.race([tmpBook.coverUrl(), new Promise((_, r) => setTimeout(() => r(new Error('t')), 5000))]);
+      if (coverBlobUrl) {
+        const coverDataUrl = await new Promise(resolve => {
+          const img = new Image();
+          const timer = setTimeout(() => resolve(null), 5000);
+          img.onload = () => {
+            clearTimeout(timer);
+            try {
+              const maxW = 200;
+              const scale = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
+              const w = Math.round(img.naturalWidth * scale);
+              const h = Math.round(img.naturalHeight * scale);
+              const canvas = document.createElement('canvas');
+              canvas.width = w; canvas.height = h;
+              canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+              resolve(canvas.toDataURL('image/jpeg', 0.80));
+            } catch { resolve(null); }
+          };
+          img.onerror = () => { clearTimeout(timer); resolve(null); };
+          img.src = coverBlobUrl;
+        });
+        if (coverDataUrl) {
+          const current = loadLibrary();
+          const idx = current.findIndex(e => e.filePath === filePath);
+          if (idx >= 0) { current[idx].coverDataUrl = coverDataUrl; saveLibrary(current); }
+        }
+      }
+      tmpBook.destroy();
+    } catch { /* cover extraction failed, entry already saved without cover */ }
+  } catch (e) {
+    console.warn('[library] autoAdd error:', e);
+  }
+}
+
+async function scanFolder(rootPath) {
+  if (scanInProgress) return;
+  scanInProgress = true;
+  const scanBtn = document.getElementById('lib-scan-btn');
+  const libStatus = document.getElementById('lib-status');
+  if (scanBtn) scanBtn.disabled = true;
+  libStatus.textContent = ui('libScanning');
+  libStatus.classList.remove('hidden');
+  try {
+    const epubPaths = await readDirRecursive(rootPath);
+    if (!epubPaths.length) {
+      libStatus.textContent = ui('libNoEpubFound');
+      return;
+    }
+    const newEntries = [];
+    for (const filePath of epubPaths) {
+      libStatus.textContent = ui('libScanning') + ' ' + (newEntries.length + 1) + '/' + epubPaths.length;
+      const entry = await extractMetadata(filePath);
+      newEntries.push(entry);
+    }
+    const { added, skipped } = addEntries(newEntries);
+    libStatus.textContent = ui('libScanDone', { added, skipped });
+    renderLibraryGrid();
+  } catch (err) {
+    libStatus.textContent = ui('libImportError') + errMsg(err);
+  } finally {
+    scanInProgress = false;
+    if (scanBtn) scanBtn.disabled = false;
+  }
+}
+
+function renderLibraryGrid(query = '') {
+  const lib = loadLibrary();
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? lib.filter(e => (e.title || '').toLowerCase().includes(q) || (e.author || '').toLowerCase().includes(q))
+    : lib;
+  const grid = document.getElementById('lib-grid');
+  const placeholder = document.getElementById('lib-placeholder');
+  if (!grid || !placeholder) return;
+  // Aggiorna il titolo del modale con il conteggio
+  const titleEl = document.getElementById('library-modal-title');
+  if (titleEl) titleEl.textContent = ui('libraryTitle', { count: lib.length });
+  grid.innerHTML = '';
+  if (!filtered.length) {
+    placeholder.classList.remove('hidden');
+    placeholder.textContent = q ? `No results for "${query}"` : ui('libEmpty');
+    grid.classList.add('hidden');
+    return;
+  }
+  placeholder.classList.add('hidden');
+  grid.classList.remove('hidden');
+  for (const entry of filtered) {
+    const card = document.createElement('div');
+    card.className = 'lib-book-card';
+    card.dataset.id = entry.id;
+    const img = document.createElement('img');
+    img.className = 'lib-book-cover';
+    img.alt = entry.title || ui('libCoverPlaceholder');
+    if (entry.coverDataUrl) {
+      img.src = entry.coverDataUrl;
+    } else {
+      img.src = '';
+      img.style.background = '#2a2a2a';
+    }
+    const info = document.createElement('div');
+    info.className = 'lib-book-info';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'lib-book-title';
+    titleEl.textContent = entry.title || ui('libCoverPlaceholder');
+    titleEl.title = entry.title || '';
+    // Author row with status badge
+    const authorRow = document.createElement('div');
+    authorRow.style.display = 'flex';
+    authorRow.style.alignItems = 'center';
+    authorRow.style.gap = '6px';
+    authorRow.style.justifyContent = 'space-between';
+    const authorEl = document.createElement('span');
+    authorEl.className = 'lib-book-author';
+    authorEl.textContent = entry.author || '';
+    authorEl.style.flex = '1';
+    authorEl.style.minWidth = '0';
+    authorRow.appendChild(authorEl);
+    if (entry.status) {
+      const badge = document.createElement('span');
+      badge.className = `lib-status-badge lib-status-badge--${entry.status}`;
+      const statusLabels = {
+        'to-read': ui('statusToRead'),
+        'reading':  ui('statusReading'),
+        'read':     ui('statusRead'),
+      };
+      badge.textContent = statusLabels[entry.status] || entry.status;
+      authorRow.appendChild(badge);
+    }
+    const metaEl = document.createElement('span');
+    metaEl.className = 'lib-book-meta';
+    const parts = [];
+    if (entry.publisher) parts.push(entry.publisher);
+    if (entry.pubdate) parts.push(entry.pubdate);
+    if (entry.language) parts.push(entry.language.toUpperCase());
+    metaEl.textContent = parts.join(' · ');
+    // File size + page count, right-aligned
+    const sizeEl = document.createElement('span');
+    sizeEl.className = 'lib-book-size';
+    const sizeParts = [];
+    if (entry.pageCount > 0) sizeParts.push(`~${entry.pageCount} pp.`);
+    if (entry.fileSize > 0) {
+      const mb = entry.fileSize / (1024 * 1024);
+      sizeParts.push(mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(entry.fileSize / 1024)} KB`);
+    }
+    sizeEl.textContent = sizeParts.join(' · ');
+    const metaRow = document.createElement('div');
+    metaRow.className = 'lib-book-meta-row';
+    metaRow.appendChild(metaEl);
+    metaRow.appendChild(sizeEl);
+    info.appendChild(titleEl);
+    info.appendChild(authorRow);
+    info.appendChild(metaRow);
+    // Action buttons column: ⓘ first, then trash
+    const actions = document.createElement('div');
+    actions.className = 'lib-book-actions';
+    const infoBtn = document.createElement('button');
+    infoBtn.className = 'lib-book-info-btn';
+    infoBtn.title = ui('detailInfoBtn');
+    infoBtn.innerHTML = 'ⓘ';
+    infoBtn.addEventListener('click', e => { e.stopPropagation(); openBookDetail(entry.id); });
+    const delBtn = document.createElement('button');
+    delBtn.className = 'lib-book-delete';
+    delBtn.title = ui('libDeleteBook');
+    delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:1.1em;height:1.1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      removeEntry(entry.id);
+    });
+    actions.appendChild(infoBtn);
+    actions.appendChild(delBtn);
+    card.appendChild(img);
+    card.appendChild(info);
+    card.appendChild(actions);
+    card.addEventListener('click', () => openBookFromLibrary(entry));
+    grid.appendChild(card);
+  }
+}
+
+// Open book detail modal for editing metadata
+function openBookDetail(entryId) {
+  const lib = loadLibrary();
+  const entry = lib.find(e => e.id === entryId);
+  if (!entry) return;
+  const modal = document.getElementById('book-detail-modal');
+  // Localize all labels
+  document.getElementById('book-detail-title').textContent = entry.title || ui('bookDetail');
+  document.querySelector('label[for="detail-title"]').textContent    = ui('detailTitle');
+  document.querySelector('label[for="detail-author"]').textContent   = ui('detailAuthor');
+  document.querySelector('label[for="detail-publisher"]').textContent = ui('detailPublisher');
+  document.querySelector('label[for="detail-pubdate"]').textContent  = ui('detailYear');
+  document.querySelector('label[for="detail-language"]').textContent = ui('detailLanguage');
+  document.querySelector('label[for="detail-status"]').textContent   = ui('detailStatus');
+  document.querySelector('label[for="detail-description"]').textContent = ui('detailDescription');
+  document.querySelector('label[for="detail-notes"]').textContent    = ui('detailNotes');
+  document.getElementById('book-detail-save-label').textContent   = ui('detailSave');
+  document.getElementById('book-detail-delete-label').textContent = ui('detailDelete');
+  document.getElementById('detail-notes').placeholder = ui('personalNotes');
+  // Localize status options
+  document.getElementById('detail-status-none').textContent    = ui('statusNone');
+  document.getElementById('detail-status-to-read').textContent = ui('statusToRead');
+  document.getElementById('detail-status-reading').textContent = ui('statusReading');
+  document.getElementById('detail-status-read').textContent    = ui('statusRead');
+  // Fill values
+  document.getElementById('book-detail-cover').src = entry.coverDataUrl || '';
+  document.getElementById('detail-title').value = entry.title || '';
+  document.getElementById('detail-author').value = entry.author || '';
+  document.getElementById('detail-publisher').value = entry.publisher || '';
+  document.getElementById('detail-pubdate').value = entry.pubdate || '';
+  document.getElementById('detail-language').value = entry.language || '';
+  document.getElementById('detail-status').value = entry.status || '';
+  document.getElementById('detail-description').value = entry.description ? entry.description.replace(/<[^>]+>/g, '') : '';
+  document.getElementById('detail-notes').value = entry.notes || '';
+  const mb = entry.fileSize ? (entry.fileSize / (1024 * 1024)).toFixed(2) : '?';
+  const pages = entry.pageCount > 0 ? `~${entry.pageCount} pages` : '';
+  document.getElementById('detail-file-info').textContent = [entry.fileName, `${mb} MB`, pages].filter(Boolean).join(' · ');
+  modal.classList.remove('hidden');
+  // Wire save button
+  const saveBtn = document.getElementById('book-detail-save-btn');
+  saveBtn.onclick = () => {
+    entry.title = document.getElementById('detail-title').value.trim() || entry.title;
+    entry.author = document.getElementById('detail-author').value.trim();
+    entry.publisher = document.getElementById('detail-publisher').value.trim();
+    entry.pubdate = document.getElementById('detail-pubdate').value.trim();
+    entry.language = document.getElementById('detail-language').value.trim();
+    entry.status = document.getElementById('detail-status').value;
+    entry.notes = document.getElementById('detail-notes').value.trim();
+    const idx = lib.findIndex(e => e.id === entryId);
+    if (idx >= 0) { lib[idx] = entry; saveLibrary(lib); }
+    modal.classList.add('hidden');
+    renderLibraryGrid(document.getElementById('lib-search-input').value);
+  };
+  // Wire delete button
+  const delBtn = document.getElementById('book-detail-delete-btn');
+  delBtn.onclick = async () => {
+    const confirmed = await (async () => {
+      const msg = ui('detailDeleteConfirm', { title: entry.title });
+      if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+        try {
+          const { confirm } = await import('@tauri-apps/plugin-dialog');
+          return await confirm(msg, { title: ui('detailDeleteTitle'), kind: 'warning' });
+        } catch { /* fallback */ }
+      }
+      return window.confirm(msg);
+    })();
+    if (!confirmed) return;
+    removeEntry(entryId);
+    modal.classList.add('hidden');
+  };
+}
+
+async function openBookFromLibrary(entry) {
+  const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+  if (isTauri) {
+    try {
+      const { exists } = await import('@tauri-apps/plugin-fs');
+      const fileExists = await exists(entry.filePath);
+      if (!fileExists) {
+        await showAlert(ui('errorOpening') + entry.filePath);
+        return;
+      }
+    } catch { /* exists() not available, try anyway */ }
+    try {
+      const { readFile } = await import('@tauri-apps/plugin-fs');
+      const raw = await readFile(entry.filePath);
+      const fileData = raw.buffer ?? raw;
+      document.getElementById('library-modal').classList.add('hidden');
+      await loadEpub(fileData, entry.filePath);
+    } catch (err) {
+      await showAlert(ui('errorOpening') + errMsg(err));
+    }
+  } else {
+    await showAlert(ui('libBrowserOnly'));
+  }
+}
+
+async function exportLibrary() {
+  const lib = loadLibrary();
+  const json = JSON.stringify(lib, null, 2);
+  const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+  if (isTauri) {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      const filePath = await save({
+        defaultPath: 'giano-library.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (!filePath) return;
+      await writeTextFile(filePath, json);
+    } catch (err) {
+      await showAlert(ui('libExportError') + errMsg(err));
+    }
+  } else {
+    try {
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'giano-library.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      await showAlert(ui('libExportError') + errMsg(err));
+    }
+  }
+}
+
+async function importLibrary() {
+  const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+  const libStatus = document.getElementById('lib-status');
+  let text;
+  if (isTauri) {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const { readTextFile } = await import('@tauri-apps/plugin-fs');
+      const selected = await open({ filters: [{ name: 'JSON', extensions: ['json'] }] });
+      if (!selected) return;
+      text = await readTextFile(selected);
+    } catch (err) {
+      await showAlert(ui('libImportError') + errMsg(err));
+      return;
+    }
+  } else {
+    text = await new Promise(resolve => {
+      const input = document.getElementById('lib-import-input');
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) { resolve(null); return; }
+        input.value = '';
+        resolve(await file.text());
+      };
+      input.click();
+    });
+    if (!text) return;
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)) {
+      await showAlert(ui('invalidFormat'));
+      return;
+    }
+    const { added, skipped } = addEntries(parsed);
+    libStatus.textContent = ui('libImportedMsg', { added, skipped });
+    libStatus.classList.remove('hidden');
+    renderLibraryGrid();
+  } catch (err) {
+    await showAlert(ui('libImportError') + errMsg(err));
+  }
+}
+
+// ── Library DOM refs and listeners ────────────────────────────────────────
+const libraryBtn     = document.getElementById('library-btn');
+const libraryModal   = document.getElementById('library-modal');
+const libCloseBtn    = document.getElementById('lib-close-btn');
+const libScanBtn     = document.getElementById('lib-scan-btn');
+const libImportBtn   = document.getElementById('lib-import-btn');
+const libExportBtn   = document.getElementById('lib-export-btn');
+const libStatus      = document.getElementById('lib-status');
+const libGrid        = document.getElementById('lib-grid');
+const libPlaceholder = document.getElementById('lib-placeholder');
+const libSearchInput = document.getElementById('lib-search-input');
+
+libraryBtn.addEventListener('click', () => {
+  libraryModal.classList.remove('hidden');
+  libSearchInput.value = '';
+  renderLibraryGrid();
+});
+
+function closeLibraryModal() {
+  libraryModal.classList.add('hidden');
+  // Pulisce il messaggio di stato (esito scansione/import) alla chiusura
+  libStatus.textContent = '';
+  libStatus.classList.add('hidden');
+}
+
+libCloseBtn.addEventListener('click', closeLibraryModal);
+libraryModal.addEventListener('click', e => {
+  if (e.target === libraryModal) closeLibraryModal();
+});
+
+libScanBtn.addEventListener('click', async () => {
+  const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+  if (!isTauri) {
+    libStatus.textContent = ui('libBrowserOnly');
+    libStatus.classList.remove('hidden');
+    return;
+  }
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const selected = await open({ directory: true });
+    if (!selected) return;
+    await scanFolder(selected);
+  } catch (err) {
+    libStatus.textContent = ui('libImportError') + errMsg(err);
+    libStatus.classList.remove('hidden');
+  }
+});
+
+libImportBtn.addEventListener('click', () => importLibrary());
+libExportBtn.addEventListener('click', () => exportLibrary());
+
+// Live search filtering
+libSearchInput.addEventListener('input', () => renderLibraryGrid(libSearchInput.value));
+
+// Book detail modal close
+const bookDetailModal = document.getElementById('book-detail-modal');
+document.getElementById('book-detail-close-btn').addEventListener('click', () => bookDetailModal.classList.add('hidden'));
+bookDetailModal.addEventListener('click', e => { if (e.target === bookDetailModal) bookDetailModal.classList.add('hidden'); });
+
+document.getElementById('lib-clear-btn').addEventListener('click', async () => {
+  const lib = loadLibrary();
+  if (!lib.length) return;
+  const confirmed = await (async () => {
+    const msg = ui('libClearConfirm', { count: lib.length });
+    if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+      try {
+        const { confirm } = await import('@tauri-apps/plugin-dialog');
+        return await confirm(msg, { title: ui('libClear'), kind: 'warning' });
+      } catch { /* fallback */ }
+    }
+    return window.confirm(msg);
+  })();
+  if (!confirmed) return;
+  saveLibrary([]);
+  renderLibraryGrid();
+});

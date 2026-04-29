@@ -12,6 +12,14 @@
     <aside id="sidebar">
       <div id="sidebar-header">
         <button id="open-btn">Open book</button>
+        <button id="library-btn" title="Library">
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="4" height="18" rx="1"/>
+            <rect x="9" y="6" width="4" height="15" rx="1"/>
+            <rect x="15" y="2" width="4" height="19" rx="1"/>
+            <line x1="2" y1="21" x2="22" y2="21"/>
+          </svg>
+        </button>
         <button id="settings-btn" title="Settings"><img src="/icons/gear.svg" class="icon" alt="" /></button>
       </div>
       <div id="sidebar-controls">
@@ -200,6 +208,103 @@
       <div id="settings-about">
         <span id="settings-developed-by"></span>
         <span id="settings-version"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: library -->
+  <div id="library-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="library-modal-title">
+    <div class="modal-box modal-box--library">
+      <div class="modal-header">
+        <h2 id="library-modal-title">Library</h2>
+        <button id="lib-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+      </div>
+      <div id="lib-search-bar">
+        <input type="search" id="lib-search-input" placeholder="Search by title or author..." autocomplete="off" />
+      </div>
+      <div id="lib-status" class="hidden"></div>
+      <div id="lib-grid"></div>
+      <p id="lib-placeholder">Your library is empty. Select a folder to scan for EPUB files.</p>
+      <div id="lib-toolbar">
+        <button id="lib-scan-btn"><img src="/icons/upload.svg" class="icon" alt="" /> Select folder</button>
+        <button id="lib-import-btn" title="Import library"><img src="/icons/upload.svg" class="icon" alt="" /></button>
+        <button id="lib-export-btn" title="Export library"><img src="/icons/download.svg" class="icon" alt="" /></button>
+        <button id="lib-clear-btn" title="Clear library">
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>
+        <input type="file" id="lib-import-input" accept=".json" style="display:none" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: book detail -->
+  <div id="book-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="book-detail-title">
+    <div class="modal-box modal-box--book-detail">
+      <div class="modal-header">
+        <h2 id="book-detail-title">Book details</h2>
+        <button id="book-detail-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+      </div>
+      <div id="book-detail-body">
+        <div id="book-detail-cover-col">
+          <img id="book-detail-cover" src="" alt="" />
+        </div>
+        <div id="book-detail-fields">
+          <div class="detail-field">
+            <label for="detail-title">Title</label>
+            <input type="text" id="detail-title" />
+          </div>
+          <div class="detail-field">
+            <label for="detail-author">Author</label>
+            <input type="text" id="detail-author" />
+          </div>
+          <div class="detail-field detail-field--row">
+            <div class="detail-field">
+              <label for="detail-publisher">Publisher</label>
+              <input type="text" id="detail-publisher" />
+            </div>
+            <div class="detail-field detail-field--narrow">
+              <label for="detail-pubdate">Year</label>
+              <input type="text" id="detail-pubdate" maxlength="4" />
+            </div>
+            <div class="detail-field detail-field--narrow">
+              <label for="detail-language">Language</label>
+              <input type="text" id="detail-language" maxlength="10" />
+            </div>
+          </div>
+          <div class="detail-field">
+            <label for="detail-status">Status</label>
+            <select id="detail-status">
+              <option value="" id="detail-status-none">—</option>
+              <option value="to-read" id="detail-status-to-read">To read</option>
+              <option value="reading" id="detail-status-reading">Reading</option>
+              <option value="read" id="detail-status-read">Read</option>
+            </select>
+          </div>
+          <div class="detail-field">
+            <label for="detail-description">Description</label>
+            <textarea id="detail-description" rows="4"></textarea>
+          </div>
+          <div class="detail-field">
+            <label for="detail-notes">Notes</label>
+            <textarea id="detail-notes" rows="3" placeholder="Personal notes..."></textarea>
+          </div>
+          <div id="detail-file-info"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between">
+        <button id="book-detail-delete-btn" class="btn-danger">
+          <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          <span id="book-detail-delete-label">Delete from library</span>
+        </button>
+        <button id="book-detail-save-btn" class="btn-primary">
+          <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <span id="book-detail-save-label">Save</span>
+        </button>
       </div>
     </div>
   </div>
