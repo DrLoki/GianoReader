@@ -220,7 +220,13 @@
         <button id="lib-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
       </div>
       <div id="lib-search-bar">
-        <input type="search" id="lib-search-input" placeholder="Search by title or author..." autocomplete="off" />
+        <input type="search" id="lib-search-input" placeholder="" autocomplete="off" />
+        <select id="lib-status-filter">
+          <option value="">All</option>
+          <option value="to-read">To read</option>
+          <option value="reading">Reading</option>
+          <option value="read">Read</option>
+        </select>
       </div>
       <div id="lib-status" class="hidden"></div>
       <div id="lib-grid"></div>
@@ -296,7 +302,7 @@
           <div id="detail-file-info"></div>
         </div>
       </div>
-      <div class="modal-footer" style="justify-content:space-between">
+      <div class="modal-footer modal-footer--detail">
         <button id="book-detail-delete-btn" class="btn-danger">
           <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           <span id="book-detail-delete-label">Delete from library</span>

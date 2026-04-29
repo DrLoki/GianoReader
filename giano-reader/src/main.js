@@ -261,7 +261,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.0' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.1' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -279,6 +279,17 @@ function applyUiLang(lang) {
   if (_libPlaceholder) _libPlaceholder.textContent = t(lang, 'libEmpty');
   const _libClearBtn = document.getElementById('lib-clear-btn');
   if (_libClearBtn) _libClearBtn.title = t(lang, 'libClear');
+  const _libSearchInput = document.getElementById('lib-search-input');
+  if (_libSearchInput) _libSearchInput.placeholder = t(lang, 'libSearchPlaceholder');
+  // Status filter options
+  const _libStatusFilter = document.getElementById('lib-status-filter');
+  if (_libStatusFilter) {
+    const opts = _libStatusFilter.options;
+    if (opts[0]) opts[0].textContent = t(lang, 'libFilterAll');
+    if (opts[1]) opts[1].textContent = t(lang, 'statusToRead');
+    if (opts[2]) opts[2].textContent = t(lang, 'statusReading');
+    if (opts[3]) opts[3].textContent = t(lang, 'statusRead');
+  }
 }
 
 // Init from saved settings
@@ -1631,12 +1642,15 @@ async function scanFolder(rootPath) {
   }
 }
 
-function renderLibraryGrid(query = '') {
+function renderLibraryGrid(query = '', statusFilter = '') {
   const lib = loadLibrary();
   const q = query.trim().toLowerCase();
-  const filtered = q
+  let filtered = q
     ? lib.filter(e => (e.title || '').toLowerCase().includes(q) || (e.author || '').toLowerCase().includes(q))
     : lib;
+  if (statusFilter) {
+    filtered = filtered.filter(e => e.status === statusFilter);
+  }
   const grid = document.getElementById('lib-grid');
   const placeholder = document.getElementById('lib-placeholder');
   if (!grid || !placeholder) return;
@@ -1646,7 +1660,7 @@ function renderLibraryGrid(query = '') {
   grid.innerHTML = '';
   if (!filtered.length) {
     placeholder.classList.remove('hidden');
-    placeholder.textContent = q ? `No results for "${query}"` : ui('libEmpty');
+    placeholder.textContent = q ? ui('libNoResults', { query }) : ui('libEmpty');
     grid.classList.add('hidden');
     return;
   }
@@ -1667,10 +1681,26 @@ function renderLibraryGrid(query = '') {
     }
     const info = document.createElement('div');
     info.className = 'lib-book-info';
+    // Title row: title text + action buttons right-aligned
+    const titleRow = document.createElement('div');
+    titleRow.className = 'lib-book-title-row';
     const titleEl = document.createElement('span');
     titleEl.className = 'lib-book-title';
     titleEl.textContent = entry.title || ui('libCoverPlaceholder');
     titleEl.title = entry.title || '';
+    const infoBtn = document.createElement('button');
+    infoBtn.className = 'lib-book-action-btn';
+    infoBtn.title = ui('detailInfoBtn');
+    infoBtn.innerHTML = 'ⓘ';
+    infoBtn.addEventListener('click', e => { e.stopPropagation(); openBookDetail(entry.id); });
+    const delBtn = document.createElement('button');
+    delBtn.className = 'lib-book-action-btn lib-book-action-btn--danger';
+    delBtn.title = ui('libDeleteBook');
+    delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+    delBtn.addEventListener('click', e => { e.stopPropagation(); removeEntry(entry.id); });
+    titleRow.appendChild(titleEl);
+    titleRow.appendChild(infoBtn);
+    titleRow.appendChild(delBtn);
     // Author row with status badge
     const authorRow = document.createElement('div');
     authorRow.style.display = 'flex';
@@ -1701,7 +1731,6 @@ function renderLibraryGrid(query = '') {
     if (entry.pubdate) parts.push(entry.pubdate);
     if (entry.language) parts.push(entry.language.toUpperCase());
     metaEl.textContent = parts.join(' · ');
-    // File size + page count, right-aligned
     const sizeEl = document.createElement('span');
     sizeEl.className = 'lib-book-size';
     const sizeParts = [];
@@ -1715,30 +1744,11 @@ function renderLibraryGrid(query = '') {
     metaRow.className = 'lib-book-meta-row';
     metaRow.appendChild(metaEl);
     metaRow.appendChild(sizeEl);
-    info.appendChild(titleEl);
+    info.appendChild(titleRow);
     info.appendChild(authorRow);
     info.appendChild(metaRow);
-    // Action buttons column: ⓘ first, then trash
-    const actions = document.createElement('div');
-    actions.className = 'lib-book-actions';
-    const infoBtn = document.createElement('button');
-    infoBtn.className = 'lib-book-info-btn';
-    infoBtn.title = ui('detailInfoBtn');
-    infoBtn.innerHTML = 'ⓘ';
-    infoBtn.addEventListener('click', e => { e.stopPropagation(); openBookDetail(entry.id); });
-    const delBtn = document.createElement('button');
-    delBtn.className = 'lib-book-delete';
-    delBtn.title = ui('libDeleteBook');
-    delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:1.1em;height:1.1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
-    delBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      removeEntry(entry.id);
-    });
-    actions.appendChild(infoBtn);
-    actions.appendChild(delBtn);
     card.appendChild(img);
     card.appendChild(info);
-    card.appendChild(actions);
     card.addEventListener('click', () => openBookFromLibrary(entry));
     grid.appendChild(card);
   }
@@ -1795,7 +1805,8 @@ function openBookDetail(entryId) {
     const idx = lib.findIndex(e => e.id === entryId);
     if (idx >= 0) { lib[idx] = entry; saveLibrary(lib); }
     modal.classList.add('hidden');
-    renderLibraryGrid(document.getElementById('lib-search-input').value);
+    const { query, status } = getLibFilters();
+    renderLibraryGrid(query, status);
   };
   // Wire delete button
   const delBtn = document.getElementById('book-detail-delete-btn');
@@ -1832,6 +1843,12 @@ async function openBookFromLibrary(entry) {
       const raw = await readFile(entry.filePath);
       const fileData = raw.buffer ?? raw;
       document.getElementById('library-modal').classList.add('hidden');
+      // Advance status: anything except "reading"/"read" → "reading" when book is opened
+      if (entry.status !== 'reading' && entry.status !== 'read') {
+        const lib = loadLibrary();
+        const idx = lib.findIndex(e => e.id === entry.id);
+        if (idx >= 0) { lib[idx].status = 'reading'; saveLibrary(lib); }
+      }
       await loadEpub(fileData, entry.filePath);
     } catch (err) {
       await showAlert(ui('errorOpening') + errMsg(err));
@@ -1927,10 +1944,19 @@ const libStatus      = document.getElementById('lib-status');
 const libGrid        = document.getElementById('lib-grid');
 const libPlaceholder = document.getElementById('lib-placeholder');
 const libSearchInput = document.getElementById('lib-search-input');
+const libStatusFilter = document.getElementById('lib-status-filter');
+
+function getLibFilters() {
+  return {
+    query: libSearchInput.value,
+    status: libStatusFilter ? libStatusFilter.value : '',
+  };
+}
 
 libraryBtn.addEventListener('click', () => {
   libraryModal.classList.remove('hidden');
   libSearchInput.value = '';
+  if (libStatusFilter) libStatusFilter.value = '';
   renderLibraryGrid();
 });
 
@@ -1968,7 +1994,16 @@ libImportBtn.addEventListener('click', () => importLibrary());
 libExportBtn.addEventListener('click', () => exportLibrary());
 
 // Live search filtering
-libSearchInput.addEventListener('input', () => renderLibraryGrid(libSearchInput.value));
+libSearchInput.addEventListener('input', () => {
+  const { query, status } = getLibFilters();
+  renderLibraryGrid(query, status);
+});
+if (libStatusFilter) {
+  libStatusFilter.addEventListener('change', () => {
+    const { query, status } = getLibFilters();
+    renderLibraryGrid(query, status);
+  });
+}
 
 // Book detail modal close
 const bookDetailModal = document.getElementById('book-detail-modal');

@@ -437,16 +437,21 @@ body {
 .modal-footer {
   display: flex; gap: 8px; justify-content: flex-end;
   border-top: 1px solid var(--border); padding-top: 12px;
+  flex-wrap: wrap;
 }
-.modal-footer button {
+.modal-footer--detail {
+  justify-content: space-between;
+}
+/* Small icon-only buttons (bookmarks footer) */
+.modal-footer button:not(.btn-primary):not(.btn-danger) {
   width: 32px; height: 32px;
   border-radius: 4px; border: 1px solid var(--border);
   cursor: pointer; font-size: 1rem;
-  background: var(--modal-btn-bg); color: var(--modal-text);
+  background: #2a2a2a; color: #ccc;
   display: flex; align-items: center; justify-content: center;
   padding: 0;
 }
-.modal-footer button:hover { background: var(--modal-btn-hover); color: var(--modal-text); }
+.modal-footer button:not(.btn-primary):not(.btn-danger):hover { background: #3a3a3a; color: #fff; }
 
 /* ── Modal ── */
 .modal-overlay {
@@ -728,10 +733,10 @@ body.theme-sepia {
   filter: brightness(0) invert(0.7) !important;
 }
 
-/* Modal-box icons: follow modal theme */
+/* Modal-box icons: follow modal theme (only for small icon buttons, not btn-primary/btn-danger) */
 .modal-header .icon,
-.modal-footer .icon {
-  filter: var(--icon-filter-on-surface) !important;
+.modal-footer button:not(.btn-primary):not(.btn-danger) .icon {
+  filter: brightness(0) invert(0.85) !important;
 }
 
 /* Active toggle: accent bg → white icon */
@@ -914,20 +919,44 @@ body.theme-sepia {
 #lib-search-bar {
   margin-bottom: 10px;
   flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 #lib-search-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 7px 12px;
-  border: 1px solid #444;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #1a1a1a;
-  color: #e0e0e0;
+  background: var(--bg);
+  color: var(--text);
   font-size: 0.88rem;
   outline: none;
   font-family: var(--font-family);
 }
 #lib-search-input:focus { border-color: var(--accent); }
-#lib-search-input::placeholder { color: #555; }
+#lib-search-input::placeholder { color: var(--text-muted); }
+
+#lib-status-filter {
+  flex-shrink: 0;
+  padding: 7px 28px 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
+  cursor: pointer;
+  font-family: var(--font-family);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+#lib-status-filter:focus { border-color: var(--accent); }
+#lib-status-filter option { background: var(--bg); color: var(--text); }
 
 /* List layout */
 #lib-grid {
@@ -956,18 +985,17 @@ body.theme-sepia {
   padding: 8px 10px;
   transition: border-color 0.12s, background 0.12s;
   position: relative;
-  /* Always use modal-box background so text is readable on all themes */
-  background: #242424;
-  color: #e0e0e0;
+  background: var(--modal-bg);
+  color: var(--modal-text);
 }
-.lib-book-card:hover { border-color: var(--accent); background: #2e2e2e; }
+.lib-book-card:hover { border-color: var(--accent); background: var(--modal-item-hover); }
 
 .lib-book-cover {
   width: 46px; height: 64px;
   object-fit: cover;
   border-radius: 3px;
   flex-shrink: 0;
-  background: #444;
+  background: var(--border);
   display: block;
 }
 
@@ -978,16 +1006,16 @@ body.theme-sepia {
 
 .lib-book-title {
   font-size: 0.88rem; font-weight: bold;
-  color: #e0e0e0;
+  color: var(--modal-text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   line-height: 1.3;
 }
 .lib-book-author {
-  font-size: 0.78rem; color: #aaa;
+  font-size: 0.78rem; color: var(--modal-text-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .lib-book-meta {
-  font-size: 0.70rem; color: #666;
+  font-size: 0.70rem; color: var(--modal-text-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   margin-top: 1px;
 }
@@ -996,25 +1024,9 @@ body.theme-sepia {
   gap: 8px; margin-top: 1px;
 }
 .lib-book-size {
-  font-size: 0.68rem; color: #555;
+  font-size: 0.68rem; color: var(--modal-text-muted);
   white-space: nowrap; flex-shrink: 0;
   text-align: right;
-}
-
-.lib-book-delete {
-  position: absolute; top: 4px; right: 4px;
-  background: rgba(0,0,0,0.55); border: none;
-  cursor: pointer;
-  width: 26px; height: 26px; border-radius: 3px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0; opacity: 0;
-  transition: opacity 0.12s;
-}
-.lib-book-card:hover .lib-book-delete { opacity: 1; }
-.lib-book-delete:hover { background: var(--accent); opacity: 1 !important; }
-.lib-book-delete .icon {
-  width: 0.75em; height: 0.75em;
-  filter: brightness(0) invert(1) !important;
 }
 
 /* RTL support for library */
@@ -1032,42 +1044,41 @@ html.rtl .lib-book-card { flex-direction: row-reverse; }
 .lib-status-badge--reading  { background: #1a3a1a; color: #6af56a; }
 .lib-status-badge--read     { background: #2a2a2a; color: #888; }
 
-/* ── Card action buttons ── */
-.lib-book-actions {
-  display: flex; flex-direction: column; gap: 4px;
-  flex-shrink: 0; align-items: center; justify-content: center;
-  padding-left: 4px;
+/* ── Card action buttons (in title row) ── */
+.lib-book-title-row {
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0;
 }
-.lib-book-info-btn {
-  background: none; border: 1px solid #444;
-  color: #aaa; cursor: pointer;
-  width: 26px; height: 26px; border-radius: 3px;
+.lib-book-title-row .lib-book-title {
+  flex: 1; min-width: 0;
+}
+.lib-book-action-btn {
+  flex-shrink: 0;
+  width: 24px; height: 24px;
+  border-radius: 3px; border: 1px solid var(--border);
+  background: none; color: var(--modal-text-muted);
+  cursor: pointer; font-size: 0.8rem;
   display: flex; align-items: center; justify-content: center;
-  padding: 0; font-size: 0.85rem;
-  transition: background 0.1s, color 0.1s;
+  padding: 0; line-height: 1;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
-.lib-book-info-btn:hover { background: #3a3a3a; color: #fff; border-color: #666; }
-
-.lib-book-delete {
-  background: none; border: 1px solid #5a1a1a;
-  color: #c0392b; cursor: pointer;
-  width: 30px; height: 30px; border-radius: 3px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0; font-size: 1rem;
-  transition: background 0.1s;
-}
-.lib-book-delete:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+.lib-book-action-btn:hover { background: var(--modal-btn-hover); color: var(--modal-text); border-color: var(--modal-text-muted); }
+.lib-book-action-btn--danger { border-color: #5a1a1a; color: #c0392b; }
+.lib-book-action-btn--danger:hover { background: #c0392b !important; color: #fff !important; border-color: #c0392b !important; }
+.lib-book-action-btn--danger svg { stroke: currentColor; }
 
 /* ── Book detail modal ── */
 .modal-box--book-detail {
   max-width: 700px; width: 96%;
   max-height: 90vh;
   display: flex; flex-direction: column;
+  padding: 16px 20px;
+  overflow: hidden;
 }
 #book-detail-body {
   display: flex; gap: 20px;
-  flex: 1; overflow-y: auto; min-height: 0;
-  padding: 4px 0;
+  flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0;
+  padding: 4px 2px;
 }
 #book-detail-cover-col {
   flex-shrink: 0; width: 120px;
@@ -1086,18 +1097,19 @@ html.rtl .lib-book-card { flex-direction: row-reverse; }
 }
 .detail-field--row {
   flex-direction: row; gap: 8px; align-items: flex-end;
+  flex-wrap: wrap;
 }
-.detail-field--row > .detail-field { flex: 1; }
-.detail-field--narrow { flex: 0 0 70px !important; }
+.detail-field--row > .detail-field { flex: 1; min-width: 80px; }
+.detail-field--narrow { flex: 0 0 70px !important; min-width: 60px !important; }
 .detail-field label {
-  font-size: 0.72rem; color: #888;
+  font-size: 0.72rem; color: var(--modal-text-muted);
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 .detail-field input,
 .detail-field select,
 .detail-field textarea {
-  background: #1a1a1a; color: #e0e0e0;
-  border: 1px solid #444; border-radius: 4px;
+  background: var(--modal-bg); color: var(--modal-text);
+  border: 1px solid var(--border); border-radius: 4px;
   padding: 6px 8px; font-size: 0.85rem;
   font-family: var(--font-family);
   outline: none; resize: vertical;
@@ -1105,22 +1117,27 @@ html.rtl .lib-book-card { flex-direction: row-reverse; }
 .detail-field input:focus,
 .detail-field select:focus,
 .detail-field textarea:focus { border-color: var(--accent); }
-.detail-field select option { background: #1a1a1a; }
+.detail-field select option { background: var(--modal-bg); color: var(--modal-text); }
 #detail-file-info {
-  font-size: 0.72rem; color: #555;
+  font-size: 0.72rem; color: var(--modal-text-muted);
   margin-top: 4px;
 }
 
 /* Action buttons */
 .btn-primary {
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: #fff !important;
   border: none; padding: 7px 18px; border-radius: 4px;
   cursor: pointer; font-size: 0.85rem;
+  display: flex; align-items: center; gap: 6px;
 }
 .btn-primary:hover { opacity: 0.85; }
+.btn-primary svg { stroke: #fff !important; flex-shrink: 0; }
 .btn-danger {
-  background: none; color: #c0392b;
+  background: none; color: #c0392b !important;
   border: 1px solid #5a1a1a; padding: 7px 18px; border-radius: 4px;
   cursor: pointer; font-size: 0.85rem;
+  display: flex; align-items: center; gap: 6px;
 }
-.btn-danger:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+.btn-danger:hover { background: #c0392b !important; color: #fff !important; border-color: #c0392b; }
+.btn-danger svg { stroke: #c0392b !important; flex-shrink: 0; }
+.btn-danger:hover svg { stroke: #fff !important; }
