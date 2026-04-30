@@ -64,17 +64,17 @@ Una volta caricato il libro:
 ## Interfaccia principale
 
 ```
-┌─────────────────┬──────────────────────┬──────────────────────┐
-│   Barra laterale│   Pannello originale  │  Pannello traduzione │
-│                 │                       │                      │
-│  + Apri libro   │  Testo originale      │  Testo tradotto      │
-│  ─────────────  │  del capitolo         │  (lazy, dal punto    │
-│  Indice (TOC)   │                       │   di lettura)        │
-│                 │                       │                      │
-│  [Segnalibri]   │                       │                      │
-│  [Libreria]     │                       │                      │
-│  [Impostazioni] │                       │                      │
-└─────────────────┴──────────────────────┴──────────────────────┘
+┌──────────────────┬───────────────────────┬──────────────────────┐
+│   Barra laterale │   Pannello originale  │  Pannello traduzione │
+│                  │                       │                      │
+│  + Apri libro    │  Testo originale      │  Testo tradotto      │
+│  ─────────────   │  del capitolo         │  (lazy, dal punto    │
+│  Indice (TOC)    │                       │   di lettura)        │
+│                  │                       │                      │
+│  [Segnalibri]    │                       │                      │
+│  [Libreria]      │                       │                      │
+│  [Impostazioni]  │                       │                      │
+└──────────────────┴───────────────────────┴──────────────────────┘
          Barra di progresso con tacche per capitolo
 ```
 
