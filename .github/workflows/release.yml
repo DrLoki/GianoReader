@@ -1,10 +1,13 @@
 name: Release
 
-# Triggered by pushing a version tag (e.g. v0.7.2)
 on:
   push:
     tags:
       - 'v*'
+
+env:
+  # Suppress Node.js 20 deprecation warnings on GitHub Actions runners
+  ACTIONS_ALLOW_UNSECURE_NODE_VERSION: true
 
 jobs:
   build:
@@ -29,7 +32,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # No cache here — avoids path resolution issues with non-root projects
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -58,6 +60,9 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build -- ${{ matrix.args }}
         working-directory: giano-reader
+        env:
+          # Print full Rust backtraces on failure
+          RUST_BACKTRACE: '1'
 
       - name: Upload artifacts (Windows)
         if: matrix.platform == 'windows-latest'
