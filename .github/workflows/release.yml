@@ -12,35 +12,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows → .msi + NSIS .exe
           - platform: windows-latest
             args: ''
-          # macOS (Intel + Apple Silicon) → .dmg
           - platform: macos-latest
             args: '--target universal-apple-darwin'
-          # Linux → .deb + .AppImage
           - platform: ubuntu-22.04
             args: ''
 
     runs-on: ${{ matrix.platform }}
 
-    defaults:
-      run:
-        working-directory: giano-reader
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Node.js ────────────────────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: ${{ github.workspace }}/giano-reader/package-lock.json
+          node-version: '20'
+          # No cache here — avoids path resolution issues with non-root projects
 
-      # ── Rust ───────────────────────────────────────────────────────────────
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -51,12 +41,8 @@ jobs:
         with:
           workspaces: giano-reader/src-tauri -> target
 
-      # ── Linux system dependencies ──────────────────────────────────────────
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
-        # working-directory default does not apply to 'run' steps that use shell
-        # these apt commands run in the repo root — that's fine
-        working-directory: .
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -65,18 +51,14 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      # ── Frontend ───────────────────────────────────────────────────────────
       - name: Install npm dependencies
         run: npm ci
+        working-directory: giano-reader
 
-      # ── Tauri build + upload to release ───────────────────────────────────
       - name: Build Tauri app
         run: npm run tauri build -- ${{ matrix.args }}
-        env:
-          # Disable debug symbols to keep binary size down
-          TAURI_DEBUG: ''
+        working-directory: giano-reader
 
-      # ── Collect artifacts ──────────────────────────────────────────────────
       - name: Upload artifacts (Windows)
         if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
@@ -105,7 +87,6 @@ jobs:
             giano-reader/src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
-  # ── Create GitHub Release with all artifacts ──────────────────────────────
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -120,9 +101,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: List artifacts (debug)
-        run: find artifacts -type f | sort
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
