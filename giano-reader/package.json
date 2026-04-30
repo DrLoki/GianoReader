@@ -2,6 +2,9 @@
   "name": "giano-reader",
   "version": "0.7.2",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

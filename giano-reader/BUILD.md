@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) >= 18
+- [Node.js](https://nodejs.org/) >= 22 (version used in development: 22.2.0)
 - [Rust](https://www.rust-lang.org/tools/install) (stable toolchain)
 - [Tauri CLI prerequisites](https://tauri.app/start/prerequisites/) for your operating system
 
