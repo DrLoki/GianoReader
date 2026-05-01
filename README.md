@@ -7,7 +7,7 @@
 > **Read globally, understand locally. The dual-faced reader for language explorers.**
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/b546c87e-60c2-4727-a374-0a76a5a3b91f" alt="Giano Reader Screenshot" width="800">
+  <img width="1021" height="704" alt="5EgwP4AOvV" src="https://github.com/user-attachments/assets/4848e1c7-e997-4f6a-87b4-4565fbcd38d0" />
 </p>
 
 ### 📖 Bridging the Gap in Foreign Literature
