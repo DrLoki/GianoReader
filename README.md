@@ -1,10 +1,33 @@
-# Giano Reader
+# 🎭 Giano Reader
 
-Desktop EPUB reader with integrated side-by-side translation powered by Google Translate. Built with [Tauri 2](https://tauri.app/) + Vite + vanilla JavaScript.
+![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-F7DF1E?logo=javascript&logoColor=black)
+
+> **Read globally, understand locally. The dual-faced reader for language explorers.**
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/b546c87e-60c2-4727-a374-0a76a5a3b91f" alt="Giano Reader Screenshot" width="800">
+</p>
+
+### 📖 Bridging the Gap in Foreign Literature
+
+**Giano Reader** is a lightweight, high-performance desktop application designed for those who refuse to let a language barrier stand between them and a great book. 
+
+Named after the Roman god of dualities and transitions, Giano provides a **synchronized, side-by-side reading experience**. It is specifically crafted for language learners who want to dive into foreign literature without losing the flow, the context, or the original book's formatting.
 
 ---
 
-## Features
+### 🚀 Why Giano Reader?
+
+*   **⚡ Lightweight & Native:** Built with **Tauri 2**, offering a snappy desktop experience with a minimal system footprint.
+*   **🔗 Fluid Synchronization:** As you scroll the original text, the translation follows perfectly. Never lose your place again.
+*   **🧠 Context-Aware:** Unlike standard translators, Giano preserves the "soul" of the EPUB, rendering native styles while providing a modern translation overlay.
+*   **⏳ Smart Lazy Translation:** Our chunking logic means you don't have to wait for the whole book to be processed—it translates as you read, starting from your current position.
+
+---
+
+## ✨ Key Features
 
 - Open and read EPUB files
 - Navigable table of contents (TOC)
@@ -23,17 +46,25 @@ Desktop EPUB reader with integrated side-by-side translation powered by Google T
 - Language dropdowns with SVG flag images (compatible with WebView2 on Windows)
 - Window geometry persistence across restarts (Tauri only)
 
-## Supported translation languages
+## 🌍 Supported Languages
 
 Italian, English, French, German, Spanish, Portuguese, Russian, Chinese, Japanese, Arabic, Filipino, Albanian.
 
 ---
 
+## 📦 Build Instructions
+
 For build requirements and instructions see [BUILD.md](giano-reader/BUILD.md).
+
+## Quick Start
+
+1. Clone the repo: `git clone https://github.com/user/giano-reader.git`
+2. Install dependencies: `npm install`
+3. Run in dev mode: `npm run tauri dev`
 
 ---
 
-## Project structure
+## 🛠 Project Structure
 
 ```
 giano-reader/
@@ -74,7 +105,7 @@ giano-reader/
 
 ---
 
-## How translation works
+## ⚙️ How Translation Works
 
 Uses the unofficial Google Translate public endpoint (`translate.googleapis.com`) — no API key required. Text is split into ~4500-character chunks and translated lazily: the visible block first, then subsequent ones as you scroll. When opening a bookmark, translation starts directly from the saved position.
 
@@ -107,6 +138,5 @@ Language dropdowns use custom SVG flags in `public/flags/` instead of Unicode em
 
 ---
 
-## License
-
-MIT
+## ⚖️ License
+This project is licensed under a custom license. See the [LICENSE](LICENSE) file for details.
