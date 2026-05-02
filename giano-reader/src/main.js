@@ -50,6 +50,7 @@ const bmCloseBtn           = document.getElementById('bm-close-btn');
 const bmImportBtn          = document.getElementById('bm-import-btn');
 const bmExportBtn          = document.getElementById('bm-export-btn');
 const bmImportInput        = document.getElementById('bm-import-input');
+const bmSearchInput        = document.getElementById('bm-search-input');
 const bookmarkMissingModal = document.getElementById('bookmark-missing-modal');
 const bmMissingName        = document.getElementById('bm-missing-name');
 const bmRelocateBtn        = document.getElementById('bm-relocate-btn');
@@ -87,7 +88,8 @@ hideTranslationBtn.addEventListener('click', () => {
 const FLAG_MAP = {
   it: 'it', en: 'gb', fr: 'fr', de: 'de', es: 'es',
   pt: 'pt', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
-  fil: 'ph', sq: 'al',
+  fil: 'ph', sq: 'al', hi: 'in', ko: 'kr', th: 'th',
+  bn: 'in', id: 'id',
 };
 
 function createFlagSelect(selectEl) {
@@ -201,16 +203,25 @@ function applyTheme(theme) {
   } else {
     document.body.classList.add(`theme-${theme}`);
   }
+  if (currentViewMode === 'original') {
+    renderNativeView();
+  }
 }
 
 function applyFont(family) {
   document.documentElement.style.setProperty('--reader-font-family', family);
+  if (currentViewMode === 'original') {
+    renderNativeView();
+  }
 }
 
 function applyFontSize(size) {
   document.documentElement.style.setProperty('--font-size', size + 'px');
   if (fontSizeValue) fontSizeValue.textContent = size + 'px';
   if (fontSizeRange) fontSizeRange.value = size;
+  if (currentViewMode === 'original') {
+    renderNativeView();
+  }
 }
 
 function applyUiLang(lang) {
@@ -241,13 +252,14 @@ function applyUiLang(lang) {
   bmImportBtn.title                                         = t(lang, 'importBookmarks');
   bmExportBtn.title                                         = t(lang, 'exportBookmarks');
   bookmarksPlaceholder.textContent                          = t(lang, 'noBookmarksSaved');
+  if (bmSearchInput) bmSearchInput.placeholder              = t(lang, 'bmSearchPlaceholder');
   // Missing file modal
   document.getElementById('bm-missing-modal-title').textContent = t(lang, 'fileNotFound');
   bmRelocateBtn.textContent                                      = t(lang, 'browse');
   bmCancelBtn.textContent                                        = t(lang, 'cancel');
   // Progress bar buttons
-  prevBtn.title = 'Previous chapter';
-  nextBtn.title = 'Next chapter';
+  prevBtn.title = t(lang, 'prevChapter');
+  nextBtn.title = t(lang, 'nextChapter');
   settingsBtn.title = t(lang, 'settings');
   // View toggle & sync notice
   if (viewToggleBtn) {
@@ -263,7 +275,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.2' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.3' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -401,7 +413,7 @@ async function showAlert(msg) {
 
 // Estrae un messaggio leggibile da qualsiasi tipo di errore (string, Error, oggetto Tauri)
 function errMsg(err) {
-  if (!err) return 'Unknown error';
+  if (!err) return ui('unknownError');
   if (typeof err === 'string') return err;
   if (err.message) return err.message;
   try { return JSON.stringify(err); } catch { return String(err); }
@@ -614,9 +626,11 @@ async function renderNativeView() {
       const frame = document.createElement('iframe');
       frame.id = 'epub-native-frame';
       frame.className = 'native-frame';
-      const bg  = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()   || '#1a1a1a';
-      const fg  = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()  || '#e0e0e0';
-      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:Georgia,serif;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}a{color:inherit;}</style>`;
+      const bg  = getComputedStyle(document.body).backgroundColor || '#1a1a1a';
+      const fg  = getComputedStyle(document.body).color || '#e0e0e0';
+      const font = getComputedStyle(document.documentElement).getPropertyValue('--reader-font-family') || 'Georgia, serif';
+      const size = getComputedStyle(document.documentElement).getPropertyValue('--font-size') || '16px';
+      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:${font}!important;font-size:${size}!important;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}a{color:inherit;}</style>`;
       // Script iniettato nell'iframe: intercetta tutti i click sui link e li
       // comunica al parent tramite postMessage invece di navigare l'iframe.
       const interceptScript = `<script>
@@ -1102,18 +1116,25 @@ addBookmarkBtn.addEventListener('click', async () => {
   bms.push(bm);
   saveBookmarks(bms);
   renderBookmarks();
+  showAlert(ui('bookmarkAdded'));
 });
 
 // Renderizza la lista segnalibri nella modale
-function renderBookmarks() {
+function renderBookmarks(query = '') {
   const bms = loadBookmarks();
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? bms.filter(bm => (bm.bookTitle || bm.fileName || '').toLowerCase().includes(q))
+    : bms;
+
   bookmarksList.innerHTML = '';
-  if (!bms.length) {
+  if (!filtered.length) {
     bookmarksList.appendChild(bookmarksPlaceholder);
     bookmarksPlaceholder.style.display = '';
+    bookmarksPlaceholder.textContent = q ? ui('libNoResults', { query }) : ui('noBookmarksSaved');
     return;
   }
-  for (const bm of bms) {
+  for (const bm of filtered) {
     const li = document.createElement('li');
     li.className = 'bookmark-item';
     li.innerHTML = `
@@ -1134,8 +1155,15 @@ function renderBookmarks() {
   }
 }
 
+if (bmSearchInput) {
+  bmSearchInput.addEventListener('input', () => {
+    renderBookmarks(bmSearchInput.value);
+  });
+}
+
 // Apri/chiudi modale segnalibri
 function openBookmarksModal() {
+  if (bmSearchInput) bmSearchInput.value = '';
   renderBookmarks();
   bookmarksModal.classList.remove('hidden');
 }
@@ -1371,18 +1399,21 @@ async function restoreWindowState() {
     const raw = localStorage.getItem(WINDOW_STATE_KEY);
     if (!raw) return;
     const state = JSON.parse(raw);
-    const { getCurrentWindow, PhysicalSize, PhysicalPosition, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/window');
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    const { PhysicalSize, PhysicalPosition, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/dpi');
     const win = getCurrentWindow();
+    
+    // Verifica se le coordinate sono valide (non negative o eccessive) per evitare finestre "perse"
+    const isValidPos = state.x !== undefined && state.y !== undefined && state.x >= -10000 && state.y >= -10000;
+
     if (state.maximized) {
       await win.maximize();
     } else if (state.physical) {
-      // Restore using physical pixels — no scale factor conversion needed
       if (state.width && state.height) await win.setSize(new PhysicalSize(state.width, state.height));
-      if (state.x != null && state.y != null) await win.setPosition(new PhysicalPosition(state.x, state.y));
+      if (isValidPos) await win.setPosition(new PhysicalPosition(state.x, state.y));
     } else {
-      // Legacy entries saved as logical pixels
       if (state.width && state.height) await win.setSize(new LogicalSize(state.width, state.height));
-      if (state.x != null && state.y != null) await win.setPosition(new LogicalPosition(state.x, state.y));
+      if (isValidPos) await win.setPosition(new LogicalPosition(state.x, state.y));
     }
   } catch (err) {
     console.warn('[window-state] restore error:', err);

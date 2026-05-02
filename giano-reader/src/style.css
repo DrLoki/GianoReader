@@ -383,7 +383,7 @@ body {
 
 /* ── Modale segnalibri ── */
 .modal-box--bookmarks {
-  max-width: 520px; width: 92%;
+  max-width: 640px; width: 95%;
   display: flex; flex-direction: column;
   max-height: 80vh;
 }
@@ -398,6 +398,24 @@ body {
   border-radius: 3px;
 }
 .modal-close:hover { color: var(--modal-text); background: var(--modal-btn-hover); }
+
+#bm-search-bar {
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+#bm-search-input {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.88rem;
+  outline: none;
+  font-family: var(--font-family);
+}
+#bm-search-input:focus { border-color: var(--accent); }
+#bm-search-input::placeholder { color: var(--text-muted); }
 
 #bookmarks-list {
   list-style: none;

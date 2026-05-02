@@ -7,7 +7,9 @@ pub fn run() {
             #[cfg(debug_assertions)]
             {
                 use tauri::Manager;
-                app.get_webview_window("main").unwrap().open_devtools();
+                if let Some(win) = app.get_webview_window("main") {
+                    win.open_devtools();
+                }
             }
             // Icona finestra diversa dall'icona app/desktop
             {

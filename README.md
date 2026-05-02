@@ -48,14 +48,15 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 
 ## 🌍 Supported Languages
 
-Italian, English, French, German, Spanish, Portuguese, Russian, Chinese, Japanese, Arabic, Filipino, Albanian.
+Giano Reader supports 17 interface languages:
+English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Filipino, Arabic, Albanian.
 
 ---
 
 ## 📥 Download & Install
 You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and Linux (.AppImage) here:
 
-👉 [Download Giano Reader v0.7.2](https://github.com/DrLoki/GianoReader/releases/tag/v0.7.2)
+👉 [Download Giano Reader v0.7.3](https://github.com/DrLoki/GianoReader/releases/tag/v0.7.3)
 
 ---
 
@@ -96,7 +97,7 @@ giano-reader/
 ├── src/
 │   ├── main.js             # All frontend logic: reader, UI, bookmarks, library, scroll sync
 │   ├── translator.js       # Google Translate integration (chunked, lazy)
-│   ├── i18n.js             # UI translations (12 languages); exports t(lang, key, vars)
+│   ├── i18n.js             # UI translations (17 languages); exports t(lang, key, vars)
 │   ├── settings-utils.js   # Pure utility functions (no DOM); used by main.js and tests
 │   └── style.css           # All styles (dark mode via body.dark)
 └── src-tauri/
