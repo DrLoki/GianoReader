@@ -638,7 +638,8 @@ body.theme-sepia {
 #sidebar-header #open-btn {
   flex: 1;
 }
-#settings-btn {
+#settings-btn,
+#optimal-limit-btn {
   background: var(--accent); border: none;
   color: #fff; cursor: pointer;
   width: 34px; height: 34px;
@@ -647,7 +648,8 @@ body.theme-sepia {
   display: flex; align-items: center; justify-content: center;
   padding: 0;
 }
-#settings-btn:hover { opacity: 0.85; }
+#settings-btn:hover,
+#optimal-limit-btn:hover { opacity: 0.85; }
 
 /* ── Modal settings ── */
 .modal-box--settings {
@@ -680,6 +682,12 @@ body.theme-sepia {
 .settings-row input[type="number"]::-webkit-inner-spin-button,
 .settings-row input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
+}
+
+.settings-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 /* Font size slider row */
@@ -749,7 +757,8 @@ body.theme-sepia {
 }
 
 /* Accent buttons: always white */
-#settings-btn .icon {
+#settings-btn .icon,
+#optimal-limit-btn .icon {
   filter: var(--icon-filter-on-dark) !important;
 }
 
@@ -894,7 +903,8 @@ body.theme-sepia {
   padding: 0;
 }
 #library-btn:hover { opacity: 0.85; }
-#library-btn svg.icon {
+#library-btn svg.icon,
+#optimal-limit-btn svg.icon {
   filter: none !important;
   color: #fff;
   width: 1.3em; height: 1.3em;

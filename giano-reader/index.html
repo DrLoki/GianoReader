@@ -226,7 +226,11 @@
         <label for="max-file-size-mb" id="max-file-size-mb-label">Max file size (MB)</label>
         <div class="settings-input-group">
           <input type="number" id="max-file-size-mb" min="10" max="2000" step="1" value="150" />
-          <button id="optimal-limit-btn" type="button" title="">⚡</button>
+          <button id="optimal-limit-btn" type="button" title="">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </button>
         </div>
         <span id="ram-advisor-error" class="settings-error hidden"></span>
       </div>
