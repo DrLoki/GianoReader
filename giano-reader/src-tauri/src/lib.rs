@@ -1,8 +1,18 @@
+use sysinfo::System;
+
+#[tauri::command]
+fn get_system_ram() -> u64 {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    sys.total_memory() / 1_048_576 // converti byte → MB
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .invoke_handler(tauri::generate_handler![get_system_ram])
         .setup(|app| {
             #[cfg(debug_assertions)]
             {

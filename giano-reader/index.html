@@ -222,6 +222,18 @@
         <label for="search-depth-input" id="search-depth-label">Search depth</label>
         <input type="number" id="search-depth-input" min="1" max="10" step="1" value="3" />
       </div>
+      <div class="settings-row">
+        <label for="max-file-size-mb" id="max-file-size-mb-label">Max file size (MB)</label>
+        <div class="settings-input-group">
+          <input type="number" id="max-file-size-mb" min="10" max="2000" step="1" value="150" />
+          <button id="optimal-limit-btn" type="button" title="">⚡</button>
+        </div>
+        <span id="ram-advisor-error" class="settings-error hidden"></span>
+      </div>
+      <div class="settings-row">
+        <label for="warn-file-size-mb" id="warn-file-size-mb-label">Warn file size (MB)</label>
+        <input type="number" id="warn-file-size-mb" min="10" max="2000" step="1" value="50" />
+      </div>
       <div id="settings-about">
         <span id="settings-developed-by"></span>
         <span id="settings-version"></span>

@@ -16,6 +16,9 @@ let currentViewMode = 'text';       // 'text' | 'original'
 
 const LAZY_CHUNK = 12; // paragrafi per chunk di traduzione lazy
 
+const DEFAULT_MAX_FILE_SIZE_MB  = 150;
+const DEFAULT_WARN_FILE_SIZE_MB = 50;
+
 // ── Riferimenti DOM ────────────────────────────────────────────────────────
 const openBtn              = document.getElementById('open-btn');
 const prevBtn              = document.getElementById('prev-btn');
@@ -65,6 +68,11 @@ const fontFamilySelect     = document.getElementById('font-family-select');
 const fontSizeRange        = document.getElementById('font-size-range');
 const fontSizeValue        = document.getElementById('font-size-value');
 const searchDepthInput     = document.getElementById('search-depth-input');
+// File size limits
+const maxFileSizeMbInput   = document.getElementById('max-file-size-mb');
+const warnFileSizeMbInput  = document.getElementById('warn-file-size-mb');
+const optimalLimitBtn      = document.getElementById('optimal-limit-btn');
+const ramAdvisorError      = document.getElementById('ram-advisor-error');
 // View toggle — commuta tra Text_Mode e Original_Mode
 const viewToggleBtn        = document.getElementById('view-toggle-btn');
 const syncDisabledNotice   = document.getElementById('sync-disabled-notice');
@@ -189,6 +197,57 @@ function createFlagSelect(selectEl) {
 const SETTINGS_KEY = 'giano-reader-settings';
 const THEMES = ['dark', 'light', 'monokai', 'solarized-dark', 'nord', 'sepia'];
 
+// Helper per storage persistente (Filesystem in Tauri, localStorage in Browser)
+const PersistentStorage = {
+  async get(key, defaultValue = []) {
+    if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+      try {
+        const { readTextFile, exists } = await import('@tauri-apps/plugin-fs');
+        const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
+        const dir = await appLocalDataDir();
+        const path = await join(dir, `${key}.json`);
+        if (await exists(path)) {
+          const content = await readTextFile(path);
+          return JSON.parse(content);
+        }
+      } catch (e) { console.warn(`[Storage] error loading ${key} from FS:`, e); }
+    }
+    // Fallback a localStorage (e migrazione automatica se trovato)
+    try {
+      const val = localStorage.getItem(key);
+      if (val) {
+        const parsed = JSON.parse(val);
+        // Se siamo in Tauri, migra al file alla prima occasione (il save successivo lo farà)
+        return parsed;
+      }
+    } catch { }
+    return defaultValue;
+  },
+  async set(key, value) {
+    if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+      try {
+        const { writeTextFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');
+        const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
+        const dir = await appLocalDataDir();
+        if (!(await exists(dir))) await mkdir(dir, { recursive: true });
+        const path = await join(dir, `${key}.json`);
+        await writeTextFile(path, JSON.stringify(value, null, 2));
+        // Pulisce localStorage dopo il salvataggio su file con successo
+        localStorage.removeItem(key);
+        return;
+      } catch (e) { console.error(`[Storage] error saving ${key} to FS:`, e); }
+    }
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        console.error('[Storage] Quota exceeded on localStorage!');
+        showAlert(t(loadSettings().uiLang || 'en', 'storageQuotaError'));
+      }
+    }
+  }
+};
+
 function loadSettings() {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch { return {}; }
 }
@@ -275,7 +334,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.3' });
+  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.4' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -307,6 +366,13 @@ function applyUiLang(lang) {
   // Search depth label
   const _searchDepthLabel = document.getElementById('search-depth-label');
   if (_searchDepthLabel) _searchDepthLabel.textContent = t(lang, 'searchDepth');
+  // File size limit labels
+  const _maxLabel  = document.getElementById('max-file-size-mb-label');
+  const _warnLabel = document.getElementById('warn-file-size-mb-label');
+  if (_maxLabel)  _maxLabel.textContent  = t(lang, 'maxFileSizeMB');
+  if (_warnLabel) _warnLabel.textContent = t(lang, 'warnFileSizeMB');
+  if (optimalLimitBtn) optimalLimitBtn.title = t(lang,
+    (window.__TAURI__ || window.__TAURI_INTERNALS__) ? 'determineOptimalValue' : 'ramAdvisorBrowserOnly');
 }
 
 // Init from saved settings
@@ -328,6 +394,18 @@ function applyUiLang(lang) {
   // Search depth
   const searchDepth = s.searchDepth ?? 3;
   if (searchDepthInput) searchDepthInput.value = searchDepth;
+  // Translation language
+  if (s.translationLang) langSelect.value = s.translationLang;
+  // File size limits
+  const maxFileSizeMB  = typeof s.maxFileSizeMB  === 'number' ? s.maxFileSizeMB  : DEFAULT_MAX_FILE_SIZE_MB;
+  const warnFileSizeMB = typeof s.warnFileSizeMB === 'number' ? s.warnFileSizeMB : DEFAULT_WARN_FILE_SIZE_MB;
+  if (maxFileSizeMbInput)  maxFileSizeMbInput.value  = maxFileSizeMB;
+  if (warnFileSizeMbInput) warnFileSizeMbInput.value = warnFileSizeMB;
+  // Disable optimal-limit button in browser mode
+  if (optimalLimitBtn && !(window.__TAURI__ || window.__TAURI_INTERNALS__)) {
+    optimalLimitBtn.disabled = true;
+    optimalLimitBtn.title = ui('ramAdvisorBrowserOnly');
+  }
   // Sostituisce i select lingua con dropdown custom (bandiere emoji)
   createFlagSelect(langSelect);
   createFlagSelect(uiLangSelect);
@@ -375,9 +453,81 @@ if (searchDepthInput) {
   });
 }
 
+if (maxFileSizeMbInput) {
+  maxFileSizeMbInput.addEventListener('change', () => {
+    let val = parseInt(maxFileSizeMbInput.value, 10);
+    val = Math.max(10, Math.min(2000, isNaN(val) ? DEFAULT_MAX_FILE_SIZE_MB : val));
+    maxFileSizeMbInput.value = val;
+    // Clamp warn if necessary
+    let warn = parseInt(warnFileSizeMbInput.value, 10) || DEFAULT_WARN_FILE_SIZE_MB;
+    if (warn >= val) { warn = val - 1; warnFileSizeMbInput.value = warn; }
+    const s = loadSettings();
+    s.maxFileSizeMB = val;
+    s.warnFileSizeMB = warn;
+    saveSettings(s);
+  });
+}
+
+if (warnFileSizeMbInput) {
+  warnFileSizeMbInput.addEventListener('change', () => {
+    const maxVal = parseInt(maxFileSizeMbInput?.value, 10) || DEFAULT_MAX_FILE_SIZE_MB;
+    let val = parseInt(warnFileSizeMbInput.value, 10);
+    val = Math.max(10, Math.min(maxVal - 1, isNaN(val) ? DEFAULT_WARN_FILE_SIZE_MB : val));
+    warnFileSizeMbInput.value = val;
+    const s = loadSettings();
+    s.warnFileSizeMB = val;
+    saveSettings(s);
+  });
+}
+
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.add('hidden'); });
+
+// ── RAM Advisor ────────────────────────────────────────────────────────────
+/**
+ * Calcola il limite ottimale dalla RAM totale.
+ * @param {number} totalRamMb - RAM totale in MB
+ * @returns {number} - valore in MB, max 500
+ */
+function computeOptimalLimit(totalRamMb) {
+  return Math.min(Math.floor(totalRamMb / 4), 500);
+}
+
+function showRamAdvisorError(msg) {
+  if (ramAdvisorError) {
+    ramAdvisorError.textContent = msg;
+    ramAdvisorError.classList.remove('hidden');
+  }
+}
+
+if (optimalLimitBtn) {
+  optimalLimitBtn.addEventListener('click', async () => {
+    if (!(window.__TAURI__ || window.__TAURI_INTERNALS__)) return;
+    if (ramAdvisorError) ramAdvisorError.classList.add('hidden');
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const ramMb = await invoke('get_system_ram');
+      if (!ramMb || ramMb === 0) {
+        showRamAdvisorError(ui('oomError'));
+        return;
+      }
+      const optimal = computeOptimalLimit(ramMb);
+      maxFileSizeMbInput.value = optimal;
+      // Clamp warnFileSizeMB if necessary
+      const currentWarn = parseInt(warnFileSizeMbInput.value, 10) || DEFAULT_WARN_FILE_SIZE_MB;
+      const clampedWarn = Math.min(currentWarn, optimal - 1);
+      warnFileSizeMbInput.value = clampedWarn;
+      // Persist
+      const s = loadSettings();
+      s.maxFileSizeMB = optimal;
+      s.warnFileSizeMB = clampedWarn;
+      saveSettings(s);
+    } catch (err) {
+      showRamAdvisorError(ui('oomError') + ': ' + errMsg(err));
+    }
+  });
+}
 
 // Shorthand: translate using current UI language
 function ui(key, vars) { return t(loadSettings().uiLang || 'en', key, vars); }
@@ -836,23 +986,85 @@ async function translateCurrentChapter(startPct = 0) {
   observeNextSentinel();
 }
 
+// ── Size Guard ─────────────────────────────────────────────────────────────
+/**
+ * Classifica la dimensione di un file rispetto ai limiti configurati.
+ * @param {number} fileSizeBytes  - dimensione del file in byte
+ * @param {number} maxFileSizeMB  - limite bloccante in MB
+ * @param {number} warnFileSizeMB - soglia di avviso in MB
+ * @returns {'ok' | 'warn' | 'block'}
+ */
+function sizeGuard(fileSizeBytes, maxFileSizeMB, warnFileSizeMB) {
+  const MB = 1_048_576;
+  if (fileSizeBytes > maxFileSizeMB * MB) return 'block';
+  if (fileSizeBytes > warnFileSizeMB * MB) return 'warn';
+  return 'ok';
+}
+
 // ── Apertura file ──────────────────────────────────────────────────────────
 openBtn.addEventListener('click', async () => {
   try {
-    let fileData = null, fileName = '';
+    let fileData = null, fileName = '', fileSizeBytes = 0;
+    const s = loadSettings();
+    const maxFileSizeMB  = typeof s.maxFileSizeMB  === 'number' ? s.maxFileSizeMB  : DEFAULT_MAX_FILE_SIZE_MB;
+    const warnFileSizeMB = typeof s.warnFileSizeMB === 'number' ? s.warnFileSizeMB : DEFAULT_WARN_FILE_SIZE_MB;
+
     if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
       const { open }     = await import('@tauri-apps/plugin-dialog');
-      const { readFile } = await import('@tauri-apps/plugin-fs');
+      const { readFile, stat } = await import('@tauri-apps/plugin-fs');
       const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub'] }] });
       if (!selected) return;
       fileName = selected;
-      const raw = await readFile(selected);
+      // Get file size before reading
+      const info = await stat(selected);
+      fileSizeBytes = info.size;
+      const guard = sizeGuard(fileSizeBytes, maxFileSizeMB, warnFileSizeMB);
+      if (guard === 'block') {
+        const sizeMB = (fileSizeBytes / 1_048_576).toFixed(1);
+        const name = selected.split(/[\\/]/).pop();
+        await showAlert(ui('fileTooLargeMsg', { name, sizeMB, maxMB: maxFileSizeMB }));
+        return;
+      }
+      if (guard === 'warn') {
+        const sizeMB = (fileSizeBytes / 1_048_576).toFixed(1);
+        const name = selected.split(/[\\/]/).pop();
+        console.warn(ui('fileLargeWarnMsg', { name, sizeMB }));
+      }
+      showLoading(ui('readingFile'));
+      let raw;
+      try {
+        raw = await readFile(selected);
+      } catch (err) {
+        hideLoading();
+        if (book) { try { book.destroy(); } catch (_) {} book = null; }
+        await showAlert(ui('oomErrorMsg', { name: selected.split(/[\\/]/).pop() }));
+        return;
+      }
       fileData = raw.buffer ?? raw;
     } else {
       const picked = await pickFileViaInput();
       if (!picked) return;
       fileName = picked.name;
-      fileData = picked.buffer;
+      fileSizeBytes = picked.size;
+      const guard = sizeGuard(fileSizeBytes, maxFileSizeMB, warnFileSizeMB);
+      if (guard === 'block') {
+        const sizeMB = (fileSizeBytes / 1_048_576).toFixed(1);
+        await showAlert(ui('fileTooLargeMsg', { name: fileName, sizeMB, maxMB: maxFileSizeMB }));
+        return;
+      }
+      if (guard === 'warn') {
+        const sizeMB = (fileSizeBytes / 1_048_576).toFixed(1);
+        console.warn(ui('fileLargeWarnMsg', { name: fileName, sizeMB }));
+      }
+      showLoading(ui('readingFile'));
+      try {
+        fileData = await picked.getBuffer();
+      } catch (err) {
+        hideLoading();
+        if (book) { try { book.destroy(); } catch (_) {} book = null; }
+        await showAlert(ui('oomErrorMsg', { name: fileName }));
+        return;
+      }
     }
     const ext = fileName.split('.').pop().toLowerCase();
     if (ext === 'epub') await loadEpub(fileData, fileName);
@@ -872,20 +1084,42 @@ function pickFileViaInput() {
     input.onchange = async () => {
       const file = input.files[0];
       if (!file) return resolve(null);
-      resolve({ name: file.name, buffer: await file.arrayBuffer() });
+      resolve({
+        name: file.name,
+        size: file.size,
+        getBuffer: () => file.arrayBuffer(),
+        // Keep backward compat: buffer is resolved lazily via getBuffer()
+      });
     };
     input.click();
   });
 }
 
 // ── Carica EPUB ────────────────────────────────────────────────────────────
+/**
+ * Verifica se un errore è di tipo OOM (Out Of Memory).
+ * @param {*} err
+ * @returns {boolean}
+ */
+function isOomError(err) {
+  const msg = errMsg(err).toLowerCase();
+  return msg.includes('out of memory') || msg.includes('allocation failed') || msg.includes('memory');
+}
+
 async function loadEpub(arrayBuffer, filePath = '') {
+  // Distruggi il libro precedente
+  if (book) {
+    try { book.destroy(); } catch (_) {}
+    book = null;
+    currentSpineItems = [];
+    currentChapterParagraphs = [];
+    currentFilePath = null;
+  }
+
   showLoading(ui('loadingEpub'));
   hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
-    if (book) { book.destroy(); book = null; }
-    currentChapterParagraphs = [];
 
     // Nota: evitiamo intenzionalmente `book.ready` — può bloccarsi indefinitamente
     // su certi EPUB (es. generati da Calibre) per un problema interno di JSZip.
@@ -944,6 +1178,15 @@ async function loadEpub(arrayBuffer, filePath = '') {
     setViewMode('text');
     viewToggleBtn.disabled = false;
     await displayChapter(bestIndex >= 0 ? bestIndex : 0);
+  } catch (err) {
+    if (book) {
+      try { book.destroy(); } catch (_) {}
+      book = null;
+      currentSpineItems = [];
+      currentChapterParagraphs = [];
+      currentFilePath = null;
+    }
+    await showAlert(isOomError(err) ? ui('oomErrorMsg', { name: filePath }) : ui('errorOpening') + errMsg(err));
   } finally {
     hideLoading();
   }
@@ -979,6 +1222,16 @@ async function displayChapter(index, scrollPct = 0) {
       renderOriginal(currentChapterParagraphs);
       await translateCurrentChapter(scrollPct);
       if (scrollPct > 0) restoreScrollPct(scrollPct);
+    }
+    // Unload non-current spine items to free memory (after rendering is complete)
+    for (let i = 0; i < currentSpineItems.length; i++) {
+      if (i === currentSpineIndex) continue;
+      const spineItem = currentSpineItems[i];
+      if (typeof spineItem.unload === 'function') {
+        try { spineItem.unload(); } catch (e) {
+          console.warn('[memory] unload error on spine item', i, e);
+        }
+      }
     }
   } catch (err) {
     if (currentSpineIndex !== myIndex) return;
@@ -1053,8 +1306,11 @@ nextBtn.addEventListener('click', () => {
   displayChapter(currentSpineIndex + 1);
 });
 
-// Cambio lingua → ritraduce il capitolo corrente
+// Cambio lingua → salva la scelta e ritraduce il capitolo corrente
 langSelect.addEventListener('change', () => {
+  const s = loadSettings();
+  s.translationLang = langSelect.value;
+  saveSettings(s);
   if (currentChapterParagraphs.length) translateCurrentChapter();
 });
 
@@ -1081,13 +1337,16 @@ document.addEventListener('keydown', e => {
 
 // ── Segnalibri ─────────────────────────────────────────────────────────────
 const BOOKMARKS_KEY = 'giano-reader-bookmarks';
+let _cachedBookmarks = null;
 
-function loadBookmarks() {
-  try { return JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || '[]'); }
-  catch { return []; }
+async function loadBookmarks() {
+  if (_cachedBookmarks) return _cachedBookmarks;
+  _cachedBookmarks = await PersistentStorage.get(BOOKMARKS_KEY, []);
+  return _cachedBookmarks;
 }
-function saveBookmarks(bms) {
-  localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bms));
+async function saveBookmarks(bms) {
+  _cachedBookmarks = bms;
+  await PersistentStorage.set(BOOKMARKS_KEY, bms);
 }
 
 // Restituisce la label del capitolo corrente dalla progress bar
@@ -1099,7 +1358,7 @@ function getChapterLabel(index) {
 // Aggiunge un segnalibro per il capitolo corrente
 addBookmarkBtn.addEventListener('click', async () => {
   if (!currentFilePath) return;
-  const bms = loadBookmarks();
+  const bms = await loadBookmarks();
   const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
   const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
   const bm = {
@@ -1114,14 +1373,14 @@ addBookmarkBtn.addEventListener('click', async () => {
     scrollPct,
   };
   bms.push(bm);
-  saveBookmarks(bms);
-  renderBookmarks();
+  await saveBookmarks(bms);
+  await renderBookmarks();
   showAlert(ui('bookmarkAdded'));
 });
 
 // Renderizza la lista segnalibri nella modale
-function renderBookmarks(query = '') {
-  const bms = loadBookmarks();
+async function renderBookmarks(query = '') {
+  const bms = await loadBookmarks();
   const q = query.trim().toLowerCase();
   const filtered = q
     ? bms.filter(bm => (bm.bookTitle || bm.fileName || '').toLowerCase().includes(q))
@@ -1147,36 +1406,36 @@ function renderBookmarks(query = '') {
     `;
     li.querySelector('.bm-info').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
     li.querySelector('.bm-icon').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
-    li.querySelector('.bm-delete').addEventListener('click', e => {
+    li.querySelector('.bm-delete').addEventListener('click', async e => {
       e.stopPropagation();
-      deleteBookmark(bm.id);
+      await deleteBookmark(bm.id);
     });
     bookmarksList.appendChild(li);
   }
 }
 
 if (bmSearchInput) {
-  bmSearchInput.addEventListener('input', () => {
-    renderBookmarks(bmSearchInput.value);
+  bmSearchInput.addEventListener('input', async () => {
+    await renderBookmarks(bmSearchInput.value);
   });
 }
 
 // Apri/chiudi modale segnalibri
-function openBookmarksModal() {
+async function openBookmarksModal() {
   if (bmSearchInput) bmSearchInput.value = '';
-  renderBookmarks();
+  await renderBookmarks();
   bookmarksModal.classList.remove('hidden');
 }
 function closeBookmarksModal() {
   bookmarksModal.classList.add('hidden');
 }
 bookmarksOpenBtn.addEventListener('click', openBookmarksModal);
-bmCloseBtn.addEventListener('click', closeBookmarksModal);
+bmCloseBtn.addEventListener('click', closeLibraryModal);
 bookmarksModal.addEventListener('click', e => { if (e.target === bookmarksModal) closeBookmarksModal(); });
 
 // Esporta segnalibri come JSON
 bmExportBtn.addEventListener('click', async () => {
-  const bms = loadBookmarks();
+  const bms = await loadBookmarks();
   const json = JSON.stringify(bms, null, 2);
   const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
 
@@ -1216,20 +1475,21 @@ bmImportInput.addEventListener('change', async () => {
     const text = await file.text();
     const imported = JSON.parse(text);
     if (!Array.isArray(imported)) throw new Error(ui('invalidFormat'));
-    const existing = loadBookmarks();
+    const existing = await loadBookmarks();
     const existingIds = new Set(existing.map(b => b.id));
     const toAdd = imported.filter(b => b && b.id && !existingIds.has(b.id));
-    saveBookmarks([...existing, ...toAdd]);
-    renderBookmarks();
+    await saveBookmarks([...existing, ...toAdd]);
+    await renderBookmarks();
     await showAlert(ui('importedMsg', { added: toAdd.length, skipped: imported.length - toAdd.length }));
   } catch (err) {
     await showAlert(ui('importError') + errMsg(err));
   }
 });
 
-function deleteBookmark(id) {
-  saveBookmarks(loadBookmarks().filter(b => b.id !== id));
-  renderBookmarks();
+async function deleteBookmark(id) {
+  const bms = await loadBookmarks();
+  await saveBookmarks(bms.filter(b => b.id !== id));
+  await renderBookmarks();
 }
 
 // Mostra la modal di rilocazione e restituisce il nuovo path scelto, o null se annullato
@@ -1259,14 +1519,14 @@ async function askRelocate(bm) {
 }
 
 // Aggiorna il path di un segnalibro e ricarica la lista
-function updateBookmarkPath(bm, newPath) {
-  const bms = loadBookmarks();
+async function updateBookmarkPath(bm, newPath) {
+  const bms = await loadBookmarks();
   const idx = bms.findIndex(b => b.id === bm.id);
   if (idx >= 0) {
     bms[idx].filePath = newPath;
     bms[idx].fileName = newPath.split(/[\\/]/).pop();
-    saveBookmarks(bms);
-    renderBookmarks();
+    await saveBookmarks(bms);
+    await renderBookmarks();
     bm.filePath = bms[idx].filePath;
     bm.fileName = bms[idx].fileName;
   }
@@ -1288,7 +1548,7 @@ async function openBookmark(bm) {
       // Path not absolute: ask user to locate the file
       const newPath = await askRelocate(bm);
       if (!newPath) return;
-      updateBookmarkPath(bm, newPath);
+      await updateBookmarkPath(bm, newPath);
     } else {
       await showAlert(`Please open the file "${bm.fileName}" manually and navigate to: ${bm.chapterLabel}`);
       return;
@@ -1313,7 +1573,7 @@ async function openBookmark(bm) {
   if (!fileExists) {
     const newPath = await askRelocate(bm);
     if (!newPath) return;
-    updateBookmarkPath(bm, newPath);
+    await updateBookmarkPath(bm, newPath);
   }
 
   await loadBookmarkFile(bm);
@@ -1359,7 +1619,7 @@ async function loadBookmarkFile(bm) {
     if (msg.includes('forbidden') || msg.includes('not allowed') || msg.includes('No such file') || msg.includes('os error')) {
       const newPath = await askRelocate(bm);
       if (!newPath) return;
-      updateBookmarkPath(bm, newPath);
+      await updateBookmarkPath(bm, newPath);
       await loadBookmarkFile(bm);
     } else {
       await showAlert(ui('errorOpening') + msg);
@@ -1368,7 +1628,9 @@ async function loadBookmarkFile(bm) {
 }
 
 // Inizializza la lista segnalibri all'avvio
-renderBookmarks();
+(async function initBookmarks() {
+  await renderBookmarks();
+})();
 
 // ── Persistenza geometria finestra (solo Tauri) ────────────────────────────
 const WINDOW_STATE_KEY = 'giano-reader-window-state';
@@ -1431,19 +1693,27 @@ if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
   setInterval(saveWindowState, 5000);
 }
 
+// Distruggi il libro alla chiusura della finestra per liberare memoria
+window.addEventListener('beforeunload', () => {
+  if (book) { try { book.destroy(); } catch (_) {} }
+});
+
 // ── Library ────────────────────────────────────────────────────────────────
 const LIBRARY_KEY = 'giano-reader-library';
+let _cachedLibrary = null;
 
-function loadLibrary() {
-  try { return JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); }
-  catch { return []; }
+async function loadLibrary() {
+  if (_cachedLibrary) return _cachedLibrary;
+  _cachedLibrary = await PersistentStorage.get(LIBRARY_KEY, []);
+  return _cachedLibrary;
 }
-function saveLibrary(entries) {
-  localStorage.setItem(LIBRARY_KEY, JSON.stringify(entries));
+async function saveLibrary(entries) {
+  _cachedLibrary = entries;
+  await PersistentStorage.set(LIBRARY_KEY, entries);
 }
 
-function addEntries(newEntries) {
-  const lib = loadLibrary();
+async function addEntries(newEntries) {
+  const lib = await loadLibrary();
   const existingPaths = new Set(lib.map(e => e.filePath));
   let added = 0, skipped = 0;
   for (const entry of newEntries) {
@@ -1455,13 +1725,14 @@ function addEntries(newEntries) {
       added++;
     }
   }
-  saveLibrary(lib);
+  await saveLibrary(lib);
   return { added, skipped };
 }
 
-function removeEntry(id) {
-  saveLibrary(loadLibrary().filter(e => e.id !== id));
-  renderLibraryGrid();
+async function removeEntry(id) {
+  const lib = await loadLibrary();
+  await saveLibrary(lib.filter(e => e.id !== id));
+  await renderLibraryGrid();
 }
 
 async function readDirRecursive(dirPath, maxDepth = 3) {
@@ -1610,7 +1881,7 @@ async function autoAddToLibrary(arrayBuffer, filePath, meta) {
     const addedAt = Date.now();
     const fileSize = arrayBuffer.byteLength || 0;
     // Add immediately without cover so the entry appears right away
-    addEntries([{ id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount: 0, coverDataUrl: null, status: 'to-read', notes: '', addedAt }]);
+    await addEntries([{ id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount: 0, coverDataUrl: null, status: 'to-read', notes: '', addedAt }]);
     // Extract cover in background and update the entry
     try {
       const tmpBook = ePub(arrayBuffer);
@@ -1637,9 +1908,9 @@ async function autoAddToLibrary(arrayBuffer, filePath, meta) {
           img.src = coverBlobUrl;
         });
         if (coverDataUrl) {
-          const current = loadLibrary();
+          const current = await loadLibrary();
           const idx = current.findIndex(e => e.filePath === filePath);
-          if (idx >= 0) { current[idx].coverDataUrl = coverDataUrl; saveLibrary(current); }
+          if (idx >= 0) { current[idx].coverDataUrl = coverDataUrl; await saveLibrary(current); }
         }
       }
       tmpBook.destroy();
@@ -1670,9 +1941,9 @@ async function scanFolder(rootPath) {
       const entry = await extractMetadata(filePath);
       newEntries.push(entry);
     }
-    const { added, skipped } = addEntries(newEntries);
+    const { added, skipped } = await addEntries(newEntries);
     libStatus.textContent = ui('libScanDone', { added, skipped });
-    renderLibraryGrid();
+    await renderLibraryGrid();
   } catch (err) {
     libStatus.textContent = ui('libImportError') + errMsg(err);
   } finally {
@@ -1681,8 +1952,8 @@ async function scanFolder(rootPath) {
   }
 }
 
-function renderLibraryGrid(query = '', statusFilter = '') {
-  const lib = loadLibrary();
+async function renderLibraryGrid(query = '', statusFilter = '') {
+  const lib = await loadLibrary();
   const q = query.trim().toLowerCase();
   let filtered = q
     ? lib.filter(e => (e.title || '').toLowerCase().includes(q) || (e.author || '').toLowerCase().includes(q))
@@ -1731,12 +2002,12 @@ function renderLibraryGrid(query = '', statusFilter = '') {
     infoBtn.className = 'lib-book-action-btn';
     infoBtn.title = ui('detailInfoBtn');
     infoBtn.innerHTML = 'ⓘ';
-    infoBtn.addEventListener('click', e => { e.stopPropagation(); openBookDetail(entry.id); });
+    infoBtn.addEventListener('click', async e => { e.stopPropagation(); await openBookDetail(entry.id); });
     const delBtn = document.createElement('button');
     delBtn.className = 'lib-book-action-btn lib-book-action-btn--danger';
     delBtn.title = ui('libDeleteBook');
     delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
-    delBtn.addEventListener('click', e => { e.stopPropagation(); removeEntry(entry.id); });
+    delBtn.addEventListener('click', async e => { e.stopPropagation(); await removeEntry(entry.id); });
     titleRow.appendChild(titleEl);
     titleRow.appendChild(infoBtn);
     titleRow.appendChild(delBtn);
@@ -1794,8 +2065,8 @@ function renderLibraryGrid(query = '', statusFilter = '') {
 }
 
 // Open book detail modal for editing metadata
-function openBookDetail(entryId) {
-  const lib = loadLibrary();
+async function openBookDetail(entryId) {
+  const lib = await loadLibrary();
   const entry = lib.find(e => e.id === entryId);
   if (!entry) return;
   const modal = document.getElementById('book-detail-modal');
@@ -1842,10 +2113,10 @@ function openBookDetail(entryId) {
     entry.status = document.getElementById('detail-status').value;
     entry.notes = document.getElementById('detail-notes').value.trim();
     const idx = lib.findIndex(e => e.id === entryId);
-    if (idx >= 0) { lib[idx] = entry; saveLibrary(lib); }
+    if (idx >= 0) { lib[idx] = entry; await saveLibrary(lib); }
     modal.classList.add('hidden');
     const { query, status } = getLibFilters();
-    renderLibraryGrid(query, status);
+    await renderLibraryGrid(query, status);
   };
   // Wire delete button
   const delBtn = document.getElementById('book-detail-delete-btn');
@@ -1861,7 +2132,7 @@ function openBookDetail(entryId) {
       return window.confirm(msg);
     })();
     if (!confirmed) return;
-    removeEntry(entryId);
+    await removeEntry(entryId);
     modal.classList.add('hidden');
   };
 }
@@ -1884,9 +2155,9 @@ async function openBookFromLibrary(entry) {
       document.getElementById('library-modal').classList.add('hidden');
       // Advance status: anything except "reading"/"read" → "reading" when book is opened
       if (entry.status !== 'reading' && entry.status !== 'read') {
-        const lib = loadLibrary();
+        const lib = await loadLibrary();
         const idx = lib.findIndex(e => e.id === entry.id);
-        if (idx >= 0) { lib[idx].status = 'reading'; saveLibrary(lib); }
+        if (idx >= 0) { lib[idx].status = 'reading'; await saveLibrary(lib); }
       }
       await loadEpub(fileData, entry.filePath);
     } catch (err) {
@@ -1898,7 +2169,7 @@ async function openBookFromLibrary(entry) {
 }
 
 async function exportLibrary() {
-  const lib = loadLibrary();
+  const lib = await loadLibrary();
   const json = JSON.stringify(lib, null, 2);
   const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
   if (isTauri) {
@@ -1963,10 +2234,10 @@ async function importLibrary() {
       await showAlert(ui('invalidFormat'));
       return;
     }
-    const { added, skipped } = addEntries(parsed);
+    const { added, skipped } = await addEntries(parsed);
     libStatus.textContent = ui('libImportedMsg', { added, skipped });
     libStatus.classList.remove('hidden');
-    renderLibraryGrid();
+    await renderLibraryGrid();
   } catch (err) {
     await showAlert(ui('libImportError') + errMsg(err));
   }
@@ -1992,11 +2263,11 @@ function getLibFilters() {
   };
 }
 
-libraryBtn.addEventListener('click', () => {
+libraryBtn.addEventListener('click', async () => {
   libraryModal.classList.remove('hidden');
   libSearchInput.value = '';
   if (libStatusFilter) libStatusFilter.value = '';
-  renderLibraryGrid();
+  await renderLibraryGrid();
 });
 
 function closeLibraryModal() {
@@ -2033,14 +2304,14 @@ libImportBtn.addEventListener('click', () => importLibrary());
 libExportBtn.addEventListener('click', () => exportLibrary());
 
 // Live search filtering
-libSearchInput.addEventListener('input', () => {
+libSearchInput.addEventListener('input', async () => {
   const { query, status } = getLibFilters();
-  renderLibraryGrid(query, status);
+  await renderLibraryGrid(query, status);
 });
 if (libStatusFilter) {
-  libStatusFilter.addEventListener('change', () => {
+  libStatusFilter.addEventListener('change', async () => {
     const { query, status } = getLibFilters();
-    renderLibraryGrid(query, status);
+    await renderLibraryGrid(query, status);
   });
 }
 
@@ -2050,7 +2321,7 @@ document.getElementById('book-detail-close-btn').addEventListener('click', () =>
 bookDetailModal.addEventListener('click', e => { if (e.target === bookDetailModal) bookDetailModal.classList.add('hidden'); });
 
 document.getElementById('lib-clear-btn').addEventListener('click', async () => {
-  const lib = loadLibrary();
+  const lib = await loadLibrary();
   if (!lib.length) return;
   const confirmed = await (async () => {
     const msg = ui('libClearConfirm', { count: lib.length });
@@ -2063,6 +2334,6 @@ document.getElementById('lib-clear-btn').addEventListener('click', async () => {
     return window.confirm(msg);
   })();
   if (!confirmed) return;
-  saveLibrary([]);
-  renderLibraryGrid();
+  await saveLibrary([]);
+  await renderLibraryGrid();
 });

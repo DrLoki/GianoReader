@@ -56,7 +56,7 @@ English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese
 ## 📥 Download & Install
 You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and Linux (.AppImage) here:
 
-👉 [Download Giano Reader v0.7.3](https://github.com/DrLoki/GianoReader/releases/tag/v0.7.3)
+👉 [Download Giano Reader v0.7.4](https://github.com/DrLoki/GianoReader/releases/tag/v0.7.4)
 
 ---
 
@@ -123,7 +123,7 @@ Uses the unofficial Google Translate public endpoint (`translate.googleapis.com`
 
 ## Library
 
-The library scans local folders for EPUB files and stores metadata (title, author, publisher, year, language, description, cover thumbnail, estimated page count, file size) in `localStorage`. Books can be filtered by reading status (To read / Reading / Read) and searched by title or author. The scan depth (1–10 folder levels) is configurable in Settings.
+The library scans local folders for EPUB files and stores metadata (title, author, publisher, year, language, description, cover thumbnail, estimated page count, file size) in persistent JSON files on disk (for the Tauri desktop app) or `localStorage` (for the browser version). This allows managing large libraries without being limited by browser storage quotas. Books can be filtered by reading status (To read / Reading / Read) and searched by title or author. The scan depth (1–10 folder levels) is configurable in Settings.
 
 ---
 
