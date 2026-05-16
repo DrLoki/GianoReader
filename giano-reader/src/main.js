@@ -16,71 +16,71 @@ let currentViewMode = 'text';       // 'text' | 'original'
 
 const LAZY_CHUNK = 12; // paragrafi per chunk di traduzione lazy
 
-const DEFAULT_MAX_FILE_SIZE_MB  = 150;
+const DEFAULT_MAX_FILE_SIZE_MB = 150;
 const DEFAULT_WARN_FILE_SIZE_MB = 50;
 
 // ── Riferimenti DOM ────────────────────────────────────────────────────────
-const openBtn              = document.getElementById('open-btn');
-const prevBtn              = document.getElementById('prev-btn');
-const nextBtn              = document.getElementById('next-btn');
-const pageInfo             = document.getElementById('page-info');
-const progressTrack        = document.getElementById('progress-track');
-const progressFill         = document.getElementById('progress-fill');
-const progressThumb        = document.getElementById('progress-thumb');
-const progressTicks        = document.getElementById('progress-ticks');
-const progressTooltip      = document.getElementById('progress-tooltip');
-const langSelect           = document.getElementById('lang-select');
-const originalViewer       = document.getElementById('original-viewer');
-const translationViewer    = document.getElementById('translation-viewer');
+const openBtn = document.getElementById('open-btn');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
+const pageInfo = document.getElementById('page-info');
+const progressTrack = document.getElementById('progress-track');
+const progressFill = document.getElementById('progress-fill');
+const progressThumb = document.getElementById('progress-thumb');
+const progressTicks = document.getElementById('progress-ticks');
+const progressTooltip = document.getElementById('progress-tooltip');
+const langSelect = document.getElementById('lang-select');
+const originalViewer = document.getElementById('original-viewer');
+const translationViewer = document.getElementById('translation-viewer');
 const translationLangLabel = document.getElementById('translation-lang-label');
-const translationStatus    = document.getElementById('translation-status');
-const loadingOverlay       = document.getElementById('loading-overlay');
-const loadingText          = document.getElementById('loading-text');
-const noBookPlaceholder    = document.getElementById('no-book-placeholder');
-const tocList              = document.getElementById('toc-list');
-const tocPlaceholder       = document.getElementById('toc-placeholder');
-const bookInfo             = document.getElementById('book-info');
-const bookTitle            = document.getElementById('book-title');
-const bookAuthor           = document.getElementById('book-author');
-const coverImg             = document.getElementById('cover-img');
+const translationStatus = document.getElementById('translation-status');
+const loadingOverlay = document.getElementById('loading-overlay');
+const loadingText = document.getElementById('loading-text');
+const noBookPlaceholder = document.getElementById('no-book-placeholder');
+const tocList = document.getElementById('toc-list');
+const tocPlaceholder = document.getElementById('toc-placeholder');
+const bookInfo = document.getElementById('book-info');
+const bookTitle = document.getElementById('book-title');
+const bookAuthor = document.getElementById('book-author');
+const coverImg = document.getElementById('cover-img');
 // Segnalibri
-const addBookmarkBtn       = document.getElementById('add-bookmark-btn');
-const bookmarksList        = document.getElementById('bookmarks-list');
+const addBookmarkBtn = document.getElementById('add-bookmark-btn');
+const bookmarksList = document.getElementById('bookmarks-list');
 const bookmarksPlaceholder = document.getElementById('bookmarks-placeholder');
-const bookmarksModal       = document.getElementById('bookmarks-modal');
-const bookmarksOpenBtn     = document.getElementById('bookmarks-open-btn');
-const bmCloseBtn           = document.getElementById('bm-close-btn');
-const bmImportBtn          = document.getElementById('bm-import-btn');
-const bmExportBtn          = document.getElementById('bm-export-btn');
-const bmImportInput        = document.getElementById('bm-import-input');
-const bmSearchInput        = document.getElementById('bm-search-input');
+const bookmarksModal = document.getElementById('bookmarks-modal');
+const bookmarksOpenBtn = document.getElementById('bookmarks-open-btn');
+const bmCloseBtn = document.getElementById('bm-close-btn');
+const bmImportBtn = document.getElementById('bm-import-btn');
+const bmExportBtn = document.getElementById('bm-export-btn');
+const bmImportInput = document.getElementById('bm-import-input');
+const bmSearchInput = document.getElementById('bm-search-input');
 const bookmarkMissingModal = document.getElementById('bookmark-missing-modal');
-const bmMissingName        = document.getElementById('bm-missing-name');
-const bmRelocateBtn        = document.getElementById('bm-relocate-btn');
-const bmCancelBtn          = document.getElementById('bm-cancel-btn');
+const bmMissingName = document.getElementById('bm-missing-name');
+const bmRelocateBtn = document.getElementById('bm-relocate-btn');
+const bmCancelBtn = document.getElementById('bm-cancel-btn');
 // Settings
-const settingsBtn          = document.getElementById('settings-btn');
-const settingsModal        = document.getElementById('settings-modal');
-const settingsCloseBtn     = document.getElementById('settings-close-btn');
-const uiLangSelect         = document.getElementById('ui-lang-select');
-const themeSelect          = document.getElementById('theme-select');
-const fontFamilySelect     = document.getElementById('font-family-select');
-const fontSizeRange        = document.getElementById('font-size-range');
-const fontSizeValue        = document.getElementById('font-size-value');
-const searchDepthInput     = document.getElementById('search-depth-input');
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const settingsCloseBtn = document.getElementById('settings-close-btn');
+const uiLangSelect = document.getElementById('ui-lang-select');
+const themeSelect = document.getElementById('theme-select');
+const fontFamilySelect = document.getElementById('font-family-select');
+const fontSizeRange = document.getElementById('font-size-range');
+const fontSizeValue = document.getElementById('font-size-value');
+const searchDepthInput = document.getElementById('search-depth-input');
 // File size limits
-const maxFileSizeMbInput   = document.getElementById('max-file-size-mb');
-const warnFileSizeMbInput  = document.getElementById('warn-file-size-mb');
-const optimalLimitBtn      = document.getElementById('optimal-limit-btn');
-const ramAdvisorError      = document.getElementById('ram-advisor-error');
+const maxFileSizeMbInput = document.getElementById('max-file-size-mb');
+const warnFileSizeMbInput = document.getElementById('warn-file-size-mb');
+const optimalLimitBtn = document.getElementById('optimal-limit-btn');
+const ramAdvisorError = document.getElementById('ram-advisor-error');
 // View toggle — commuta tra Text_Mode e Original_Mode
-const viewToggleBtn        = document.getElementById('view-toggle-btn');
-const syncDisabledNotice   = document.getElementById('sync-disabled-notice');
-const originalNative       = document.getElementById('original-native');
+const viewToggleBtn = document.getElementById('view-toggle-btn');
+const syncDisabledNotice = document.getElementById('sync-disabled-notice');
+const originalNative = document.getElementById('original-native');
 // Hide translation toggle — nasconde/mostra il pannello di traduzione
-const hideTranslationBtn   = document.getElementById('hide-translation-btn');
-const translationPanel     = document.getElementById('translation-panel');
-const divider              = document.getElementById('divider');
+const hideTranslationBtn = document.getElementById('hide-translation-btn');
+const translationPanel = document.getElementById('translation-panel');
+const divider = document.getElementById('divider');
 
 let translationHidden = false;
 
@@ -290,32 +290,32 @@ function applyUiLang(lang) {
   document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
   document.documentElement.classList.toggle('rtl', isRtl);
   // Sidebar
-  openBtn.textContent                                    = t(lang, 'openBook');
+  openBtn.textContent = t(lang, 'openBook');
   document.querySelector('label[for="lang-select"]').textContent = t(lang, 'translationLanguage');
-  tocPlaceholder.textContent                             = t(lang, 'noBookOpen');
-  bookmarksOpenBtn.innerHTML                             = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'bookmarks');
-  addBookmarkBtn.title                                   = t(lang, 'addBookmark');
-  bookmarksOpenBtn.title                                 = t(lang, 'openBookmarks');
+  tocPlaceholder.textContent = t(lang, 'noBookOpen');
+  bookmarksOpenBtn.innerHTML = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'bookmarks');
+  addBookmarkBtn.title = t(lang, 'addBookmark');
+  bookmarksOpenBtn.title = t(lang, 'openBookmarks');
   // Viewer headers
   document.getElementById('original-header-label').textContent = t(lang, 'original');
   // Settings modal labels
   document.querySelector('label[for="ui-lang-select"]').textContent = t(lang, 'interfaceLanguage');
-  document.querySelector('label[for="theme-select"]').textContent   = t(lang, 'theme');
+  document.querySelector('label[for="theme-select"]').textContent = t(lang, 'theme');
   document.querySelector('label[for="font-family-select"]').textContent = t(lang, 'fontFamily');
-  document.querySelector('label[for="font-size-range"]').textContent    = t(lang, 'fontSize');
-  document.getElementById('settings-modal-title').innerHTML         = '<img src="/icons/gear.svg" class="icon" alt="" /> ' + t(lang, 'settings');
-  settingsCloseBtn.title                                             = t(lang, 'close');
+  document.querySelector('label[for="font-size-range"]').textContent = t(lang, 'fontSize');
+  document.getElementById('settings-modal-title').innerHTML = '<img src="/icons/gear.svg" class="icon" alt="" /> ' + t(lang, 'settings');
+  settingsCloseBtn.title = t(lang, 'close');
   // Bookmarks modal
-  document.getElementById('bm-modal-title').innerHTML      = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'bookmarks');
-  bmCloseBtn.title                                          = t(lang, 'close');
-  bmImportBtn.title                                         = t(lang, 'importBookmarks');
-  bmExportBtn.title                                         = t(lang, 'exportBookmarks');
-  bookmarksPlaceholder.textContent                          = t(lang, 'noBookmarksSaved');
-  if (bmSearchInput) bmSearchInput.placeholder              = t(lang, 'bmSearchPlaceholder');
+  document.getElementById('bm-modal-title').innerHTML = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'bookmarks');
+  bmCloseBtn.title = t(lang, 'close');
+  bmImportBtn.title = t(lang, 'importBookmarks');
+  bmExportBtn.title = t(lang, 'exportBookmarks');
+  bookmarksPlaceholder.textContent = t(lang, 'noBookmarksSaved');
+  if (bmSearchInput) bmSearchInput.placeholder = t(lang, 'bmSearchPlaceholder');
   // Missing file modal
   document.getElementById('bm-missing-modal-title').textContent = t(lang, 'fileNotFound');
-  bmRelocateBtn.textContent                                      = t(lang, 'browse');
-  bmCancelBtn.textContent                                        = t(lang, 'cancel');
+  bmRelocateBtn.textContent = t(lang, 'browse');
+  bmCancelBtn.textContent = t(lang, 'cancel');
   // Progress bar buttons
   prevBtn.title = t(lang, 'prevChapter');
   nextBtn.title = t(lang, 'nextChapter');
@@ -334,7 +334,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent      = t(lang, 'version', { version: '0.7.4' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.7.4' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -367,9 +367,9 @@ function applyUiLang(lang) {
   const _searchDepthLabel = document.getElementById('search-depth-label');
   if (_searchDepthLabel) _searchDepthLabel.textContent = t(lang, 'searchDepth');
   // File size limit labels
-  const _maxLabel  = document.getElementById('max-file-size-mb-label');
+  const _maxLabel = document.getElementById('max-file-size-mb-label');
   const _warnLabel = document.getElementById('warn-file-size-mb-label');
-  if (_maxLabel)  _maxLabel.textContent  = t(lang, 'maxFileSizeMB');
+  if (_maxLabel) _maxLabel.textContent = t(lang, 'maxFileSizeMB');
   if (_warnLabel) _warnLabel.textContent = t(lang, 'warnFileSizeMB');
   if (optimalLimitBtn) optimalLimitBtn.title = t(lang,
     (window.__TAURI__ || window.__TAURI_INTERNALS__) ? 'determineOptimalValue' : 'ramAdvisorBrowserOnly');
@@ -397,9 +397,9 @@ function applyUiLang(lang) {
   // Translation language
   if (s.translationLang) langSelect.value = s.translationLang;
   // File size limits
-  const maxFileSizeMB  = typeof s.maxFileSizeMB  === 'number' ? s.maxFileSizeMB  : DEFAULT_MAX_FILE_SIZE_MB;
+  const maxFileSizeMB = typeof s.maxFileSizeMB === 'number' ? s.maxFileSizeMB : DEFAULT_MAX_FILE_SIZE_MB;
   const warnFileSizeMB = typeof s.warnFileSizeMB === 'number' ? s.warnFileSizeMB : DEFAULT_WARN_FILE_SIZE_MB;
-  if (maxFileSizeMbInput)  maxFileSizeMbInput.value  = maxFileSizeMB;
+  if (maxFileSizeMbInput) maxFileSizeMbInput.value = maxFileSizeMB;
   if (warnFileSizeMbInput) warnFileSizeMbInput.value = warnFileSizeMB;
   // Disable optimal-limit button in browser mode
   if (optimalLimitBtn && !(window.__TAURI__ || window.__TAURI_INTERNALS__)) {
@@ -593,7 +593,7 @@ function updateProgress() {
 progressTrack.addEventListener('click', e => {
   if (e.target.classList.contains('progress-tick')) return;
   if (!currentSpineItems.length) return;
-  const rect  = progressTrack.getBoundingClientRect();
+  const rect = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   displayChapter(Math.round(ratio * (currentSpineItems.length - 1)));
 });
@@ -655,10 +655,10 @@ function updateActiveTick() {
 // Tooltip sull'hover generico sulla barra
 progressTrack.addEventListener('mousemove', e => {
   if (!currentSpineItems.length) return;
-  const rect  = progressTrack.getBoundingClientRect();
+  const rect = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const idx   = Math.round(ratio * (currentSpineItems.length - 1));
-  const tick  = progressTicks.querySelector(`[data-idx="${idx}"]`);
+  const idx = Math.round(ratio * (currentSpineItems.length - 1));
+  const tick = progressTicks.querySelector(`[data-idx="${idx}"]`);
   if (tick) showTooltip(tick, tick.dataset.label, parseFloat(tick.style.left));
 });
 progressTrack.addEventListener('mouseleave', hideTooltip);
@@ -693,7 +693,7 @@ function safeInnerHtml(el) {
   });
   // Rimuovi attributi di stile/evento da tutti gli altri elementi
   clone.querySelectorAll('*').forEach(n => {
-    ['onclick','onmouseover','onerror','onload'].forEach(ev => n.removeAttribute(ev));
+    ['onclick', 'onmouseover', 'onerror', 'onload'].forEach(ev => n.removeAttribute(ev));
   });
   return clone.innerHTML;
 }
@@ -776,8 +776,8 @@ async function renderNativeView() {
       const frame = document.createElement('iframe');
       frame.id = 'epub-native-frame';
       frame.className = 'native-frame';
-      const bg  = getComputedStyle(document.body).backgroundColor || '#1a1a1a';
-      const fg  = getComputedStyle(document.body).color || '#e0e0e0';
+      const bg = getComputedStyle(document.body).backgroundColor || '#1a1a1a';
+      const fg = getComputedStyle(document.body).color || '#e0e0e0';
       const font = getComputedStyle(document.documentElement).getPropertyValue('--reader-font-family') || 'Georgia, serif';
       const size = getComputedStyle(document.documentElement).getPropertyValue('--font-size') || '16px';
       const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:${font}!important;font-size:${size}!important;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}a{color:inherit;}</style>`;
@@ -1006,11 +1006,11 @@ openBtn.addEventListener('click', async () => {
   try {
     let fileData = null, fileName = '', fileSizeBytes = 0;
     const s = loadSettings();
-    const maxFileSizeMB  = typeof s.maxFileSizeMB  === 'number' ? s.maxFileSizeMB  : DEFAULT_MAX_FILE_SIZE_MB;
+    const maxFileSizeMB = typeof s.maxFileSizeMB === 'number' ? s.maxFileSizeMB : DEFAULT_MAX_FILE_SIZE_MB;
     const warnFileSizeMB = typeof s.warnFileSizeMB === 'number' ? s.warnFileSizeMB : DEFAULT_WARN_FILE_SIZE_MB;
 
     if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
-      const { open }     = await import('@tauri-apps/plugin-dialog');
+      const { open } = await import('@tauri-apps/plugin-dialog');
       const { readFile, stat } = await import('@tauri-apps/plugin-fs');
       const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub'] }] });
       if (!selected) return;
@@ -1036,7 +1036,7 @@ openBtn.addEventListener('click', async () => {
         raw = await readFile(selected);
       } catch (err) {
         hideLoading();
-        if (book) { try { book.destroy(); } catch (_) {} book = null; }
+        if (book) { try { book.destroy(); } catch (_) { } book = null; }
         await showAlert(ui('oomErrorMsg', { name: selected.split(/[\\/]/).pop() }));
         return;
       }
@@ -1061,7 +1061,7 @@ openBtn.addEventListener('click', async () => {
         fileData = await picked.getBuffer();
       } catch (err) {
         hideLoading();
-        if (book) { try { book.destroy(); } catch (_) {} book = null; }
+        if (book) { try { book.destroy(); } catch (_) { } book = null; }
         await showAlert(ui('oomErrorMsg', { name: fileName }));
         return;
       }
@@ -1109,7 +1109,7 @@ function isOomError(err) {
 async function loadEpub(arrayBuffer, filePath = '') {
   // Distruggi il libro precedente
   if (book) {
-    try { book.destroy(); } catch (_) {}
+    try { book.destroy(); } catch (_) { }
     book = null;
     currentSpineItems = [];
     currentChapterParagraphs = [];
@@ -1131,11 +1131,11 @@ async function loadEpub(arrayBuffer, filePath = '') {
       book.loaded.metadata,
       new Promise((_, rej) => setTimeout(() => rej(new Error('metadata timeout after 20s')), 20000)),
     ]);
-    bookTitle.textContent  = meta.title   || ui('unknownTitle');
+    bookTitle.textContent = meta.title || ui('unknownTitle');
     bookAuthor.textContent = meta.creator || '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
-    try { const url = await book.coverUrl(); if (url) coverImg.src = url; } catch (_) {}
+    try { const url = await book.coverUrl(); if (url) coverImg.src = url; } catch (_) { }
 
     // Auto-aggiunta alla libreria quando si apre un libro (solo in Tauri con path assoluto)
     if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
@@ -1180,7 +1180,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
     await displayChapter(bestIndex >= 0 ? bestIndex : 0);
   } catch (err) {
     if (book) {
-      try { book.destroy(); } catch (_) {}
+      try { book.destroy(); } catch (_) { }
       book = null;
       currentSpineItems = [];
       currentChapterParagraphs = [];
@@ -1271,7 +1271,7 @@ function renderToc(items, parent = tocList) {
   parent.innerHTML = '';
   for (const item of items) {
     const li = document.createElement('li');
-    const a  = document.createElement('a');
+    const a = document.createElement('a');
     a.href = '#';
     a.textContent = item.label.trim();
     a.addEventListener('click', e => {
@@ -1322,15 +1322,15 @@ document.addEventListener('keydown', e => {
   const lineH = 16 * 1.8;
   const pageH = originalViewer.clientHeight * 0.9;
   let delta = 0;
-  if (e.key === 'ArrowDown') { delta =  lineH * 3; e.preventDefault(); }
-  if (e.key === 'ArrowUp')   { delta = -lineH * 3; e.preventDefault(); }
-  if (e.key === ' ')         { delta = e.shiftKey ? -pageH : pageH; e.preventDefault(); }
+  if (e.key === 'ArrowDown') { delta = lineH * 3; e.preventDefault(); }
+  if (e.key === 'ArrowUp') { delta = -lineH * 3; e.preventDefault(); }
+  if (e.key === ' ') { delta = e.shiftKey ? -pageH : pageH; e.preventDefault(); }
   if (delta === 0) return;
 
-  const origMax  = Math.max(1, originalViewer.scrollHeight    - originalViewer.clientHeight);
+  const origMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
   const transMax = Math.max(1, translationViewer.scrollHeight - translationViewer.clientHeight);
   syncingScroll = true;
-  originalViewer.scrollTop    = Math.max(0, Math.min(originalViewer.scrollTop + delta, origMax));
+  originalViewer.scrollTop = Math.max(0, Math.min(originalViewer.scrollTop + delta, origMax));
   translationViewer.scrollTop = Math.max(0, Math.min((originalViewer.scrollTop / origMax) * transMax, transMax));
   syncingScroll = false;
 });
@@ -1664,7 +1664,7 @@ async function restoreWindowState() {
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     const { PhysicalSize, PhysicalPosition, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/dpi');
     const win = getCurrentWindow();
-    
+
     // Verifica se le coordinate sono valide (non negative o eccessive) per evitare finestre "perse"
     const isValidPos = state.x !== undefined && state.y !== undefined && state.x >= -10000 && state.y >= -10000;
 
@@ -1695,7 +1695,7 @@ if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
 
 // Distruggi il libro alla chiusura della finestra per liberare memoria
 window.addEventListener('beforeunload', () => {
-  if (book) { try { book.destroy(); } catch (_) {} }
+  if (book) { try { book.destroy(); } catch (_) { } }
 });
 
 // ── Library ────────────────────────────────────────────────────────────────
@@ -1855,7 +1855,7 @@ async function extractMetadata(filePath) {
       epubBook.destroy();
       return { id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount, coverDataUrl, status: 'to-read', notes: '', addedAt };
     } catch (e) {
-      try { epubBook?.destroy(); } catch {}
+      try { epubBook?.destroy(); } catch { }
       return { id, filePath, fileName, title: titleFallback, author: '', fileSize: fileSize ?? 0, pageCount: 0, coverDataUrl: null, addedAt };
     }
   } catch {
@@ -2028,8 +2028,8 @@ async function renderLibraryGrid(query = '', statusFilter = '') {
       badge.className = `lib-status-badge lib-status-badge--${entry.status}`;
       const statusLabels = {
         'to-read': ui('statusToRead'),
-        'reading':  ui('statusReading'),
-        'read':     ui('statusRead'),
+        'reading': ui('statusReading'),
+        'read': ui('statusRead'),
       };
       badge.textContent = statusLabels[entry.status] || entry.status;
       authorRow.appendChild(badge);
@@ -2072,22 +2072,22 @@ async function openBookDetail(entryId) {
   const modal = document.getElementById('book-detail-modal');
   // Localize all labels
   document.getElementById('book-detail-title').textContent = entry.title || ui('bookDetail');
-  document.querySelector('label[for="detail-title"]').textContent    = ui('detailTitle');
-  document.querySelector('label[for="detail-author"]').textContent   = ui('detailAuthor');
+  document.querySelector('label[for="detail-title"]').textContent = ui('detailTitle');
+  document.querySelector('label[for="detail-author"]').textContent = ui('detailAuthor');
   document.querySelector('label[for="detail-publisher"]').textContent = ui('detailPublisher');
-  document.querySelector('label[for="detail-pubdate"]').textContent  = ui('detailYear');
+  document.querySelector('label[for="detail-pubdate"]').textContent = ui('detailYear');
   document.querySelector('label[for="detail-language"]').textContent = ui('detailLanguage');
-  document.querySelector('label[for="detail-status"]').textContent   = ui('detailStatus');
+  document.querySelector('label[for="detail-status"]').textContent = ui('detailStatus');
   document.querySelector('label[for="detail-description"]').textContent = ui('detailDescription');
-  document.querySelector('label[for="detail-notes"]').textContent    = ui('detailNotes');
-  document.getElementById('book-detail-save-label').textContent   = ui('detailSave');
+  document.querySelector('label[for="detail-notes"]').textContent = ui('detailNotes');
+  document.getElementById('book-detail-save-label').textContent = ui('detailSave');
   document.getElementById('book-detail-delete-label').textContent = ui('detailDelete');
   document.getElementById('detail-notes').placeholder = ui('personalNotes');
   // Localize status options
-  document.getElementById('detail-status-none').textContent    = ui('statusNone');
+  document.getElementById('detail-status-none').textContent = ui('statusNone');
   document.getElementById('detail-status-to-read').textContent = ui('statusToRead');
   document.getElementById('detail-status-reading').textContent = ui('statusReading');
-  document.getElementById('detail-status-read').textContent    = ui('statusRead');
+  document.getElementById('detail-status-read').textContent = ui('statusRead');
   // Fill values
   document.getElementById('book-detail-cover').src = entry.coverDataUrl || '';
   document.getElementById('detail-title').value = entry.title || '';
@@ -2104,7 +2104,7 @@ async function openBookDetail(entryId) {
   modal.classList.remove('hidden');
   // Wire save button
   const saveBtn = document.getElementById('book-detail-save-btn');
-  saveBtn.onclick = () => {
+  saveBtn.onclick = async () => {
     entry.title = document.getElementById('detail-title').value.trim() || entry.title;
     entry.author = document.getElementById('detail-author').value.trim();
     entry.publisher = document.getElementById('detail-publisher').value.trim();
@@ -2244,14 +2244,14 @@ async function importLibrary() {
 }
 
 // ── Library DOM refs and listeners ────────────────────────────────────────
-const libraryBtn     = document.getElementById('library-btn');
-const libraryModal   = document.getElementById('library-modal');
-const libCloseBtn    = document.getElementById('lib-close-btn');
-const libScanBtn     = document.getElementById('lib-scan-btn');
-const libImportBtn   = document.getElementById('lib-import-btn');
-const libExportBtn   = document.getElementById('lib-export-btn');
-const libStatus      = document.getElementById('lib-status');
-const libGrid        = document.getElementById('lib-grid');
+const libraryBtn = document.getElementById('library-btn');
+const libraryModal = document.getElementById('library-modal');
+const libCloseBtn = document.getElementById('lib-close-btn');
+const libScanBtn = document.getElementById('lib-scan-btn');
+const libImportBtn = document.getElementById('lib-import-btn');
+const libExportBtn = document.getElementById('lib-export-btn');
+const libStatus = document.getElementById('lib-status');
+const libGrid = document.getElementById('lib-grid');
 const libPlaceholder = document.getElementById('lib-placeholder');
 const libSearchInput = document.getElementById('lib-search-input');
 const libStatusFilter = document.getElementById('lib-status-filter');
