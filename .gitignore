@@ -1,4 +1,6 @@
 .kiro/
 .kilo/
 .vscode/
+.antigravity/
 package-lock.json
+

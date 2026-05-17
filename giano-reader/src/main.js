@@ -197,7 +197,61 @@ function createFlagSelect(selectEl) {
 const SETTINGS_KEY = 'giano-reader-settings';
 const THEMES = ['dark', 'light', 'monokai', 'solarized-dark', 'nord', 'sepia'];
 
-// Helper per storage persistente (Filesystem in Tauri, localStorage in Browser)
+// ── IndexedDB Fallback per Browser ──────────────────────────────────────────
+const IndexedDBStorage = {
+  dbName: 'GianoReaderDB',
+  storeName: 'kv',
+  db: null,
+  async getDB() {
+    if (this.db) return this.db;
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, 1);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName);
+        }
+      };
+      request.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve(this.db);
+      };
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+  async get(key, defaultValue) {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const transaction = db.transaction(this.storeName, 'readonly');
+        const store = transaction.objectStore(this.storeName);
+        const request = store.get(key);
+        request.onsuccess = () => {
+          resolve(request.result !== undefined ? request.result : defaultValue);
+        };
+        request.onerror = () => resolve(defaultValue);
+      });
+    } catch {
+      return defaultValue;
+    }
+  },
+  async set(key, value) {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(this.storeName, 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        const request = store.put(value, key);
+        request.onsuccess = () => resolve();
+        request.onerror = (e) => reject(e.target.error);
+      });
+    } catch (e) {
+      throw e;
+    }
+  }
+};
+
+// Helper per storage persistente (Filesystem in Tauri, IndexedDB/localStorage in Browser)
 const PersistentStorage = {
   async get(key, defaultValue = []) {
     if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
@@ -212,15 +266,21 @@ const PersistentStorage = {
         }
       } catch (e) { console.warn(`[Storage] error loading ${key} from FS:`, e); }
     }
-    // Fallback a localStorage (e migrazione automatica se trovato)
+    // Fallback a IndexedDB con migrazione da localStorage se presente
     try {
-      const val = localStorage.getItem(key);
-      if (val) {
-        const parsed = JSON.parse(val);
-        // Se siamo in Tauri, migra al file alla prima occasione (il save successivo lo farà)
+      const dbVal = await IndexedDBStorage.get(key, null);
+      if (dbVal !== null) return dbVal;
+
+      const lsVal = localStorage.getItem(key);
+      if (lsVal) {
+        const parsed = JSON.parse(lsVal);
+        await IndexedDBStorage.set(key, parsed);
+        localStorage.removeItem(key); // pulisce localStorage
         return parsed;
       }
-    } catch { }
+    } catch (e) {
+      console.warn(`[Storage] error loading/migrating ${key} from IndexedDB:`, e);
+    }
     return defaultValue;
   },
   async set(key, value) {
@@ -232,17 +292,27 @@ const PersistentStorage = {
         if (!(await exists(dir))) await mkdir(dir, { recursive: true });
         const path = await join(dir, `${key}.json`);
         await writeTextFile(path, JSON.stringify(value, null, 2));
-        // Pulisce localStorage dopo il salvataggio su file con successo
-        localStorage.removeItem(key);
+        // Pulisce anche IndexedDB e localStorage se salvato con successo su file
+        try {
+          localStorage.removeItem(key);
+          const db = await IndexedDBStorage.getDB();
+          const transaction = db.transaction(IndexedDBStorage.storeName, 'readwrite');
+          transaction.objectStore(IndexedDBStorage.storeName).delete(key);
+        } catch { }
         return;
       } catch (e) { console.error(`[Storage] error saving ${key} to FS:`, e); }
     }
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      await IndexedDBStorage.set(key, value);
     } catch (e) {
-      if (e.name === 'QuotaExceededError' || e.code === 22) {
-        console.error('[Storage] Quota exceeded on localStorage!');
-        showAlert(t(loadSettings().uiLang || 'en', 'storageQuotaError'));
+      console.error('[Storage] IndexedDB storage error, falling back to localStorage:', e);
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (err) {
+        if (err.name === 'QuotaExceededError' || err.code === 22) {
+          console.error('[Storage] Quota exceeded on localStorage!');
+          showAlert(t(loadSettings().uiLang || 'en', 'storageQuotaError'));
+        }
       }
     }
   }
@@ -334,7 +404,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.7.4' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.7.5' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -1868,7 +1938,7 @@ let scanInProgress = false;
 // Auto-add a book to the library when opened, extracting cover in background
 async function autoAddToLibrary(arrayBuffer, filePath, meta) {
   try {
-    const lib = loadLibrary();
+    const lib = await loadLibrary();
     if (lib.some(e => e.filePath === filePath)) return; // already in library
     const fileName = filePath.split(/[\\/]/).pop();
     const title = meta.title || fileName.replace(/\.epub$/i, '');
@@ -1952,7 +2022,10 @@ async function scanFolder(rootPath) {
   }
 }
 
-async function renderLibraryGrid(query = '', statusFilter = '') {
+const ITEMS_PER_PAGE = 60;
+let _renderedCount = ITEMS_PER_PAGE;
+
+async function renderLibraryGrid(query = '', statusFilter = '', appendMore = false) {
   const lib = await loadLibrary();
   const q = query.trim().toLowerCase();
   let filtered = q
@@ -1967,8 +2040,17 @@ async function renderLibraryGrid(query = '', statusFilter = '') {
   // Aggiorna il titolo del modale con il conteggio
   const titleEl = document.getElementById('library-modal-title');
   if (titleEl) titleEl.textContent = ui('libraryTitle', { count: lib.length });
-  grid.innerHTML = '';
-  if (!filtered.length) {
+
+  if (!appendMore) {
+    grid.innerHTML = '';
+    _renderedCount = ITEMS_PER_PAGE;
+  }
+
+  // Remove existing Load More button if any
+  const existingLoadMore = document.getElementById('lib-load-more-btn');
+  if (existingLoadMore) existingLoadMore.remove();
+
+  if (!filtered.length && !appendMore) {
     placeholder.classList.remove('hidden');
     placeholder.textContent = q ? ui('libNoResults', { query }) : ui('libEmpty');
     grid.classList.add('hidden');
@@ -1976,13 +2058,19 @@ async function renderLibraryGrid(query = '', statusFilter = '') {
   }
   placeholder.classList.add('hidden');
   grid.classList.remove('hidden');
-  for (const entry of filtered) {
+
+  const startIdx = appendMore ? _renderedCount : 0;
+  const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, filtered.length);
+  const chunk = filtered.slice(startIdx, endIdx);
+
+  for (const entry of chunk) {
     const card = document.createElement('div');
     card.className = 'lib-book-card';
     card.dataset.id = entry.id;
     const img = document.createElement('img');
     img.className = 'lib-book-cover';
     img.alt = entry.title || ui('libCoverPlaceholder');
+    img.loading = 'lazy'; // Native lazy loading
     if (entry.coverDataUrl) {
       img.src = entry.coverDataUrl;
     } else {
@@ -1994,10 +2082,10 @@ async function renderLibraryGrid(query = '', statusFilter = '') {
     // Title row: title text + action buttons right-aligned
     const titleRow = document.createElement('div');
     titleRow.className = 'lib-book-title-row';
-    const titleEl = document.createElement('span');
-    titleEl.className = 'lib-book-title';
-    titleEl.textContent = entry.title || ui('libCoverPlaceholder');
-    titleEl.title = entry.title || '';
+    const titleTextEl = document.createElement('span');
+    titleTextEl.className = 'lib-book-title';
+    titleTextEl.textContent = entry.title || ui('libCoverPlaceholder');
+    titleTextEl.title = entry.title || '';
     const infoBtn = document.createElement('button');
     infoBtn.className = 'lib-book-action-btn';
     infoBtn.title = ui('detailInfoBtn');
@@ -2008,7 +2096,7 @@ async function renderLibraryGrid(query = '', statusFilter = '') {
     delBtn.title = ui('libDeleteBook');
     delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
     delBtn.addEventListener('click', async e => { e.stopPropagation(); await removeEntry(entry.id); });
-    titleRow.appendChild(titleEl);
+    titleRow.appendChild(titleTextEl);
     titleRow.appendChild(infoBtn);
     titleRow.appendChild(delBtn);
     // Author row with status badge
@@ -2061,6 +2149,20 @@ async function renderLibraryGrid(query = '', statusFilter = '') {
     card.appendChild(info);
     card.addEventListener('click', () => openBookFromLibrary(entry));
     grid.appendChild(card);
+  }
+
+  _renderedCount = endIdx;
+
+  if (endIdx < filtered.length) {
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.id = 'lib-load-more-btn';
+    loadMoreBtn.className = 'lib-load-more-btn';
+    loadMoreBtn.textContent = ui('loadMore');
+    loadMoreBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await renderLibraryGrid(query, statusFilter, true);
+    });
+    grid.after(loadMoreBtn);
   }
 }
 

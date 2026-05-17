@@ -56,7 +56,7 @@ English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese
 ## 📥 Download & Install
 You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and Linux (.AppImage) here:
 
-👉 [Download Giano Reader v0.7.4](https://github.com/DrLoki/GianoReader/releases/tag/v0.7.4)
+👉 [Download Giano Reader v0.7.5](https://github.com/DrLoki/GianoReader/releases/tag/v0.7.5)
 
 ---
 

@@ -1074,6 +1074,23 @@ body.theme-sepia {
   text-align: right;
 }
 
+.lib-load-more-btn {
+  display: block;
+  margin: 16px auto;
+  padding: 8px 24px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.lib-load-more-btn:hover {
+  opacity: 0.85;
+}
+
 /* RTL support for library */
 html.rtl #lib-toolbar { flex-direction: row-reverse; }
 html.rtl .lib-book-card { flex-direction: row-reverse; }

@@ -102,6 +102,7 @@ export const translations = {
     determineOptimalValue: 'Determine optimal value',
     ramAdvisorBrowserOnly: 'This feature requires the desktop application.',
     storageQuotaError: 'The storage quota has been exceeded. Please delete some books or bookmarks.',
+    loadMore:                'Load more',
   },
   zh: {
     viewToggle:          '切换原始视图',
@@ -162,6 +163,7 @@ export const translations = {
     determineOptimalValue: '确定最佳值',
     ramAdvisorBrowserOnly: '此功能需要桌面应用程序。',
     storageQuotaError: '存储配额已超出。请删除一些书籍或书签。',
+    loadMore:                '加载更多',
   },
   hi: {
     viewToggle:          'मूल दृश्य बदलें',
@@ -224,6 +226,7 @@ export const translations = {
     prevChapter:         'पिछला अध्याय',
     nextChapter:         'अगला अध्याय',
     unknownError:        'अज्ञात त्रुटि',
+    loadMore:                'और लोड करें',
   },
   es: {
     viewToggle:          'Alternar vista original',
@@ -319,6 +322,7 @@ export const translations = {
     warnFileSizeMB:      'Umbral de aviso (MB)',
     determineOptimalValue: 'Determinar valor óptimo',
     ramAdvisorBrowserOnly: 'Esta función requiere la aplicación de escritorio.',
+    loadMore:                'Cargar más',
   },
   fr: {
     viewToggle:          'Afficher vue originale',
@@ -415,6 +419,7 @@ export const translations = {
     warnFileSizeMB:      'Seuil d\'avertissement (Mo)',
     determineOptimalValue: 'Déterminer la valeur optimale',
     ramAdvisorBrowserOnly: 'Cette fonctionnalité nécessite l\'application de bureau.',
+    loadMore:                'Charger plus',
   },
   bn: {
     viewToggle:          'মূল দৃশ্য পরিবর্তন করুন',
@@ -477,6 +482,7 @@ export const translations = {
     prevChapter:         'পূর্ববর্তী অধ্যায়',
     nextChapter:         'পরবর্তী অধ্যায়',
     unknownError:        'অজানা ত্রুটি',
+    loadMore:                'আরো লোড করুন',
   },
   pt: {
     viewToggle:          'Alternar vista original',
@@ -572,6 +578,7 @@ export const translations = {
     warnFileSizeMB:      'Limite de aviso (MB)',
     determineOptimalValue: 'Determinar valor ideal',
     ramAdvisorBrowserOnly: 'Este recurso requer o aplicativo desktop.',
+    loadMore:                'Carregar mais',
   },
   ru: {
     viewToggle:          'Переключить оригинальный вид',
@@ -634,6 +641,7 @@ export const translations = {
     warnFileSizeMB:      'Порог предупреждения (МБ)',
     determineOptimalValue: 'Определить оптимальное значение',
     ramAdvisorBrowserOnly: 'Эта функция требует настольного приложения.',
+    loadMore:                'Загрузить еще',
   },
   ja: {
     viewToggle:          '元の表示に切り替え',
@@ -696,6 +704,7 @@ export const translations = {
     warnFileSizeMB:      '警告ファイルサイズ（MB）',
     determineOptimalValue: '最適値を決定',
     ramAdvisorBrowserOnly: 'この機能にはデスクトップアプリが必要です。',
+    loadMore:                'もっと読み込む',
   },
   id: {
     viewToggle:          'Alihkan tampilan asli',
@@ -758,6 +767,7 @@ export const translations = {
     prevChapter:         'Bab sebelumnya',
     nextChapter:         'Bab selanjutnya',
     unknownError:        'Kesalahan tidak diketahui',
+    loadMore:                'Muat lebih banyak',
   },
   de: {
     viewToggle:          'Originalansicht umschalten',
@@ -853,6 +863,7 @@ export const translations = {
     warnFileSizeMB:      'Warnschwelle (MB)',
     determineOptimalValue: 'Optimalen Wert bestimmen',
     ramAdvisorBrowserOnly: 'Diese Funktion erfordert die Desktop-App.',
+    loadMore:                'Mehr laden',
   },
   ko: {
     viewToggle:          '원본 보기 전환',
@@ -915,6 +926,7 @@ export const translations = {
     prevChapter:         '이전 장',
     nextChapter:         '다음 장',
     unknownError:        '알 수 없는 오류',
+    loadMore:                '더 보기',
   },
   fr: {
     viewToggle:          'Afficher vue originale',
@@ -1011,6 +1023,7 @@ export const translations = {
     warnFileSizeMB:      'Seuil d\'avertissement (Mo)',
     determineOptimalValue: 'Déterminer la valeur optimale',
     ramAdvisorBrowserOnly: 'Cette fonctionnalité nécessite l\'application de bureau.',
+    loadMore:                'Charger plus',
   },
   it: {
     viewToggle:          'Mostra vista originale',
@@ -1115,6 +1128,7 @@ export const translations = {
     determineOptimalValue: 'Determina valore ottimale',
     ramAdvisorBrowserOnly: 'Questa funzione richiede l\'applicazione desktop.',
     storageQuotaError: 'Quota di spazio superata. Elimina alcuni libri o segnalibri.',
+    loadMore:                'Carica altri',
   },
   th: {
     viewToggle:          'สลับมุมมองต้นฉบับ',
@@ -1177,6 +1191,7 @@ export const translations = {
     prevChapter:         'บทก่อนหน้า',
     nextChapter:         'บทถัดไป',
     unknownError:        'ข้อผิดพลาดที่ไม่รู้จัก',
+    loadMore:                'โหลดเพิ่มเติม',
   },
   fil: {
     viewToggle:          'I-toggle ang orihinal na view',
@@ -1239,6 +1254,7 @@ export const translations = {
     warnFileSizeMB:      'Limitasyon ng babala (MB)',
     determineOptimalValue: 'Tukuyin ang pinakamainam na halaga',
     ramAdvisorBrowserOnly: 'Ang feature na ito ay nangangailangan ng desktop application.',
+    loadMore:                'Mag-load pa',
   },
   ar: {
     viewToggle:          'تبديل العرض الأصلي',
@@ -1301,6 +1317,7 @@ export const translations = {
     warnFileSizeMB:      'حد التحذير (ميغابايت)',
     determineOptimalValue: 'تحديد القيمة المثلى',
     ramAdvisorBrowserOnly: 'تتطلب هذه الميزة تطبيق سطح المكتب.',
+    loadMore:                'تحميل المزيد',
   },
   sq: {
     viewToggle:          'Kalo pamjen origjinale',
@@ -1363,6 +1380,7 @@ export const translations = {
     warnFileSizeMB:      'Kufiri i paralajmërimit (MB)',
     determineOptimalValue: 'Përcakto vlerën optimale',
     ramAdvisorBrowserOnly: 'Kjo veçori kërkon aplikacionin desktop.',
+    loadMore:                'Ngarko më shumë',
   },
 };
 
