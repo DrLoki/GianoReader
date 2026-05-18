@@ -51,7 +51,14 @@ function makeLibFunctions(storage) {
     if (onRemove) onRemove();
     return filtered;
   }
-  return { loadLibrary, saveLibrary, addEntries, removeEntry };
+  function importLibraryLogic(jsonText) {
+    const parsed = JSON.parse(jsonText);
+    if (!Array.isArray(parsed)) {
+      throw new Error('Invalid format: not an array');
+    }
+    return addEntries(parsed);
+  }
+  return { loadLibrary, saveLibrary, addEntries, removeEntry, importLibraryLogic };
 }
 
 // ── renderLibraryGrid (DOM-based, uses jsdom) ─────────────────────────────
@@ -195,6 +202,56 @@ describe('importLibrary — format validation', () => {
   it('accepts array JSON', () => {
     const parsed = JSON.parse('[{"id":"1","filePath":"/a.epub"}]');
     expect(Array.isArray(parsed)).toBe(true);
+  });
+});
+
+describe('importLibrary workflow', () => {
+  it('throws error when JSON is malformed', () => {
+    const storage = createLocalStorageMock();
+    const { importLibraryLogic } = makeLibFunctions(storage);
+    expect(() => importLibraryLogic('{"malformed": ')).toThrow();
+  });
+
+  it('throws error when JSON is not an array', () => {
+    const storage = createLocalStorageMock();
+    const { importLibraryLogic } = makeLibFunctions(storage);
+    expect(() => importLibraryLogic('{"title": "Single Book"}')).toThrow('Invalid format: not an array');
+  });
+
+  it('imports valid JSON library and saves to storage', () => {
+    const storage = createLocalStorageMock();
+    const { importLibraryLogic, loadLibrary } = makeLibFunctions(storage);
+    const mockJson = JSON.stringify([
+      { id: '1', filePath: '/path/to/a.epub', title: 'Book A' },
+      { id: '2', filePath: '/path/to/b.epub', title: 'Book B' }
+    ]);
+    const result = importLibraryLogic(mockJson);
+    expect(result).toEqual({ added: 2, skipped: 0 });
+    
+    const lib = loadLibrary();
+    expect(lib).toHaveLength(2);
+    expect(lib[0].title).toBe('Book A');
+    expect(lib[1].title).toBe('Book B');
+  });
+
+  it('deduplicates already existing entries by filePath during import', () => {
+    const storage = createLocalStorageMock();
+    const { importLibraryLogic, addEntries, loadLibrary } = makeLibFunctions(storage);
+    
+    // Seed library with existing book
+    addEntries([{ id: '1', filePath: '/path/to/a.epub', title: 'Book A' }]);
+    
+    const mockJson = JSON.stringify([
+      { id: '1', filePath: '/path/to/a.epub', title: 'Book A (Modified)' },
+      { id: '2', filePath: '/path/to/b.epub', title: 'Book B' }
+    ]);
+    const result = importLibraryLogic(mockJson);
+    expect(result).toEqual({ added: 1, skipped: 1 });
+    
+    const lib = loadLibrary();
+    expect(lib).toHaveLength(2);
+    expect(lib.find(e => e.filePath === '/path/to/a.epub').title).toBe('Book A'); // original intact
+    expect(lib.find(e => e.filePath === '/path/to/b.epub').title).toBe('Book B');
   });
 });
 

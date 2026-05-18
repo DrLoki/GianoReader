@@ -211,9 +211,16 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   height: 52px;
 }
+#original-header-left,
+#translation-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ── View toggle button ── */
-#original-header-actions {
+#original-header-actions,
+#translation-header-actions {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -639,7 +646,8 @@ body.theme-sepia {
   flex: 1;
 }
 #settings-btn,
-#optimal-limit-btn {
+#optimal-limit-btn,
+#openrouter-fetch-btn {
   background: var(--accent); border: none;
   color: #fff; cursor: pointer;
   width: 34px; height: 34px;
@@ -649,7 +657,8 @@ body.theme-sepia {
   padding: 0;
 }
 #settings-btn:hover,
-#optimal-limit-btn:hover { opacity: 0.85; }
+#optimal-limit-btn:hover,
+#openrouter-fetch-btn:hover { opacity: 0.85; }
 
 /* ── Modal settings ── */
 .modal-box--settings {
@@ -670,11 +679,15 @@ body.theme-sepia {
   background: var(--bg); color: var(--text);
   font-size: 0.88rem; cursor: pointer;
 }
-.settings-row input[type="number"] {
+.settings-row input[type="number"],
+.settings-row input[type="password"] {
   width: 100%; padding: 7px 10px;
   border: 1px solid var(--border); border-radius: 4px;
   background: var(--bg); color: var(--text);
   font-size: 0.88rem; cursor: text;
+  box-sizing: border-box;
+}
+.settings-row input[type="number"] {
   -webkit-appearance: textfield;
   -moz-appearance: textfield;
   appearance: textfield;
@@ -758,7 +771,8 @@ body.theme-sepia {
 
 /* Accent buttons: always white */
 #settings-btn .icon,
-#optimal-limit-btn .icon {
+#optimal-limit-btn .icon,
+#openrouter-fetch-btn .icon {
   filter: var(--icon-filter-on-dark) !important;
 }
 
@@ -789,6 +803,8 @@ body.theme-sepia {
 }
 
 /* SVG inline nei view-toggle-btn: usa currentColor, niente filtro */
+#toggle-pairing-btn svg.icon,
+#toggle-numbers-btn svg.icon,
 #hide-translation-btn svg.icon,
 #view-toggle-btn svg.icon {
   filter: none !important;
@@ -797,10 +813,16 @@ body.theme-sepia {
   height: 1.3em;
   vertical-align: -0.2em;
 }
+#toggle-pairing-btn:hover:not(:disabled) svg.icon,
+#toggle-numbers-btn:hover:not(:disabled) svg.icon,
 #hide-translation-btn:hover:not(:disabled) svg.icon,
 #view-toggle-btn:hover:not(:disabled) svg.icon {
   color: var(--text);
 }
+#toggle-pairing-btn.active svg.icon,
+#toggle-pairing-btn[aria-pressed="true"] svg.icon,
+#toggle-numbers-btn.active svg.icon,
+#toggle-numbers-btn[aria-pressed="true"] svg.icon,
 #hide-translation-btn.active svg.icon,
 #hide-translation-btn[aria-pressed="true"] svg.icon,
 #view-toggle-btn.active svg.icon,
@@ -904,7 +926,8 @@ body.theme-sepia {
 }
 #library-btn:hover { opacity: 0.85; }
 #library-btn svg.icon,
-#optimal-limit-btn svg.icon {
+#optimal-limit-btn svg.icon,
+#openrouter-fetch-btn svg.icon {
   filter: none !important;
   color: #fff;
   width: 1.3em; height: 1.3em;
@@ -1205,3 +1228,124 @@ html.rtl .lib-book-card { flex-direction: row-reverse; }
 .btn-danger:hover { background: #c0392b !important; color: #fff !important; border-color: #c0392b; }
 .btn-danger svg { stroke: #c0392b !important; flex-shrink: 0; }
 .btn-danger:hover svg { stroke: #fff !important; }
+
+/* ── Associazione Paragrafi (Nuove Funzionalità) ── */
+:root {
+  --pair-0: hsl(340, 70%, 35%);
+  --pair-1: hsl(210, 80%, 35%);
+  --pair-2: hsl(140, 60%, 30%);
+  --pair-3: hsl(25, 80%, 35%);
+  --pair-4: hsl(270, 60%, 40%);
+}
+
+body.dark,
+body.theme-monokai,
+body.theme-solarized-dark,
+body.theme-nord {
+  --pair-0: hsl(355, 100%, 75%);
+  --pair-1: hsl(195, 100%, 75%);
+  --pair-2: hsl(125, 75%, 75%);
+  --pair-3: hsl(40, 100%, 70%);
+  --pair-4: hsl(280, 85%, 80%);
+}
+
+/* 1. Pairing Cromatico */
+#viewer-wrapper.pairing-enabled p.pair-color-0 { color: var(--pair-0) !important; }
+#viewer-wrapper.pairing-enabled p.pair-color-1 { color: var(--pair-1) !important; }
+#viewer-wrapper.pairing-enabled p.pair-color-2 { color: var(--pair-2) !important; }
+#viewer-wrapper.pairing-enabled p.pair-color-3 { color: var(--pair-3) !important; }
+#viewer-wrapper.pairing-enabled p.pair-color-4 { color: var(--pair-4) !important; }
+
+/* 2. Evidenziazione Sincronizzata (Hover) */
+.text-panel p {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  border-left: 3px solid transparent;
+  padding-left: 8px;
+}
+html.rtl .text-panel p {
+  border-left: none;
+  border-right: 3px solid transparent;
+  padding-left: 0;
+  padding-right: 8px;
+}
+
+.text-panel p.para-highlight {
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-left-color: var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+html.rtl .text-panel p.para-highlight {
+  border-left-color: transparent;
+  border-right-color: var(--accent);
+  border-radius: 4px 0 0 4px;
+}
+
+/* 3. Numeri di Paragrafo */
+.para-num {
+  display: none;
+  font-size: 0.72em;
+  opacity: 0.55;
+  margin-inline-end: 8px;
+  user-select: none;
+  font-family: var(--font-family), sans-serif;
+  font-weight: 500;
+}
+#viewer-wrapper.show-numbers .para-num {
+  display: inline-block;
+}
+
+/* ── Translation Mode Switch (FREE / PRO) ── */
+#toggle-translation-mode-btn {
+  width: auto;
+  min-width: 54px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+  color: var(--text);
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#toggle-translation-mode-btn:hover:not(:disabled) {
+  background-color: var(--surface);
+  color: var(--text);
+  opacity: 0.9;
+}
+
+/* Active State (PRO Mode) */
+#toggle-translation-mode-btn.active,
+#toggle-translation-mode-btn[aria-pressed="true"] {
+  background-color: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent) !important;
+}
+
+#toggle-translation-mode-btn.active:hover:not(:disabled),
+#toggle-translation-mode-btn[aria-pressed="true"]:hover:not(:disabled) {
+  background-color: var(--accent) !important;
+  opacity: 0.9;
+}
+
+.settings-status-msg {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 4px;
+  font-weight: 500;
+}
+.settings-status-msg.error {
+  color: #c0392b;
+}
+.settings-status-msg.success {
+  color: #27ae60;
+}
+.settings-status-msg.loading {
+  color: #e67e22;
+}
+

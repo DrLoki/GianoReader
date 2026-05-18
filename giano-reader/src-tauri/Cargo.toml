@@ -1,6 +1,6 @@
 [package]
 name = "giano-reader"
-version = "0.7.5"
+version = "0.8.0"
 description = "Giano Reader con traduzione"
 authors = ["Giampaolo Bolzonella <giampaolo.bolzonella@gmail.com>"]
 edition = "2021"

@@ -1,290 +1,305 @@
-# Giano Reader — Manuale Utente
+# Giano Reader — User Manual
 
-## Indice
+## Table of Contents
 
-1. [Introduzione](#introduzione)
-2. [Installazione](#installazione)
-3. [Apertura di un libro](#apertura-di-un-libro)
-4. [Interfaccia principale](#interfaccia-principale)
-5. [Lettura e navigazione](#lettura-e-navigazione)
-6. [Traduzione](#traduzione)
-7. [Libreria](#libreria)
-8. [Segnalibri](#segnalibri)
-9. [Impostazioni](#impostazioni)
-10. [Domande frequenti](#domande-frequenti)
-
----
-
-## Introduzione
-
-**Giano Reader** è un lettore EPUB desktop con traduzione affiancata integrata tramite Google Translate. Mostra il testo originale e la traduzione in due pannelli sincronizzati, traducendo in modo lazy a partire dalla posizione di lettura corrente.
-
-Funziona come applicazione desktop (Windows, macOS, Linux) tramite Tauri, e in modalità ridotta anche nel browser.
+1. [Introduction](#introduction)
+2. [Installation](#installation)
+3. [Opening a Book](#opening-a-book)
+4. [Main Interface](#main-interface)
+5. [Reading and Navigation](#reading-and-navigation)
+6. [Translation](#translation)
+7. [Library](#library)
+8. [Bookmarks](#bookmarks)
+9. [Settings](#settings)
+10. [FAQ](#faq)
 
 ---
 
-## Installazione
+## Introduction
+
+**Giano Reader** is a desktop EPUB reader with built-in side-by-side translation via Google Translate and OpenRouter. It displays the original text and the translation in two synchronized panels, translating lazily starting from your current reading position.
+
+It works as a desktop application (Windows, macOS, Linux) via Tauri, and in a limited fallback mode in the web browser.
+
+---
+
+## Installation
 
 ### Windows
 
-1. Scarica il file `.msi` o `.exe` dalla pagina delle release.
-2. Esegui il file e segui la procedura guidata.
-3. Al termine, avvia **Giano Reader** dal menu Start o dal desktop.
+1. Download the `.msi` or `.exe` installer from the releases page.
+2. Run the file and follow the setup wizard.
+3. Once completed, launch **Giano Reader** from the Start Menu or desktop.
 
-> **Requisito:** WebView2 Runtime. È incluso in Windows 11; su Windows 10 viene installato automaticamente se non presente.
+> **Requirement:** WebView2 Runtime. It is pre-installed in Windows 11; on Windows 10 it is installed automatically if not already present.
 
 ### macOS
 
-1. Scarica il file `.dmg`.
-2. Apri il `.dmg` e trascina l'app nella cartella **Applicazioni**.
-3. Al primo avvio, se macOS blocca l'app (sviluppatore non verificato), vai in **Impostazioni di sistema → Privacy e sicurezza** e clicca **Apri comunque**.
+1. Download the `.dmg` file.
+2. Open the `.dmg` and drag the app into the **Applications** folder.
+3. On first launch, if macOS blocks the app (unverified developer), go to **System Settings → Privacy & Security** and click **Open Anyway**.
 
 ### Linux
 
-1. Scarica il pacchetto `.deb` (Debian/Ubuntu) o `.AppImage`.
-2. Per il `.deb`: `sudo dpkg -i giano-reader_*.deb`
-3. Per l'`.AppImage`: rendi il file eseguibile (`chmod +x`) e avvialo direttamente.
+1. Download the `.deb` package (Debian/Ubuntu) or `.AppImage`.
+2. For the `.deb`: `sudo dpkg -i giano-reader_*.deb`
+3. For the `.AppImage`: make the file executable (`chmod +x`) and run it directly.
 
 ---
 
-## Apertura di un libro
+## Opening a Book
 
-Clicca il pulsante **+ Apri libro** nella barra laterale sinistra. Si apre una finestra di dialogo nativa per selezionare un file `.epub`.
+Click the **+ Open book** button in the left sidebar. A native file dialog will open to let you select an `.epub` file.
 
-Una volta caricato il libro:
-- Il titolo e l'autore appaiono in cima alla barra laterale.
-- L'indice (TOC) viene popolato automaticamente.
-- Il primo capitolo con contenuto reale viene visualizzato.
-- Il libro viene aggiunto automaticamente alla Libreria (solo app desktop).
+Once the book is loaded:
+- The title and author will appear at the top of the sidebar.
+- The table of contents (TOC) is populated automatically.
+- The first chapter containing actual text will be displayed.
+- The book is added automatically to the Library (desktop app only).
 
-> **Nota browser:** nel browser non è disponibile il dialogo nativo. Viene usato un `<input type="file">` standard. La Libreria e i segnalibri con riapertura automatica richiedono l'app desktop.
+> **Browser Note:** In the web browser, the native dialog is not available. A standard `<input type="file">` is used instead. Library management and automatic bookmark reopening require the desktop app.
 
 ---
 
-## Interfaccia principale
+## Main Interface
 
 ```
 ┌──────────────────┬───────────────────────┬──────────────────────┐
-│   Barra laterale │   Pannello originale  │  Pannello traduzione │
+│          Sidebar │        Original Panel │    Translation Panel │
 │                  │                       │                      │
-│  + Apri libro    │  Testo originale      │  Testo tradotto      │
-│  ─────────────   │  del capitolo         │  (lazy, dal punto    │
-│  Indice (TOC)    │                       │   di lettura)        │
+│   + Open book    │   Original text       │   Translated text    │
+│   ─────────────  │   of the chapter      │   (lazy, from        │
+│   TOC (Index)    │                       │    reading point)    │
 │                  │                       │                      │
-│  [Segnalibri]    │                       │                      │
-│  [Libreria]      │                       │                      │
-│  [Impostazioni]  │                       │                      │
+│   [Bookmarks]    │                       │                      │
+│   [Library]      │                       │                      │
+│   [Settings]     │                       │                      │
 └──────────────────┴───────────────────────┴──────────────────────┘
-         Barra di progresso con tacche per capitolo
+             Progress bar with tick marks per chapter
 ```
 
-### Barra di progresso
+### Progress Bar
 
-La barra in fondo mostra la posizione nel libro. Ogni tacca corrisponde a un capitolo dello spine EPUB. Passando il mouse su una tacca appare il titolo del capitolo; cliccando si naviga direttamente a quel capitolo.
+The bar at the bottom shows your reading position. Each tick mark corresponds to a chapter in the EPUB spine. Hovering over a tick shows the chapter title; clicking it navigates directly to that chapter.
 
-### Pulsanti nella barra laterale
+### Sidebar Buttons
 
-| Pulsante | Funzione |
+| Button | Function |
 |---|---|
-| **+ Apri libro** | Apre un file EPUB |
-| Icona segnalibro | Apre la modale dei segnalibri |
-| Icona stella | Aggiunge un segnalibro alla posizione corrente |
-| Icona libreria | Apre la Libreria |
-| Icona ingranaggio | Apre le Impostazioni |
-| Icona frecce | Nasconde/mostra il pannello di traduzione |
-| Icona immagine | Commuta tra vista testo e vista originale EPUB |
+| **+ Open book** | Opens an EPUB file |
+| Bookmark icon | Opens the bookmarks modal |
+| Star icon | Adds a bookmark at the current position |
+| Library icon | Opens the Library |
+| Gear icon | Opens Settings |
+| Arrows icon | Hides/shows the translation panel |
+| Image icon | Toggles between text view and original EPUB view |
 
 ---
 
-## Lettura e navigazione
+## Reading and Navigation
 
-### Navigazione tra capitoli
+### Chapter Navigation
 
-- Usa i pulsanti **‹** e **›** ai lati della barra di progresso.
-- Clicca una voce nell'**indice** nella barra laterale.
-- Clicca una **tacca** sulla barra di progresso.
+- Use the **‹** and **›** buttons on the sides of the progress bar.
+- Click a chapter title in the **table of contents** in the sidebar.
+- Click a **tick mark** on the progress bar.
 
-### Scorrimento
+### Scrolling
 
-I due pannelli (originale e traduzione) scorrono in modo sincronizzato: muovendo uno, l'altro segue proporzionalmente.
+The two panels (original and translation) scroll in a synchronized manner: moving one causes the other to scroll proportionally.
 
-**Scorciatoie da tastiera:**
+**Keyboard Shortcuts:**
 
-| Tasto | Azione |
+| Key | Action |
 |---|---|
-| `↓` / `↑` | Scorre di 3 righe |
-| `Spazio` | Scorre di una pagina in avanti |
-| `Shift + Spazio` | Scorre di una pagina indietro |
+| `↓` / `↑` | Scrolls by 3 lines |
+| `Space` | Scrolls down by one page |
+| `Shift + Space` | Scrolls up by one page |
 
-### Vista originale EPUB
+### Original EPUB View
 
-Clicca l'icona **immagine** (file-image) per passare alla vista originale: il capitolo viene renderizzato in un iframe con il CSS dell'EPUB originale. In questa modalità lo scroll sincronizzato è disattivato. I link interni al libro funzionano normalmente.
+Click the **image** icon (file-image) to toggle the original EPUB view: the chapter is rendered in an iframe with its native, original EPUB styling. In this mode, synchronized scrolling is disabled. Internal links within the book work normally.
 
----
+### Paragraph-Level Helpers & Interactive Alignment
 
-## Traduzione
+To make comparative reading natural and highly efficient, Giano Reader features three interactive paragraph-level helpers:
 
-### Come funziona
-
-La traduzione usa l'endpoint pubblico non ufficiale di Google Translate (`translate.googleapis.com`) — non richiede chiave API. Il testo viene suddiviso in blocchi da ~4500 caratteri e tradotto in modo **lazy**:
-
-1. Al caricamento del capitolo viene tradotto subito il blocco visibile.
-2. Man mano che scorri verso il basso, i blocchi successivi vengono tradotti automaticamente.
-3. I blocchi precedenti (sopra la posizione iniziale) vengono tradotti in background.
-
-I paragrafi in attesa di traduzione appaiono in grigio attenuato; diventano normali una volta tradotti.
-
-### Cambiare lingua di traduzione
-
-Usa il menu a tendina con le bandiere nella barra laterale. Cambiando lingua, la traduzione del capitolo corrente riparte automaticamente.
-
-### Nascondere il pannello di traduzione
-
-Clicca l'icona **frecce** (arrows-left-right-to-line) per nascondere o mostrare il pannello di traduzione. Utile per leggere solo il testo originale a schermo intero.
-
-> **Nota:** L'endpoint non ufficiale è adatto solo a uso personale. Per uso commerciale o ad alto volume si raccomanda l'[API ufficiale Google Cloud Translation](https://cloud.google.com/translate).
+* **Synchronized Hover Highlight:** By default, hovering over any paragraph in either the original or the translation panel will instantly highlight it with a subtle background tint and a colored border at the side. In perfect synchronization, the corresponding paragraph in the opposite panel is highlighted as well, letting you easily track complex narratives. This is fully compatible with RTL (Right-to-Left) layouts like Arabic.
+* **Chromatic Paragraph Pairing:** Click the **Palette** icon in the translation header to toggle chromatic pairing. When active, adjacent paragraphs in the original and translated panels are color-coded in alternating HSL colors. Giano Reader dynamically uses customized palettes optimized separately for light and dark/nord/solarized backgrounds to maintain high text contrast and readability.
+* **Paragraph Numbers Toggle:** Click the **#** (hash) icon in the translation header to toggle inline paragraph numbers. This displays small, unobtrusive numbers at the start of each text block, aiding in precise academic comparison and line-by-line verification across both languages.
 
 ---
 
-## Libreria
+## Translation
 
-La Libreria raccoglie i tuoi file EPUB in un'unica vista con copertine, metadati e stato di lettura. È disponibile solo nell'app desktop (Tauri).
+### Dual Translation Mode (FREE / PRO)
 
-### Aprire la Libreria
+Giano Reader supports a dual translation architecture to meet both simplicity and literary excellence:
 
-Clicca l'icona **libreria** nella barra laterale. Si apre la modale con la griglia dei libri.
+#### 1. FREE Mode (Google Translate)
+The basic translation uses the unofficial public endpoint of Google Translate (`translate.googleapis.com`) — **no API key required**. Text is split into ~4500-character chunks and translated **lazily**:
+* Upon loading a chapter, the visible block is translated immediately.
+* As you scroll down, subsequent blocks are automatically translated.
+* Previous blocks (above the initial position) are translated in the background.
 
----
+#### 2. PRO Mode (OpenRouter API)
+For a premium, context-aware translation that preserves literary style, nuances, and vocabulary consistency, you can activate the **PRO** mode based on the **OpenRouter** API:
+* **Activation:** Paste a valid API Key in **Settings**. As soon as it is entered, the **FREE / PRO** switch will appear in the sidebar.
+* **Model Selection:** You can load the list of available models directly from OpenRouter servers and select your preferred one. Fast and efficient models are highly recommended (such as `google/gemini-2.5-flash` or `meta-llama/llama-3-8b-instruct`) to reduce response times to just a few seconds.
+* **Timing & Network:** When using PRO mode, OpenRouter uses *Chunked Transfer Encoding*. Consequently, the translation is generated in the background and rendered as soon as it is finished; paragraphs currently being translated remain grayed out until the process completes.
 
-### Aggiungere libri alla Libreria
+### Changing Translation Language
 
-Ci sono due modi per popolare la Libreria:
+Use the dropdown menu with flags in the sidebar. Changing the language automatically restarts the translation of the current chapter in the active mode.
 
-#### 1. Aggiunta automatica all'apertura
+### Hiding the Translation Panel
 
-Ogni volta che apri un file EPUB tramite **+ Apri libro**, il libro viene aggiunto automaticamente alla Libreria (se non è già presente). La copertina viene estratta in background e aggiornata non appena disponibile.
-
-#### 2. Scansione di una cartella
-
-Questo è il metodo principale per importare una collezione esistente:
-
-1. Apri la Libreria cliccando l'icona libreria.
-2. Clicca il pulsante **Seleziona cartella** (icona upload).
-3. Scegli la cartella radice che contiene i tuoi file EPUB.
-4. Giano Reader scansiona la cartella e le sottocartelle fino alla profondità configurata (default: 3 livelli).
-5. Per ogni file `.epub` trovato vengono estratti automaticamente: titolo, autore, editore, anno, lingua, descrizione, copertina e stima del numero di pagine.
-6. Al termine viene mostrato un riepilogo: *"Scansione completata: X aggiunti, Y già in libreria."*
-
-> **Profondità di scansione:** puoi modificare il numero di livelli di sottocartelle esplorati nelle **Impostazioni** (campo *Profondità di ricerca*, valore da 1 a 10). Aumenta il valore se hai una struttura di cartelle molto annidata.
-
-#### 3. Importazione da file JSON
-
-Se hai esportato la Libreria in precedenza (o vuoi trasferirla da un altro dispositivo):
-
-1. Apri la Libreria.
-2. Clicca l'icona **importa** (freccia su).
-3. Seleziona il file `.json` esportato in precedenza.
-4. I libri vengono aggiunti a quelli esistenti; i duplicati (stesso percorso file) vengono ignorati.
+Click the **arrows** icon (arrows-left-right-to-line) to hide or show the translation panel. This is useful for reading the original text full-screen.
 
 ---
 
-### Navigare nella Libreria
+## Library
 
-- **Cerca** per titolo o autore usando il campo di ricerca in cima alla modale.
-- **Filtra per stato** usando il menu a tendina (Tutti / Da leggere / In corso / Letto).
-- Clicca una **card** per aprire direttamente il libro nel reader.
+The Library gathers your EPUB files in a single view with covers, metadata, and reading status. It is available exclusively in the desktop app (Tauri).
 
----
+### Opening the Library
 
-### Scheda libro (dettagli e note)
-
-Ogni card ha un pulsante **ⓘ** che apre la scheda dettaglio del libro. Da qui puoi:
-
-- Modificare titolo, autore, editore, anno, lingua.
-- Impostare lo **stato di lettura**: Da leggere / In corso / Letto.
-- Aggiungere **note personali** libere.
-- Vedere le informazioni sul file (nome, dimensione, stima pagine).
-- **Eliminare** il libro dalla Libreria (non cancella il file dal disco).
-
-Clicca **Salva** per confermare le modifiche.
-
-> Quando apri un libro dalla Libreria, lo stato passa automaticamente da *Da leggere* a *In corso* (se non era già *In corso* o *Letto*).
+Click the **library** icon in the sidebar to open the modal containing your book grid.
 
 ---
 
-### Esportare la Libreria
+### Adding Books to the Library
 
-1. Apri la Libreria.
-2. Clicca l'icona **esporta** (freccia giù).
-3. Scegli dove salvare il file `giano-library.json`.
+There are two ways to populate your Library:
 
-Il file JSON contiene tutti i metadati e le copertine (come data URL). Può essere reimportato su un altro dispositivo o usato come backup.
+#### 1. Automatic Addition on Open
 
----
+Every time you open an EPUB file via **+ Open book**, the book is automatically added to the Library (if not already present). The cover is extracted in the background and updated as soon as it becomes available.
 
-### Svuotare la Libreria
+#### 2. Scanning a Folder
 
-Clicca l'icona **cestino** (lib-clear) nella barra degli strumenti della Libreria. Viene chiesta conferma prima di procedere. L'operazione rimuove tutti i record dalla Libreria ma **non cancella i file EPUB dal disco**.
+This is the primary method for importing an existing collection:
 
----
+1. Open the Library by clicking the library icon.
+2. Click the **Select folder** button (upload icon).
+3. Choose the root folder that contains your EPUB files.
+4. Giano Reader scans the folder and its subfolders up to the configured scan depth (default: 3 levels).
+5. For every `.epub` file found, Giano Reader automatically extracts: title, author, publisher, year, language, description, cover, and estimated page count.
+6. Upon completion, a summary is displayed: *"Scan complete: X added, Y already in library."*
 
-## Segnalibri
+> **Scan Depth:** You can change the number of nested subfolder levels explored in **Settings** (using the *Search depth* field, value from 1 to 10). Increase this value if you have a highly nested folder hierarchy.
 
-### Aggiungere un segnalibro
+#### 3. Importing from a JSON File
 
-1. Naviga al capitolo e alla posizione che vuoi salvare.
-2. Clicca l'icona **stella** nella barra laterale.
+If you have previously exported your Library (or want to transfer it from another device):
 
-Il segnalibro salva: percorso del file, capitolo corrente, posizione di scroll (percentuale).
-
-> Il pulsante stella è attivo solo quando un libro è aperto nell'app desktop (richiede un percorso file assoluto).
-
-### Aprire un segnalibro
-
-1. Clicca l'icona **segnalibro** per aprire la modale.
-2. Clicca il titolo o l'icona del segnalibro desiderato.
-3. Il file viene aperto e la lettura riprende dal capitolo e dalla posizione salvati.
-
-Se il file è stato spostato o rinominato, appare una finestra di dialogo che ti chiede di localizzarlo manualmente. Il percorso viene aggiornato automaticamente per le aperture future.
-
-### Importare / Esportare segnalibri
-
-Usa i pulsanti **importa** ed **esporta** nella modale dei segnalibri per salvare o caricare i segnalibri come file `giano-bookmarks.json`.
+1. Open the Library.
+2. Click the **import** icon (up arrow).
+3. Select the previously exported `.json` file.
+4. The books are added to the existing ones; duplicates (matching file paths) are ignored.
 
 ---
 
-## Impostazioni
+### Navigating the Library
 
-Apri le impostazioni cliccando l'icona **ingranaggio** nella barra laterale.
+- **Search** by title or author using the search field at the top of the modal.
+- **Filter by status** using the dropdown menu (All / To read / Reading / Read).
+- Click a **card** to open the book directly in the reader.
 
-| Impostazione | Descrizione |
+---
+
+### Book Details Panel (Details & Notes)
+
+Each card has an **ⓘ** button that opens the book details panel. From here you can:
+
+- Edit title, author, publisher, year, language.
+- Set the **reading status**: To read / Reading / Read.
+- Add freeform **personal notes**.
+- View file information (name, size, estimated pages).
+- **Delete** the book from the Library (does not delete the actual file from disk).
+
+Click **Save** to confirm changes.
+
+> When you open a book from the Library, its status automatically changes from *To read* to *Reading* (unless it was already set to *Reading* or *Read*).
+
+---
+
+### Exporting the Library
+
+1. Open the Library.
+2. Click the **export** icon (down arrow).
+3. Choose where to save the `giano-library.json` file.
+
+The JSON file contains all metadata and covers (as data URLs). It can be re-imported on another device or used as a backup.
+
+---
+
+### Clearing the Library
+
+Click the **trash** icon (lib-clear) in the Library toolbar. You will be prompted to confirm before proceeding. This operation removes all records from the Library but **does not delete the EPUB files from your disk**.
+
+---
+
+## Bookmarks
+
+### Adding a Bookmark
+
+1. Navigate to the chapter and position you want to save.
+2. Click the **star** icon in the sidebar.
+
+The bookmark saves: absolute file path, current chapter, and scroll position (percentage).
+
+> The star button is only active when a book is opened in the desktop app (which provides absolute file paths).
+
+### Opening a Bookmark
+
+1. Click the **bookmark** icon to open the modal.
+2. Click the title or icon of the desired bookmark.
+3. The file is opened, and reading resumes from the saved chapter and position.
+
+If the file has been moved or renamed, a file picker dialog will prompt you to locate it manually. The path is then updated automatically for all future openings.
+
+### Importing / Exporting Bookmarks
+
+Use the **import** and **export** buttons in the bookmarks modal to save or load bookmarks as a `giano-bookmarks.json` file.
+
+---
+
+## Settings
+
+Open Settings by clicking the **gear** icon in the sidebar.
+
+| Setting | Description |
 |---|---|
-| **Lingua interfaccia** | Lingua dei testi dell'UI (12 lingue disponibili) |
-| **Tema** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
-| **Carattere** | Font del testo di lettura |
-| **Dimensione testo** | Slider da 12 a 32 px |
-| **Profondità di ricerca** | Livelli di sottocartelle esplorati dalla scansione libreria (1–10, default 3) |
+| **Interface language** | UI text language (17 languages available with automatic i18n alignment) |
+| **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
+| **Font** | Font family for reading text |
+| **Font size** | Slider from 12px to 32px |
+| **Search depth** | Subfolder depth level for library scanning (1–10, default 3) |
+| **OpenRouter API Key** | API Key to enable advanced PRO translation using artificial intelligence models |
+| **Fetch models** | Clicking the button fetches the list of available models from OpenRouter |
+| **OpenRouter Model (PRO)** | Dropdown selector to choose the LLM model to use for PRO translations |
 
-Tutte le impostazioni vengono salvate automaticamente in `localStorage`.
+All settings are saved automatically. In the desktop application (Tauri), the Library and Bookmarks databases are stored in dedicated JSON files directly in the filesystem (`giano-library.json` and `giano-bookmarks.json` in the app's standard data directory), permanently bypassing browser storage quota limitations (`localStorage`) and avoiding "storage quota exceeded" errors when importing large ebook collections.
 
 ---
 
-## Domande frequenti
+## FAQ (Frequently Asked Questions)
 
-**Il libro non si apre / rimane bloccato sul caricamento.**
-Alcuni EPUB generati da Calibre possono impiegare più tempo del solito. Attendi fino a 20 secondi. Se il problema persiste, prova a riesportare il file da Calibre in formato EPUB 2.
+**The book won't open or stays stuck on loading.**
+Some EPUBs generated by Calibre may take longer than usual to load. Wait up to 20 seconds. If the problem persists, try re-exporting the file from Calibre as an EPUB 2 file.
 
-**La traduzione non parte o mostra errori.**
-Verifica la connessione internet. L'endpoint di Google Translate è non ufficiale e può essere temporaneamente non disponibile. Riprova dopo qualche secondo o cambia lingua e ritorna a quella originale per forzare un nuovo tentativo.
+**The translation doesn't start or shows errors.**
+Check your internet connection. The FREE Google Translate endpoint is unofficial and may be temporarily unavailable. Try again in a few seconds, or toggle translation languages/modes to force a retry.
 
-**I segnalibri non si aprono automaticamente.**
-La riapertura automatica dei segnalibri richiede l'app desktop (Tauri). Nel browser è necessario aprire il file manualmente e navigare al capitolo indicato.
+**Bookmarks do not open automatically.**
+Automatic bookmark reopening requires the desktop application (Tauri). In the browser, you will need to open the file manually and navigate to the indicated chapter.
 
-**La Libreria non trova i miei EPUB.**
-Controlla la **Profondità di ricerca** nelle Impostazioni: se i tuoi file sono in sottocartelle molto annidate, aumenta il valore (es. da 3 a 5 o più). Poi ripeti la scansione della cartella.
+**The Library cannot find my EPUB files.**
+Check the **Search depth** in Settings: if your files are stored in deeply nested subfolders, increase this value (e.g., from 3 to 5 or higher) and scan the folder again.
 
-**La copertina non appare nella Libreria.**
-Alcuni EPUB non includono una copertina nel manifest. In questo caso la card mostra uno sfondo neutro. Non è un errore.
+**The cover does not appear in the Library.**
+Some EPUBs do not define a cover image in their manifest. In this case, GianoReader displays a generic cover placeholder. This is not an error.
 
-**Come faccio a rimuovere un libro dalla Libreria senza cancellarlo dal disco?**
-Apri la scheda dettaglio del libro (pulsante **ⓘ**) e clicca **Rimuovi dalla libreria**. Il file EPUB rimane intatto sul disco.
+**How do I remove a book from the Library without deleting it from disk?**
+Open the book details panel (the **ⓘ** button) and click **Remove from library**. The actual EPUB file remains completely intact on your disk.

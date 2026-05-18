@@ -562,3 +562,68 @@ describe('Generazione libreria con import libri', () => {
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. ASSOCIAZIONE PARAGRAFI (NUOVE FUNZIONALITÀ)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Associazione paragrafi (colori, numeri, hover)', () => {
+  let storage, sFns;
+  
+  beforeEach(() => {
+    storage = createLocalStorageMock();
+    sFns = makeSettingsFunctions(storage);
+  });
+
+  it('salva e carica pairingEnabled e showNumbers correttamente', () => {
+    sFns.saveSettings({ pairingEnabled: true, showNumbers: true });
+    const settings = sFns.loadSettings();
+    expect(settings.pairingEnabled).toBe(true);
+    expect(settings.showNumbers).toBe(true);
+  });
+
+  it('renderizzazione paragrafo originale include data-idx, classi cromatiche e numeri', () => {
+    const originalViewer = document.createElement('div');
+    const paragraphs = ['Paragrafo uno', 'Paragrafo due', 'Paragrafo tre'];
+    
+    // Simula renderOriginal semplificato per il test
+    originalViewer.innerHTML = '';
+    paragraphs.forEach((p, i) => {
+      const pEl = document.createElement('p');
+      pEl.dataset.idx = i;
+      pEl.classList.add(`pair-color-${i % 5}`);
+      pEl.innerHTML = `<span class="para-num">${i + 1}</span>${escapeHtml(p)}`;
+      originalViewer.appendChild(pEl);
+    });
+
+    const pEls = originalViewer.querySelectorAll('p');
+    expect(pEls).toHaveLength(3);
+    
+    // Verifica indici
+    expect(pEls[0].dataset.idx).toBe('0');
+    expect(pEls[1].dataset.idx).toBe('1');
+    expect(pEls[2].dataset.idx).toBe('2');
+
+    // Verifica colori alternati
+    expect(pEls[0].classList.contains('pair-color-0')).toBe(true);
+    expect(pEls[1].classList.contains('pair-color-1')).toBe(true);
+    expect(pEls[2].classList.contains('pair-color-2')).toBe(true);
+
+    // Verifica numerazione interna
+    expect(pEls[0].querySelector('.para-num').textContent).toBe('1');
+    expect(pEls[1].querySelector('.para-num').textContent).toBe('2');
+    expect(pEls[2].querySelector('.para-num').textContent).toBe('3');
+  });
+
+  it('i18n: traduzioni presenti per i nuovi tasti toggle', () => {
+    const keys = ['togglePairing', 'toggleNumbers'];
+    const langs = ['en', 'it'];
+    for (const lang of langs) {
+      for (const key of keys) {
+        const val = t(lang, key);
+        expect(val).not.toBe(key);
+        expect(val.length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+

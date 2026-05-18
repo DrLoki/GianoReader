@@ -82,7 +82,16 @@ const hideTranslationBtn = document.getElementById('hide-translation-btn');
 const translationPanel = document.getElementById('translation-panel');
 const divider = document.getElementById('divider');
 
+const togglePairingBtn = document.getElementById('toggle-pairing-btn');
+const toggleNumbersBtn = document.getElementById('toggle-numbers-btn');
+const viewerWrapper = document.getElementById('viewer-wrapper');
+const toggleTranslationModeBtn = document.getElementById('toggle-translation-mode-btn');
+const openrouterKeyInput = document.getElementById('openrouter-key-input');
+const openrouterModelSelect = document.getElementById('openrouter-model-select');
+
 let translationHidden = false;
+let pairingEnabled = false;
+let showNumbers = false;
 
 hideTranslationBtn.addEventListener('click', () => {
   translationHidden = !translationHidden;
@@ -91,6 +100,48 @@ hideTranslationBtn.addEventListener('click', () => {
   hideTranslationBtn.setAttribute('aria-pressed', String(translationHidden));
   hideTranslationBtn.classList.toggle('active', translationHidden);
 });
+
+togglePairingBtn.addEventListener('click', () => {
+  pairingEnabled = !pairingEnabled;
+  viewerWrapper.classList.toggle('pairing-enabled', pairingEnabled);
+  togglePairingBtn.setAttribute('aria-pressed', String(pairingEnabled));
+  togglePairingBtn.classList.toggle('active', pairingEnabled);
+
+  const s = loadSettings();
+  s.pairingEnabled = pairingEnabled;
+  saveSettings(s);
+});
+
+toggleNumbersBtn.addEventListener('click', () => {
+  showNumbers = !showNumbers;
+  viewerWrapper.classList.toggle('show-numbers', showNumbers);
+  toggleNumbersBtn.setAttribute('aria-pressed', String(showNumbers));
+  toggleNumbersBtn.classList.toggle('active', showNumbers);
+
+  const s = loadSettings();
+  s.showNumbers = showNumbers;
+  saveSettings(s);
+});
+
+// Hover sincronizzato bidirezionale tra i pannelli
+viewerWrapper.addEventListener('mouseover', e => {
+  if (pairingEnabled || showNumbers) return;
+  const p = e.target.closest('.text-panel p[data-idx]');
+  if (!p) return;
+  const idx = p.dataset.idx;
+  const pair = viewerWrapper.querySelectorAll(`.text-panel p[data-idx="${idx}"]`);
+  pair.forEach(el => el.classList.add('para-highlight'));
+});
+
+viewerWrapper.addEventListener('mouseout', e => {
+  if (pairingEnabled || showNumbers) return;
+  const p = e.target.closest('.text-panel p[data-idx]');
+  if (!p) return;
+  const idx = p.dataset.idx;
+  const pair = viewerWrapper.querySelectorAll(`.text-panel p[data-idx="${idx}"]`);
+  pair.forEach(el => el.classList.remove('para-highlight'));
+});
+
 
 // ── Custom flag dropdown ───────────────────────────────────────────────────
 const FLAG_MAP = {
@@ -373,6 +424,18 @@ function applyUiLang(lang) {
   document.querySelector('label[for="theme-select"]').textContent = t(lang, 'theme');
   document.querySelector('label[for="font-family-select"]').textContent = t(lang, 'fontFamily');
   document.querySelector('label[for="font-size-range"]').textContent = t(lang, 'fontSize');
+  const orKeyLabel = document.querySelector('label[for="openrouter-key-input"]');
+  if (orKeyLabel) orKeyLabel.textContent = t(lang, 'openrouterApiKey');
+  const orFetchBtn = document.getElementById('openrouter-fetch-btn');
+  if (orFetchBtn) orFetchBtn.title = t(lang, 'openrouterFetchModels');
+  const orModelLabel = document.querySelector('label[for="openrouter-model-select"]');
+  if (orModelLabel) orModelLabel.textContent = t(lang, 'openrouterModelPro');
+  const orModelPlaceholder = document.getElementById('openrouter-model-placeholder');
+  if (orModelPlaceholder) orModelPlaceholder.textContent = t(lang, 'openrouterSelectModel');
+  if (toggleTranslationModeBtn) {
+    toggleTranslationModeBtn.title = t(lang, 'toggleTranslationMode');
+    toggleTranslationModeBtn.setAttribute('aria-label', t(lang, 'toggleTranslationMode'));
+  }
   document.getElementById('settings-modal-title').innerHTML = '<img src="/icons/gear.svg" class="icon" alt="" /> ' + t(lang, 'settings');
   settingsCloseBtn.title = t(lang, 'close');
   // Bookmarks modal
@@ -399,12 +462,20 @@ function applyUiLang(lang) {
     hideTranslationBtn.title = t(lang, 'hideTranslation');
     hideTranslationBtn.setAttribute('aria-label', t(lang, 'hideTranslation'));
   }
+  if (togglePairingBtn) {
+    togglePairingBtn.title = t(lang, 'togglePairing');
+    togglePairingBtn.setAttribute('aria-label', t(lang, 'togglePairing'));
+  }
+  if (toggleNumbersBtn) {
+    toggleNumbersBtn.title = t(lang, 'toggleNumbers');
+    toggleNumbersBtn.setAttribute('aria-label', t(lang, 'toggleNumbers'));
+  }
   if (syncDisabledNotice) {
     syncDisabledNotice.textContent = t(lang, 'syncDisabled');
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.7.5' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.0' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -445,6 +516,33 @@ function applyUiLang(lang) {
     (window.__TAURI__ || window.__TAURI_INTERNALS__) ? 'determineOptimalValue' : 'ramAdvisorBrowserOnly');
 }
 
+function updateTranslationModeVisibility() {
+  if (!toggleTranslationModeBtn) return;
+  const s = loadSettings();
+  const apiKey = (s.openrouterApiKey || '').trim();
+  const isValid = apiKey.startsWith('sk-or-') && apiKey.length > 6;
+  
+  toggleTranslationModeBtn.classList.toggle('hidden', !isValid);
+  
+  // Se la chiave è invalida e siamo in modalità PRO, torna a FREE!
+  if (!isValid && s.translationMode === 'pro') {
+    s.translationMode = 'free';
+    saveSettings(s);
+    
+    const isPro = false;
+    toggleTranslationModeBtn.setAttribute('aria-pressed', String(isPro));
+    toggleTranslationModeBtn.classList.remove('active');
+    toggleTranslationModeBtn.textContent = 'FREE';
+    
+    // Riavvia la traduzione in modalità FREE
+    if (currentChapterParagraphs && currentChapterParagraphs.length) {
+      const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+      const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
+      translateCurrentChapter(scrollPct);
+    }
+  }
+}
+
 // Init from saved settings
 (function initSettings() {
   const s = loadSettings();
@@ -454,6 +552,19 @@ function applyUiLang(lang) {
   themeSelect.value = theme;
   uiLangSelect.value = uiLang;
   applyUiLang(uiLang);
+  // Pairing & Paragraph Numbers
+  pairingEnabled = !!s.pairingEnabled;
+  if (viewerWrapper) viewerWrapper.classList.toggle('pairing-enabled', pairingEnabled);
+  if (togglePairingBtn) {
+    togglePairingBtn.setAttribute('aria-pressed', String(pairingEnabled));
+    togglePairingBtn.classList.toggle('active', pairingEnabled);
+  }
+  showNumbers = !!s.showNumbers;
+  if (viewerWrapper) viewerWrapper.classList.toggle('show-numbers', showNumbers);
+  if (toggleNumbersBtn) {
+    toggleNumbersBtn.setAttribute('aria-pressed', String(showNumbers));
+    toggleNumbersBtn.classList.toggle('active', showNumbers);
+  }
   // Font family
   const fontFamily = s.fontFamily || 'Georgia, serif';
   applyFont(fontFamily);
@@ -476,6 +587,34 @@ function applyUiLang(lang) {
     optimalLimitBtn.disabled = true;
     optimalLimitBtn.title = ui('ramAdvisorBrowserOnly');
   }
+
+  // OpenRouter settings init
+  const openrouterApiKey = s.openrouterApiKey || '';
+  if (openrouterKeyInput) openrouterKeyInput.value = openrouterApiKey;
+
+  const translationMode = s.translationMode || 'free';
+  if (toggleTranslationModeBtn) {
+    const isPro = translationMode === 'pro';
+    toggleTranslationModeBtn.setAttribute('aria-pressed', String(isPro));
+    toggleTranslationModeBtn.classList.toggle('active', isPro);
+    toggleTranslationModeBtn.textContent = isPro ? 'PRO' : 'FREE';
+  }
+
+  if (openrouterModelSelect) {
+    if (s.openrouterModels && s.openrouterModels.length > 0) {
+      openrouterModelSelect.innerHTML = `<option value="" id="openrouter-model-placeholder">${t(uiLang, 'openrouterSelectModel')}</option>`;
+      s.openrouterModels.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name;
+        if (m.id === s.openrouterModel) opt.selected = true;
+        openrouterModelSelect.appendChild(opt);
+      });
+    }
+  }
+
+  updateTranslationModeVisibility();
+
   // Sostituisce i select lingua con dropdown custom (bandiere emoji)
   createFlagSelect(langSelect);
   createFlagSelect(uiLangSelect);
@@ -547,6 +686,123 @@ if (warnFileSizeMbInput) {
     const s = loadSettings();
     s.warnFileSizeMB = val;
     saveSettings(s);
+  });
+}
+
+if (openrouterKeyInput) {
+  const handleKeyUpdate = () => {
+    const s = loadSettings();
+    s.openrouterApiKey = openrouterKeyInput.value.trim();
+    saveSettings(s);
+    updateTranslationModeVisibility();
+  };
+  openrouterKeyInput.addEventListener('change', handleKeyUpdate);
+  openrouterKeyInput.addEventListener('input', handleKeyUpdate);
+}
+
+if (openrouterModelSelect) {
+  openrouterModelSelect.addEventListener('change', () => {
+    const s = loadSettings();
+    s.openrouterModel = openrouterModelSelect.value;
+    saveSettings(s);
+  });
+}
+
+const openrouterFetchBtn = document.getElementById('openrouter-fetch-btn');
+const openrouterStatusMsg = document.getElementById('openrouter-status-msg');
+if (openrouterFetchBtn) {
+  openrouterFetchBtn.addEventListener('click', async () => {
+    const s = loadSettings();
+    const apiKey = openrouterKeyInput.value.trim();
+    const lang = s.uiLang || 'en';
+    if (!apiKey) {
+      if (openrouterStatusMsg) {
+        openrouterStatusMsg.textContent = t(lang, 'openrouterInvalidKey');
+        openrouterStatusMsg.className = 'settings-status-msg error';
+        openrouterStatusMsg.classList.remove('hidden');
+      }
+      return;
+    }
+
+    try {
+      if (openrouterStatusMsg) {
+        openrouterStatusMsg.textContent = t(lang, 'openrouterLoadingModels');
+        openrouterStatusMsg.className = 'settings-status-msg loading';
+        openrouterStatusMsg.classList.remove('hidden');
+      }
+      
+      const res = await fetch('https://openrouter.ai/api/v1/models?category=translation');
+      if (!res.ok) throw new Error(`Status: ${res.status}`);
+      const data = await res.json();
+      
+      if (!data.data || !Array.isArray(data.data)) {
+        throw new Error('Invalid format returned by OpenRouter');
+      }
+
+      const models = data.data.map(m => ({ id: m.id, name: m.name }));
+      models.sort((a, b) => a.name.localeCompare(b.name));
+
+      const s2 = loadSettings();
+      s2.openrouterModels = models;
+      s2.openrouterApiKey = apiKey;
+      saveSettings(s2);
+      updateTranslationModeVisibility();
+
+      if (openrouterModelSelect) {
+        openrouterModelSelect.innerHTML = `<option value="" id="openrouter-model-placeholder">${t(lang, 'openrouterSelectModel')}</option>`;
+        models.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.name;
+          if (m.id === s2.openrouterModel) opt.selected = true;
+          openrouterModelSelect.appendChild(opt);
+        });
+      }
+
+      if (openrouterStatusMsg) {
+        openrouterStatusMsg.textContent = t(lang, 'openrouterModelsLoaded');
+        openrouterStatusMsg.className = 'settings-status-msg success';
+        setTimeout(() => openrouterStatusMsg.classList.add('hidden'), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      if (openrouterStatusMsg) {
+        openrouterStatusMsg.textContent = t(lang, 'openrouterErrorLoading') + err.message;
+        openrouterStatusMsg.className = 'settings-status-msg error';
+      }
+    }
+  });
+}
+
+if (toggleTranslationModeBtn) {
+  toggleTranslationModeBtn.addEventListener('click', () => {
+    const s = loadSettings();
+    const currentMode = s.translationMode || 'free';
+    const nextMode = currentMode === 'free' ? 'pro' : 'free';
+    const lang = s.uiLang || 'en';
+
+    if (nextMode === 'pro') {
+      if (!s.openrouterApiKey || !s.openrouterModel) {
+        showAlert(t(lang, 'openrouterInvalidKey') + ' & ' + t(lang, 'openrouterSelectModel').toLowerCase());
+        settingsModal.classList.remove('hidden');
+        return;
+      }
+    }
+
+    s.translationMode = nextMode;
+    saveSettings(s);
+
+    const isPro = nextMode === 'pro';
+    toggleTranslationModeBtn.setAttribute('aria-pressed', String(isPro));
+    toggleTranslationModeBtn.classList.toggle('active', isPro);
+    toggleTranslationModeBtn.textContent = isPro ? 'PRO' : 'FREE';
+
+    // Trigger re-translation
+    if (currentChapterParagraphs && currentChapterParagraphs.length) {
+      const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+      const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
+      translateCurrentChapter(scrollPct);
+    }
   });
 }
 
@@ -788,21 +1044,32 @@ function extractParagraphs(body) {
 }
 
 // ── Scroll sincronizzato tra i due pannelli ────────────────────────────────
+let activeScrollSource = null;
+let syncTimeout = null;
+
 function bindSyncScroll() {
-  originalViewer.onscroll = () => {
+  const handleScroll = (source, target) => {
     if (syncingScroll) return;
+    if (activeScrollSource && activeScrollSource !== source) return;
+    
+    if (!activeScrollSource) {
+      activeScrollSource = source;
+    }
+    
     syncingScroll = true;
-    const r = originalViewer.scrollTop / Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
-    translationViewer.scrollTop = r * (translationViewer.scrollHeight - translationViewer.clientHeight);
-    syncingScroll = false;
+    
+    const r = source.scrollTop / Math.max(1, source.scrollHeight - source.clientHeight);
+    target.scrollTop = r * (target.scrollHeight - target.clientHeight);
+    
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+      syncingScroll = false;
+      activeScrollSource = null;
+    }, 50); // 50ms per smaltire l'inerzia e gli eventi asincroni del browser
   };
-  translationViewer.onscroll = () => {
-    if (syncingScroll) return;
-    syncingScroll = true;
-    const r = translationViewer.scrollTop / Math.max(1, translationViewer.scrollHeight - translationViewer.clientHeight);
-    originalViewer.scrollTop = r * (originalViewer.scrollHeight - originalViewer.clientHeight);
-    syncingScroll = false;
-  };
+
+  originalViewer.onscroll = () => handleScroll(originalViewer, translationViewer);
+  translationViewer.onscroll = () => handleScroll(translationViewer, originalViewer);
 }
 
 // ── View mode ──────────────────────────────────────────────────────────────
@@ -913,9 +1180,21 @@ function scrollToAnchor(anchor) {
 
 // ── Render pannelli testo ──────────────────────────────────────────────────
 function renderOriginal(paragraphs) {
-  originalViewer.innerHTML = paragraphs.length
-    ? paragraphsToHtml(paragraphs)
-    : `<p class="placeholder">${ui('noContent')}</p>`;
+  originalViewer.innerHTML = '';
+  if (paragraphs.length) {
+    paragraphs.forEach((p, i) => {
+      const text = p.text !== undefined ? p.text : p;
+      if (!text.trim()) return;
+      const html = p.html !== undefined ? p.html : escapeHtml(p);
+      const pEl = document.createElement('p');
+      pEl.dataset.idx = i;
+      pEl.classList.add(`pair-color-${i % 5}`);
+      pEl.innerHTML = `<span class="para-num">${i + 1}</span>${html}`;
+      originalViewer.appendChild(pEl);
+    });
+  } else {
+    originalViewer.innerHTML = `<p class="placeholder">${ui('noContent')}</p>`;
+  }
   originalViewer.scrollTop = 0;
 
   // Gestione click sui link interni EPUB nel pannello testo
@@ -981,8 +1260,8 @@ async function translateCurrentChapter(startPct = 0) {
     const text = para.text !== undefined ? para.text : para;
     const p = document.createElement('p');
     p.dataset.idx = i;
-    p.className = 'pending';
-    p.textContent = text;
+    p.classList.add('pending', `pair-color-${i % 5}`);
+    p.innerHTML = `<span class="para-num">${i + 1}</span>${escapeHtml(text)}`;
     translationViewer.appendChild(p);
     return p;
   });
@@ -1009,7 +1288,7 @@ async function translateCurrentChapter(startPct = 0) {
       const translated = await translateParagraphs(slice, lang, signal);
       if (signal.aborted) return;
       for (let i = 0; i < translated.length; i++) {
-        pEls[start + i].textContent = translated[i] || slice[i];
+        pEls[start + i].innerHTML = `<span class="para-num">${start + i + 1}</span>${escapeHtml(translated[i] || slice[i])}`;
         pEls[start + i].classList.remove('pending');
       }
       if (translatedChunks.size >= totalChunks) setTranslationStatus('');
@@ -1019,7 +1298,7 @@ async function translateCurrentChapter(startPct = 0) {
       // Fallback: mostra il testo originale per i paragrafi del chunk fallito
       for (let i = start; i < end; i++) {
         const fallback = paragraphs[i].text !== undefined ? paragraphs[i].text : paragraphs[i];
-        pEls[i].textContent = fallback;
+        pEls[i].innerHTML = `<span class="para-num">${i + 1}</span>${escapeHtml(fallback)}`;
         pEls[i].classList.remove('pending');
       }
     }

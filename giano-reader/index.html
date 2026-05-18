@@ -68,7 +68,9 @@
       <div id="viewer-wrapper">
         <div id="original-panel">
           <div id="original-header">
-            <span id="original-header-label">Original</span>
+            <div id="original-header-left">
+              <span id="original-header-label">Original</span>
+            </div>
             <div id="original-header-actions">
               <button id="hide-translation-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
                 <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -93,9 +95,31 @@
         <div id="divider"></div>
         <div id="translation-panel">
           <div id="translation-header">
-            <span id="translation-lang-label">Translation</span>
-            <span id="translation-status"></span>
-            <span id="sync-disabled-notice" class="hidden sync-notice"></span>
+            <div id="translation-header-left">
+              <span id="translation-lang-label">Translation</span>
+            </div>
+            <div id="translation-header-actions">
+              <button id="toggle-translation-mode-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">FREE</button>
+              <button id="toggle-pairing-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.03457 19.176 5.09322 19.4357 5.00624 19.6738C4.83151 20.1522 4.73789 20.6653 4.73789 21.2C4.73789 21.6418 5.09606 22 5.53789 22H12Z"/>
+                  <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor"/>
+                  <circle cx="11.5" cy="7.5" r="1.5" fill="currentColor"/>
+                  <circle cx="16.5" cy="9.5" r="1.5" fill="currentColor"/>
+                  <circle cx="15.5" cy="14.5" r="1.5" fill="currentColor"/>
+                </svg>
+              </button>
+              <button id="toggle-numbers-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="4" y1="9" x2="20" y2="9"/>
+                  <line x1="4" y1="15" x2="20" y2="15"/>
+                  <line x1="9" y1="4" x2="9" y2="20"/>
+                  <line x1="15" y1="4" x2="15" y2="20"/>
+                </svg>
+              </button>
+              <span id="translation-status"></span>
+              <span id="sync-disabled-notice" class="hidden sync-notice"></span>
+            </div>
           </div>
           <div id="translation-viewer" class="text-panel"></div>
         </div>
@@ -237,6 +261,27 @@
       <div class="settings-row">
         <label for="warn-file-size-mb" id="warn-file-size-mb-label">Warn file size (MB)</label>
         <input type="number" id="warn-file-size-mb" min="10" max="2000" step="1" value="50" />
+      </div>
+      <div class="settings-row">
+        <label for="openrouter-key-input">OpenRouter API Key</label>
+        <div class="settings-input-group">
+          <input type="password" id="openrouter-key-input" placeholder="sk-or-..." autocomplete="off" />
+          <button id="openrouter-fetch-btn" type="button" title="Fetch models">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+              <path d="M16 16h5v5"/>
+            </svg>
+          </button>
+        </div>
+        <span id="openrouter-status-msg" class="settings-status-msg hidden"></span>
+      </div>
+      <div class="settings-row">
+        <label for="openrouter-model-select">OpenRouter Model (PRO)</label>
+        <select id="openrouter-model-select">
+          <option value="" id="openrouter-model-placeholder">Select a model...</option>
+        </select>
       </div>
       <div id="settings-about">
         <span id="settings-developed-by"></span>
