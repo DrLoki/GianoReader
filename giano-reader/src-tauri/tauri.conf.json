@@ -1,6 +1,6 @@
 {
   "productName": "Giano Reader",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "identifier": "com.bolzonella.giano-reader",
   "build": {
     "frontendDist": "../dist",

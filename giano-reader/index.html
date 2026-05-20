@@ -393,6 +393,60 @@
     </div>
   </div>
 
+  <!-- Custom Context Menu -->
+  <div id="custom-context-menu" class="context-menu hidden">
+    <div class="context-menu-item" id="ctx-prev">
+      <span class="ctx-label">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        <span class="ctx-text">Capitolo precedente</span>
+      </span>
+      <span class="ctx-shortcut">ALT+&larr;</span>
+    </div>
+    <div class="context-menu-item" id="ctx-next">
+      <span class="ctx-label">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        <span class="ctx-text">Capitolo successivo</span>
+      </span>
+      <span class="ctx-shortcut">ALT+&rarr;</span>
+    </div>
+    <div class="context-menu-item" id="ctx-refresh">
+      <span class="ctx-label">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+        <span class="ctx-text">Aggiorna</span>
+      </span>
+      <span class="ctx-shortcut">CTRL+R</span>
+    </div>
+    <div class="context-menu-item" id="ctx-print">
+      <span class="ctx-label">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        <span class="ctx-text">Stampa</span>
+      </span>
+      <span class="ctx-shortcut">CTRL+P</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-group">
+      <label for="ctx-font-select">Carattere</label>
+      <select id="ctx-font-select">
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', Times, serif">Times New Roman</option>
+        <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
+        <option value="'Book Antiqua', Palatino, serif">Book Antiqua</option>
+        <option value="Garamond, serif">Garamond</option>
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="'Segoe UI', Tahoma, sans-serif">Segoe UI</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+        <option value="'Courier New', Courier, monospace">Courier New</option>
+      </select>
+    </div>
+    <div class="context-menu-group">
+      <div class="ctx-range-header">
+        <label for="ctx-size-range">Dimensione Testo</label>
+        <span id="ctx-size-value" class="settings-value">16px</span>
+      </div>
+      <input type="range" id="ctx-size-range" min="12" max="28" step="1" value="16" />
+    </div>
+  </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

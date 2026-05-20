@@ -114,6 +114,8 @@ export const translations = {
     openrouterErrorLoading: 'Error loading models: ',
     openrouterModelsLoaded: 'Models loaded successfully!',
     openrouterInvalidKey: 'Please enter an API Key first',
+    print: 'Print',
+    refresh: 'Refresh',
   },
   zh: {
     viewToggle: '切换原始视图',
@@ -459,6 +461,8 @@ export const translations = {
     openrouterErrorLoading: 'Error al cargar modelos:',
     openrouterModelsLoaded: '¡Modelos cargados exitosamente!',
     openrouterInvalidKey: 'Primero ingrese una clave API',
+    print: 'Imprimir',
+    refresh: 'Actualizar',
   },
   fr: {
     viewToggle: 'Afficher vue originale',
@@ -575,6 +579,8 @@ export const translations = {
     openrouterErrorLoading: 'Erreur de chargement des modèles :',
     openrouterModelsLoaded: 'Modèles chargés avec succès !',
     openrouterInvalidKey: 'Veuillez d\'abord saisir une clé API',
+    print: 'Imprimer',
+    refresh: 'Actualiser',
   },
   bn: {
     viewToggle: 'মূল দৃশ্য পরিবর্তন করুন',
@@ -1265,6 +1271,8 @@ export const translations = {
     openrouterErrorLoading: 'Fehler beim Laden der Modelle:',
     openrouterModelsLoaded: 'Modelle erfolgreich geladen!',
     openrouterInvalidKey: 'Bitte geben Sie zuerst einen API-Schlüssel ein',
+    print: 'Drucken',
+    refresh: 'Aktualisieren',
   },
   ko: {
     viewToggle: '원본 보기 전환',
@@ -1496,6 +1504,8 @@ export const translations = {
     openrouterErrorLoading: 'Errore caricamento modelli: ',
     openrouterModelsLoaded: 'Modelli caricati con successo!',
     openrouterInvalidKey: 'Inserisci prima una chiave API',
+    print: 'Stampa',
+    refresh: 'Aggiorna',
   },
   th: {
     viewToggle: 'สลับมุมมองต้นฉบับ',

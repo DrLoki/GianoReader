@@ -99,6 +99,21 @@ hideTranslationBtn.addEventListener('click', () => {
   divider.classList.toggle('hidden', translationHidden);
   hideTranslationBtn.setAttribute('aria-pressed', String(translationHidden));
   hideTranslationBtn.classList.toggle('active', translationHidden);
+
+  if (!translationHidden) {
+    if (currentViewMode === 'text' && currentChapterParagraphs && currentChapterParagraphs.length) {
+      const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+      const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
+      translateCurrentChapter(scrollPct);
+    }
+  } else {
+    if (translationAbortController) {
+      translationAbortController.abort();
+      translationAbortController = null;
+    }
+    setTranslationStatus('');
+    translationViewer.innerHTML = '';
+  }
 });
 
 togglePairingBtn.addEventListener('click', () => {
@@ -390,6 +405,9 @@ function applyTheme(theme) {
 
 function applyFont(family) {
   document.documentElement.style.setProperty('--reader-font-family', family);
+  if (typeof fontFamilySelect !== 'undefined' && fontFamilySelect) fontFamilySelect.value = family;
+  const ctxFontSelect = document.getElementById('ctx-font-select');
+  if (ctxFontSelect) ctxFontSelect.value = family;
   if (currentViewMode === 'original') {
     renderNativeView();
   }
@@ -399,6 +417,10 @@ function applyFontSize(size) {
   document.documentElement.style.setProperty('--font-size', size + 'px');
   if (fontSizeValue) fontSizeValue.textContent = size + 'px';
   if (fontSizeRange) fontSizeRange.value = size;
+  const ctxSizeRange = document.getElementById('ctx-size-range');
+  const ctxSizeValue = document.getElementById('ctx-size-value');
+  if (ctxSizeRange) ctxSizeRange.value = size;
+  if (ctxSizeValue) ctxSizeValue.textContent = size + 'px';
   if (currentViewMode === 'original') {
     renderNativeView();
   }
@@ -438,6 +460,20 @@ function applyUiLang(lang) {
   }
   document.getElementById('settings-modal-title').innerHTML = '<img src="/icons/gear.svg" class="icon" alt="" /> ' + t(lang, 'settings');
   settingsCloseBtn.title = t(lang, 'close');
+
+  // Context menu labels
+  const ctxPrevText = document.querySelector('#ctx-prev .ctx-text');
+  if (ctxPrevText) ctxPrevText.textContent = t(lang, 'prevChapter');
+  const ctxNextText = document.querySelector('#ctx-next .ctx-text');
+  if (ctxNextText) ctxNextText.textContent = t(lang, 'nextChapter');
+  const ctxRefreshText = document.querySelector('#ctx-refresh .ctx-text');
+  if (ctxRefreshText) ctxRefreshText.textContent = t(lang, 'refresh');
+  const ctxPrintText = document.querySelector('#ctx-print .ctx-text');
+  if (ctxPrintText) ctxPrintText.textContent = t(lang, 'print');
+  const ctxFontLabel = document.querySelector('.context-menu-group label[for="ctx-font-select"]');
+  if (ctxFontLabel) ctxFontLabel.textContent = t(lang, 'fontFamily');
+  const ctxSizeLabel = document.querySelector('.context-menu-group label[for="ctx-size-range"]');
+  if (ctxSizeLabel) ctxSizeLabel.textContent = t(lang, 'fontSize');
   // Bookmarks modal
   document.getElementById('bm-modal-title').innerHTML = '<img src="/icons/book-bookmark.svg" class="icon" alt="" /> ' + t(lang, 'bookmarks');
   bmCloseBtn.title = t(lang, 'close');
@@ -475,7 +511,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.0' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.1' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -521,19 +557,19 @@ function updateTranslationModeVisibility() {
   const s = loadSettings();
   const apiKey = (s.openrouterApiKey || '').trim();
   const isValid = apiKey.startsWith('sk-or-') && apiKey.length > 6;
-  
+
   toggleTranslationModeBtn.classList.toggle('hidden', !isValid);
-  
+
   // Se la chiave è invalida e siamo in modalità PRO, torna a FREE!
   if (!isValid && s.translationMode === 'pro') {
     s.translationMode = 'free';
     saveSettings(s);
-    
+
     const isPro = false;
     toggleTranslationModeBtn.setAttribute('aria-pressed', String(isPro));
     toggleTranslationModeBtn.classList.remove('active');
     toggleTranslationModeBtn.textContent = 'FREE';
-    
+
     // Riavvia la traduzione in modalità FREE
     if (currentChapterParagraphs && currentChapterParagraphs.length) {
       const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
@@ -730,11 +766,11 @@ if (openrouterFetchBtn) {
         openrouterStatusMsg.className = 'settings-status-msg loading';
         openrouterStatusMsg.classList.remove('hidden');
       }
-      
+
       const res = await fetch('https://openrouter.ai/api/v1/models?category=translation');
       if (!res.ok) throw new Error(`Status: ${res.status}`);
       const data = await res.json();
-      
+
       if (!data.data || !Array.isArray(data.data)) {
         throw new Error('Invalid format returned by OpenRouter');
       }
@@ -1051,16 +1087,16 @@ function bindSyncScroll() {
   const handleScroll = (source, target) => {
     if (syncingScroll) return;
     if (activeScrollSource && activeScrollSource !== source) return;
-    
+
     if (!activeScrollSource) {
       activeScrollSource = source;
     }
-    
+
     syncingScroll = true;
-    
+
     const r = source.scrollTop / Math.max(1, source.scrollHeight - source.clientHeight);
     target.scrollTop = r * (target.scrollHeight - target.clientHeight);
-    
+
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
       syncingScroll = false;
@@ -1234,6 +1270,12 @@ function renderTranslationPlaceholder(msg) {
 async function translateCurrentChapter(startPct = 0) {
   if (translationAbortController) translationAbortController.abort();
   if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
+
+  if (translationHidden) {
+    setTranslationStatus('');
+    translationViewer.innerHTML = '';
+    return;
+  }
 
   translationAbortController = new AbortController();
   const signal = translationAbortController.signal;
@@ -1668,6 +1710,17 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
+  if (e.altKey && e.key === 'ArrowLeft') {
+    if (!prevBtn.disabled) prevBtn.click();
+    e.preventDefault();
+    return;
+  }
+  if (e.altKey && e.key === 'ArrowRight') {
+    if (!nextBtn.disabled) nextBtn.click();
+    e.preventDefault();
+    return;
+  }
+
   const lineH = 16 * 1.8;
   const pageH = originalViewer.clientHeight * 0.9;
   let delta = 0;
@@ -1779,7 +1832,7 @@ function closeBookmarksModal() {
   bookmarksModal.classList.add('hidden');
 }
 bookmarksOpenBtn.addEventListener('click', openBookmarksModal);
-bmCloseBtn.addEventListener('click', closeLibraryModal);
+bmCloseBtn.addEventListener('click', closeBookmarksModal);
 bookmarksModal.addEventListener('click', e => { if (e.target === bookmarksModal) closeBookmarksModal(); });
 
 // Esporta segnalibri come JSON
@@ -2718,3 +2771,148 @@ document.getElementById('lib-clear-btn').addEventListener('click', async () => {
   await saveLibrary([]);
   await renderLibraryGrid();
 });
+
+// ── Custom Context Menu Logic ──────────────────────────────────────────────
+const customContextMenu = document.getElementById('custom-context-menu');
+const ctxPrev = document.getElementById('ctx-prev');
+const ctxNext = document.getElementById('ctx-next');
+const ctxRefresh = document.getElementById('ctx-refresh');
+const ctxPrint = document.getElementById('ctx-print');
+const ctxFontSelect = document.getElementById('ctx-font-select');
+const ctxSizeRange = document.getElementById('ctx-size-range');
+const ctxSizeValue = document.getElementById('ctx-size-value');
+
+// Show the context menu on right click (except inside inputs/textareas)
+document.addEventListener('contextmenu', e => {
+  const target = e.target;
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('input') || target.closest('textarea')) {
+    return;
+  }
+
+  e.preventDefault();
+
+  // Sync the context menu values to current active settings just in case
+  const s = loadSettings();
+  if (ctxFontSelect) ctxFontSelect.value = s.fontFamily || 'Georgia, serif';
+  if (ctxSizeRange) {
+    ctxSizeRange.value = s.fontSize || 16;
+    if (ctxSizeValue) ctxSizeValue.textContent = (s.fontSize || 16) + 'px';
+  }
+
+  // Toggle disabled state for prev/next buttons depending on pagination state
+  if (ctxPrev) {
+    ctxPrev.classList.toggle('disabled', prevBtn.disabled);
+  }
+  if (ctxNext) {
+    ctxNext.classList.toggle('disabled', nextBtn.disabled);
+  }
+
+  // Show and position
+  customContextMenu.classList.remove('hidden');
+
+  let x = e.clientX;
+  let y = e.clientY;
+  const menuWidth = customContextMenu.offsetWidth || 250;
+  const menuHeight = customContextMenu.offsetHeight || 300;
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
+
+  if (x + menuWidth > windowWidth) {
+    x = windowWidth - menuWidth - 10;
+  }
+  if (y + menuHeight > windowHeight) {
+    y = windowHeight - menuHeight - 10;
+  }
+
+  customContextMenu.style.left = `${x}px`;
+  customContextMenu.style.top = `${y}px`;
+});
+
+// Hide context menu when clicking outside
+document.addEventListener('click', e => {
+  if (customContextMenu && !customContextMenu.contains(e.target)) {
+    customContextMenu.classList.add('hidden');
+  }
+});
+
+// Hide context menu on ESC
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && customContextMenu) {
+    customContextMenu.classList.add('hidden');
+  }
+});
+
+// Navigation actions
+if (ctxPrev) {
+  ctxPrev.addEventListener('click', () => {
+    if (!prevBtn.disabled) {
+      prevBtn.click();
+      customContextMenu.classList.add('hidden');
+    }
+  });
+}
+if (ctxNext) {
+  ctxNext.addEventListener('click', () => {
+    if (!nextBtn.disabled) {
+      nextBtn.click();
+      customContextMenu.classList.add('hidden');
+    }
+  });
+}
+if (ctxRefresh) {
+  ctxRefresh.addEventListener('click', () => {
+    location.reload();
+  });
+}
+if (ctxPrint) {
+  ctxPrint.addEventListener('click', () => {
+    window.print();
+    customContextMenu.classList.add('hidden');
+  });
+}
+
+// Font family synchronization
+if (ctxFontSelect) {
+  ctxFontSelect.addEventListener('change', () => {
+    const s = loadSettings();
+    s.fontFamily = ctxFontSelect.value;
+    saveSettings(s);
+    applyFont(s.fontFamily);
+  });
+}
+
+// Font size synchronization (live slide and final apply)
+if (ctxSizeRange) {
+  ctxSizeRange.addEventListener('input', () => {
+    const val = ctxSizeRange.value;
+    if (ctxSizeValue) ctxSizeValue.textContent = val + 'px';
+    // Live update style
+    document.documentElement.style.setProperty('--font-size', val + 'px');
+  });
+
+  ctxSizeRange.addEventListener('change', () => {
+    const val = parseInt(ctxSizeRange.value, 10);
+    const s = loadSettings();
+    s.fontSize = val;
+    saveSettings(s);
+    applyFontSize(val); // This updates settings modal and everything properly
+  });
+}
+
+// Aggiunge shorcuts CTRL + wheel up/down per ingrandire/ridurre font size
+document.addEventListener('wheel', e => {
+  if (e.ctrlKey) {
+    e.preventDefault();
+    const s = loadSettings();
+    let size = s.fontSize || 16;
+    if (e.deltaY < 0) {
+      size = Math.min(28, size + 1);
+    } else if (e.deltaY > 0) {
+      size = Math.max(12, size - 1);
+    }
+    s.fontSize = size;
+    saveSettings(s);
+    applyFontSize(size);
+  }
+}, { passive: false });
+

@@ -1349,3 +1349,147 @@ html.rtl .text-panel p.para-highlight {
   color: #e67e22;
 }
 
+/* ── Custom Context Menu ── */
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  padding: 8px 0;
+  min-width: 250px;
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  color: var(--text);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  user-select: none;
+  animation: ctxFadeIn 0.15s ease-out;
+}
+
+@keyframes ctxFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.context-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.context-menu-item:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.context-menu-item:hover .ctx-shortcut {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.context-menu-item:hover svg.icon {
+  color: #fff !important;
+  stroke: #fff !important;
+  fill: none !important;
+}
+
+.context-menu-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ctx-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctx-label svg.icon {
+  width: 1.1em;
+  height: 1.1em;
+  stroke-width: 2;
+  color: var(--text);
+  transition: color 0.12s, stroke 0.12s;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.ctx-shortcut {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 16px;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+.context-menu-group {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.context-menu-group label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.context-menu-group select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-family);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.context-menu-group select:focus {
+  border-color: var(--accent);
+}
+
+.ctx-range-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ctx-range-header label {
+  margin: 0;
+}
+
+.ctx-range-header .settings-value {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: var(--text);
+}
+
+.context-menu-group input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin-top: 4px;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+}
+
