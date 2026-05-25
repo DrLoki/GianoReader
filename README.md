@@ -150,7 +150,7 @@ Giano Reader includes premium tools designed to speed up comprehension and make 
 
 The library scans local folders for EPUB files and stores book metadata (title, author, publisher, year, language, description, cover thumbnail, estimated page count, file size) persistently. 
 
-To prevent web browser storage quota limitations (`localStorage` is limited to ~5MB), **Giano Reader desktop (Tauri) automatically migrates all library metadata and bookmarks to secure JSON files directly on your local filesystem** (`giano-library.json` and `giano-bookmarks.json` in the app's system data directory). This supports virtually unlimited library sizes and prevents `QuotaExceededError` crashes when scanning thousands of ebooks. The browser version retains a fast fallback storage mode. Books can be filtered by reading status (To read / Reading / Read) and searched by title or author. The scan depth (1–10 folder levels) is configurable in Settings.
+This supports virtually unlimited library sizes. Books can be filtered by reading status (To read / Reading / Read) and searched by title or author. The scan depth (1–10 folder levels) is configurable in *Settings*.
 
 ---
 
