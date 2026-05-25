@@ -2,6 +2,7 @@ export const translations = {
   en: {
     viewToggle: 'Toggle original view',
     hideTranslation: 'Hide/show translation panel',
+    hideOriginal: 'Hide/show original panel',
     togglePairing: 'Toggle paragraph coloring',
     toggleNumbers: 'Toggle paragraph numbers',
     syncDisabled: '⚠ scroll sync off',
@@ -120,6 +121,7 @@ export const translations = {
   zh: {
     viewToggle: '切换原始视图',
     hideTranslation: '隐藏/显示翻译面板',
+    hideOriginal: '隐藏/显示原文面板',
     togglePairing: '切换段落着色',
     toggleNumbers: '切换段落编号',
     syncDisabled: '⚠ 同步滚动关闭',
@@ -235,6 +237,7 @@ export const translations = {
   hi: {
     viewToggle: 'मूल दृश्य बदलें',
     hideTranslation: 'अनुवाद पैनल छिपाएं/दिखाएं',
+    hideOriginal: 'मूल पैनल छिपाएं/दिखाएं',
     togglePairing: 'पैराग्राफ रंग बदलें',
     toggleNumbers: 'पैराग्राफ नंबर बदलें',
     syncDisabled: '⚠ स्क्रॉल सिंक बंद',
@@ -350,6 +353,7 @@ export const translations = {
   es: {
     viewToggle: 'Alternar vista original',
     hideTranslation: 'Ocultar/mostrar panel de traducción',
+    hideOriginal: 'Ocultar/mostrar panel original',
     togglePairing: 'Alternar color de párrafos',
     toggleNumbers: 'Alternar números de párrafo',
     syncDisabled: '⚠ sincronización desactivada',
@@ -467,6 +471,7 @@ export const translations = {
   fr: {
     viewToggle: 'Afficher vue originale',
     hideTranslation: 'Masquer/afficher le panneau de traduction',
+    hideOriginal: 'Masquer/afficher le panneau d\'origine',
     togglePairing: 'Colorer les paragraphes',
     toggleNumbers: 'Afficher/masquer les numéros de paragraphe',
     syncDisabled: '⚠ sync défilement désactivé',
@@ -585,6 +590,7 @@ export const translations = {
   bn: {
     viewToggle: 'মূল দৃশ্য পরিবর্তন করুন',
     hideTranslation: 'অনুবাদ প্যানেল লুকান/দেখান',
+    hideOriginal: 'মূল প্যানেল লুকান/দেখান',
     togglePairing: 'অনুচ্ছেদ রঙ পরিবর্তন করুন',
     toggleNumbers: 'অনুচ্ছেদ নম্বর পরিবর্তন করুন',
     syncDisabled: '⚠ স্ক্রোল সিঙ্ক বন্ধ',
@@ -700,6 +706,7 @@ export const translations = {
   pt: {
     viewToggle: 'Alternar vista original',
     hideTranslation: 'Ocultar/mostrar painel de tradução',
+    hideOriginal: 'Ocultar/mostrar painel original',
     togglePairing: 'Alternar cor dos parágrafos',
     toggleNumbers: 'Alternar números dos parágrafos',
     syncDisabled: '⚠ sincronização desativada',
@@ -815,6 +822,7 @@ export const translations = {
   ru: {
     viewToggle: 'Переключить оригинальный вид',
     hideTranslation: 'Скрыть/показать панель перевода',
+    hideOriginal: 'Скрыть/показать панель оригинала',
     togglePairing: 'Цветовая разметка абзацев',
     toggleNumbers: 'Нумерация абзацев',
     syncDisabled: '⚠ синхронизация отключена',
@@ -930,6 +938,7 @@ export const translations = {
   ja: {
     viewToggle: '元の表示に切り替え',
     hideTranslation: '翻訳パネルを表示/非表示',
+    hideOriginal: '原文パネルを表示/非表示',
     togglePairing: '段落の色分けを切り替え',
     toggleNumbers: '段落番号を切り替え',
     syncDisabled: '⚠ スクロール同期オフ',
@@ -1045,6 +1054,7 @@ export const translations = {
   id: {
     viewToggle: 'Alihkan tampilan asli',
     hideTranslation: 'Sembunyikan/tampilkan panel terjemahan',
+    hideOriginal: 'Sembunyikan/tampilkan panel asli',
     togglePairing: 'Alihkan pewarnaan paragraf',
     toggleNumbers: 'Alihkan nomor paragraf',
     syncDisabled: '⚠ sinkronisasi gulir mati',
@@ -1160,6 +1170,7 @@ export const translations = {
   de: {
     viewToggle: 'Originalansicht umschalten',
     hideTranslation: 'Übersetzungsbereich ein-/ausblenden',
+    hideOriginal: 'Originalbereich ein-/ausblenden',
     togglePairing: 'Absatzfärbung umschalten',
     toggleNumbers: 'Absatznummerierung umschalten',
     syncDisabled: '⚠ Scroll-Sync deaktiviert',
@@ -1277,6 +1288,7 @@ export const translations = {
   ko: {
     viewToggle: '원본 보기 전환',
     hideTranslation: '번역 패널 숨기기/보이기',
+    hideOriginal: '원문 패널 숨기기/보이기',
     togglePairing: '단락 색상 전환',
     toggleNumbers: '단락 번호 전환',
     syncDisabled: '⚠ 스크롤 동기화 꺼짐',
@@ -1392,6 +1404,7 @@ export const translations = {
   it: {
     viewToggle: 'Mostra vista originale',
     hideTranslation: 'Nascondi/mostra pannello traduzione',
+    hideOriginal: 'Nascondi/mostra pannello originale',
     togglePairing: 'Attiva/disattiva colorazione paragrafi',
     toggleNumbers: 'Attiva/disattiva numeri paragrafo',
     syncDisabled: '⚠ sync scroll disattivato',
@@ -1510,6 +1523,7 @@ export const translations = {
   th: {
     viewToggle: 'สลับมุมมองต้นฉบับ',
     hideTranslation: 'ซ่อน/แสดงแผงแปลภาษา',
+    hideOriginal: 'ซ่อน/แสดงแผงต้นฉบับ',
     togglePairing: 'สลับการระบายสีกลุ่มข้อความ',
     toggleNumbers: 'สลับการแสดงหมายเลขกลุ่มข้อความ',
     syncDisabled: '⚠ ปิดการซิงค์การเลื่อน',
@@ -1625,6 +1639,7 @@ export const translations = {
   fil: {
     viewToggle: 'I-toggle ang orihinal na view',
     hideTranslation: 'Itago/ipakita ang panel ng pagsasalin',
+    hideOriginal: 'Itago/ipakita ang orihinal na panel',
     togglePairing: 'I-toggle ang kulay ng talata',
     toggleNumbers: 'I-toggle ang numero ng talata',
     syncDisabled: '⚠ naka-off ang scroll sync',
@@ -1740,6 +1755,7 @@ export const translations = {
   ar: {
     viewToggle: 'تبديل العرض الأصلي',
     hideTranslation: 'إخفاء/إظهار لوحة الترجمة',
+    hideOriginal: 'إخفاء/إظهار اللوحة الأصلية',
     togglePairing: 'تبديل تلوين الفقرات',
     toggleNumbers: 'تبديل أرقام الفقرات',
     syncDisabled: '⚠ مزامنة التمرير معطلة',
@@ -1855,6 +1871,7 @@ export const translations = {
   sq: {
     viewToggle: 'Kalo pamjen origjinale',
     hideTranslation: 'Fshih/shfaq panelin e përkthimit',
+    hideOriginal: 'Fshih/shfaq panelin origjinal',
     togglePairing: 'Kalo ngjyrosjen e paragrafëve',
     toggleNumbers: 'Kalo numrat e paragrafëve',
     syncDisabled: '⚠ sinkronizimi i lëvizjes çaktivizuar',

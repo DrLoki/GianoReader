@@ -81,6 +81,8 @@ const originalNative = document.getElementById('original-native');
 const hideTranslationBtn = document.getElementById('hide-translation-btn');
 const translationPanel = document.getElementById('translation-panel');
 const divider = document.getElementById('divider');
+const hideOriginalBtn = document.getElementById('hide-original-btn');
+const originalPanel = document.getElementById('original-panel');
 
 const togglePairingBtn = document.getElementById('toggle-pairing-btn');
 const toggleNumbersBtn = document.getElementById('toggle-numbers-btn');
@@ -90,13 +92,14 @@ const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
 
 let translationHidden = false;
+let originalHidden = false;
 let pairingEnabled = false;
 let showNumbers = false;
 
 hideTranslationBtn.addEventListener('click', () => {
   translationHidden = !translationHidden;
   translationPanel.classList.toggle('hidden', translationHidden);
-  divider.classList.toggle('hidden', translationHidden);
+  divider.classList.toggle('hidden', translationHidden || originalHidden);
   hideTranslationBtn.setAttribute('aria-pressed', String(translationHidden));
   hideTranslationBtn.classList.toggle('active', translationHidden);
 
@@ -105,6 +108,9 @@ hideTranslationBtn.addEventListener('click', () => {
       const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
       const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
       translateCurrentChapter(scrollPct);
+      if (scrollPct > 0) {
+        restoreScrollPct(scrollPct);
+      }
     }
   } else {
     if (translationAbortController) {
@@ -113,6 +119,22 @@ hideTranslationBtn.addEventListener('click', () => {
     }
     setTranslationStatus('');
     translationViewer.innerHTML = '';
+  }
+});
+
+hideOriginalBtn.addEventListener('click', () => {
+  originalHidden = !originalHidden;
+  originalPanel.classList.toggle('hidden', originalHidden);
+  divider.classList.toggle('hidden', originalHidden || translationHidden);
+  hideOriginalBtn.setAttribute('aria-pressed', String(originalHidden));
+  hideOriginalBtn.classList.toggle('active', originalHidden);
+
+  if (!originalHidden) {
+    // If the original panel is shown again, sync its scroll position from the translation panel
+    const transMax = Math.max(1, translationViewer.scrollHeight - translationViewer.clientHeight);
+    const scrollPct = transMax > 1 ? (translationViewer.scrollTop / transMax) : 0;
+    const max = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+    originalViewer.scrollTop = Math.round(scrollPct * max);
   }
 });
 
@@ -497,6 +519,10 @@ function applyUiLang(lang) {
   if (hideTranslationBtn) {
     hideTranslationBtn.title = t(lang, 'hideTranslation');
     hideTranslationBtn.setAttribute('aria-label', t(lang, 'hideTranslation'));
+  }
+  if (hideOriginalBtn) {
+    hideOriginalBtn.title = t(lang, 'hideOriginal');
+    hideOriginalBtn.setAttribute('aria-label', t(lang, 'hideOriginal'));
   }
   if (togglePairingBtn) {
     togglePairingBtn.title = t(lang, 'togglePairing');
@@ -1676,6 +1702,37 @@ function renderToc(items, parent = tocList) {
       );
       if (idx >= 0) displayChapter(idx);
     });
+
+    const handleTranslateTooltip = async () => {
+      const currentLang = langSelect.value;
+      const originalText = a.textContent.trim();
+
+      if (a.dataset.translatedLang === currentLang && a.dataset.translatedTitle) {
+        a.title = a.dataset.translatedTitle;
+        return;
+      }
+
+      if (a.dataset.translating === 'true') return;
+      a.dataset.translating = 'true';
+      a.title = t(currentLang, 'loading') || '...';
+
+      try {
+        const translated = await translateParagraphs([originalText], currentLang);
+        if (translated && translated[0]) {
+          a.dataset.translatedTitle = translated[0];
+          a.dataset.translatedLang = currentLang;
+          a.title = translated[0];
+        }
+      } catch (err) {
+        console.error('Error translating chapter title:', err);
+        a.title = originalText;
+      } finally {
+        a.dataset.translating = 'false';
+      }
+    };
+    a.addEventListener('mouseenter', handleTranslateTooltip);
+    a.addEventListener('focus', handleTranslateTooltip);
+
     li.appendChild(a);
     parent.appendChild(li);
     if (item.subitems?.length) {

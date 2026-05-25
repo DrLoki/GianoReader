@@ -203,28 +203,49 @@ body {
 #viewer-wrapper { flex: 1; display: flex; position: relative; overflow: hidden; min-height: 0; }
 
 #original-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-#original-header {
-  padding: 0 16px; background: var(--toolbar-bg);
-  border-bottom: 1px solid var(--border);
-  font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0;
-  letter-spacing: 0.05em; text-transform: uppercase;
-  display: flex; align-items: center; justify-content: space-between;
+/* ── Reader header (unified toolbar) ── */
+#reader-header {
   height: 52px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
 }
-#original-header-left,
-#translation-header-left {
+#reader-header-left,
+#reader-header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+}
+#reader-header-right {
+  justify-content: flex-end;
+}
+#reader-header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+.header-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+#original-header-label,
+#translation-lang-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 /* ── View toggle button ── */
-#original-header-actions,
-#translation-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 
 .view-toggle-btn {
   font-size: 1.1rem;
@@ -284,14 +305,6 @@ body {
 #divider { width: 3px; background: var(--border); flex-shrink: 0; }
 
 #translation-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-#translation-header {
-  padding: 0 16px; background: var(--toolbar-bg);
-  border-bottom: 1px solid var(--border);
-  font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0;
-  display: flex; align-items: center; justify-content: space-between;
-  letter-spacing: 0.05em; text-transform: uppercase;
-  height: 52px;
-}
 #translation-status { font-style: italic; text-transform: none; letter-spacing: 0; }
 
 /* ── Pannelli testo — stile identico ── */
@@ -805,6 +818,7 @@ body.theme-sepia {
 /* SVG inline nei view-toggle-btn: usa currentColor, niente filtro */
 #toggle-pairing-btn svg.icon,
 #toggle-numbers-btn svg.icon,
+#hide-original-btn svg.icon,
 #hide-translation-btn svg.icon,
 #view-toggle-btn svg.icon {
   filter: none !important;
@@ -815,6 +829,7 @@ body.theme-sepia {
 }
 #toggle-pairing-btn:hover:not(:disabled) svg.icon,
 #toggle-numbers-btn:hover:not(:disabled) svg.icon,
+#hide-original-btn:hover:not(:disabled) svg.icon,
 #hide-translation-btn:hover:not(:disabled) svg.icon,
 #view-toggle-btn:hover:not(:disabled) svg.icon {
   color: var(--text);
@@ -823,6 +838,8 @@ body.theme-sepia {
 #toggle-pairing-btn[aria-pressed="true"] svg.icon,
 #toggle-numbers-btn.active svg.icon,
 #toggle-numbers-btn[aria-pressed="true"] svg.icon,
+#hide-original-btn.active svg.icon,
+#hide-original-btn[aria-pressed="true"] svg.icon,
 #hide-translation-btn.active svg.icon,
 #hide-translation-btn[aria-pressed="true"] svg.icon,
 #view-toggle-btn.active svg.icon,
