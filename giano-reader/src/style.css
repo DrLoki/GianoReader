@@ -950,6 +950,19 @@ body.theme-sepia {
   width: 1.3em; height: 1.3em;
 }
 
+/* ── Conversion button ── */
+#convert-btn {
+  background: var(--accent); border: none;
+  color: #fff; cursor: pointer;
+  height: 34px; border-radius: 4px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 10px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+#convert-btn:hover { opacity: 0.85; }
+
 /* ── Library modal ── */
 .modal-box--library {
   max-width: 640px; width: 95%;
@@ -1510,3 +1523,84 @@ html.rtl .text-panel p.para-highlight {
   outline: none;
 }
 
+
+/* ── Conversion Modal ── */
+.modal-box--conversion {
+  max-width: 600px; width: 95%;
+  display: flex; flex-direction: column;
+}
+
+.conversion-file-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.conversion-file-row button {
+  background: var(--accent); color: #fff;
+  border: none; padding: 0 14px; height: 34px; border-radius: 4px;
+  cursor: pointer; font-size: 0.85rem;
+  flex-shrink: 0;
+  display: flex; align-items: center;
+}
+.conversion-file-row button:hover { opacity: 0.85; }
+.conversion-file-row span {
+  font-size: 0.82rem; color: var(--modal-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.conv-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85em;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+}
+
+.conv-progress-track {
+  width: 100%;
+  height: 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.conv-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+#conv-progress-log {
+  width: 100%;
+  height: 160px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  outline: none;
+  margin-bottom: 14px;
+}
+#conv-progress-log:focus { border-color: var(--accent); }
+
+.conversion-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+.conversion-actions button {
+  padding: 0 18px; height: 34px; border-radius: 4px; border: none;
+  cursor: pointer; font-size: 0.85rem;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center;
+}
+.conversion-actions button:hover { opacity: 0.85; }
+.conversion-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+.conversion-actions button.secondary {
+  background: var(--modal-secondary); color: var(--modal-text);
+}

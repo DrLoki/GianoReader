@@ -2,5 +2,11 @@
 .kilo/
 .vscode/
 .antigravity/
+tauri-module/
 package-lock.json
 
+
+# Pdfium native library (downloaded separately, see pdfium/README.md)
+pdfium/*.dll
+pdfium/*.dylib
+pdfium/*.so

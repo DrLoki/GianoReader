@@ -21,6 +21,7 @@
           </svg>
         </button>
         <button id="settings-btn" title="Settings"><img src="/icons/gear.svg" class="icon" alt="" /></button>
+        <button id="convert-btn" class="hidden" title="PDF → ePub">PDF → ePub</button>
       </div>
       <div id="sidebar-controls">
         <label for="lang-select">Translation language</label>
@@ -290,6 +291,12 @@
           <option value="" id="openrouter-model-placeholder">Select a model...</option>
         </select>
       </div>
+      <div class="settings-row">
+        <label for="conversion-model-select">Conversion Model (Image → Markdown)</label>
+        <select id="conversion-model-select">
+          <option value="" id="conversion-model-placeholder">Select a model...</option>
+        </select>
+      </div>
       <div id="settings-about">
         <span id="settings-developed-by"></span>
         <span id="settings-version"></span>
@@ -396,6 +403,34 @@
           <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           <span id="book-detail-save-label">Save</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: PDF to EPUB conversion -->
+  <div id="conversion-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box--conversion">
+      <div class="modal-header">
+        <h2 id="conversion-modal-title">PDF → ePub</h2>
+        <button id="conv-close-btn" class="modal-close">×</button>
+      </div>
+      <div class="conversion-file-row">
+        <button id="conv-select-file-btn">Select PDF...</button>
+        <span id="conv-file-name"></span>
+      </div>
+      <div id="conv-progress-section" class="hidden">
+        <div class="conv-progress-header">
+          <span id="conv-progress-stage"></span>
+          <span id="conv-progress-count"></span>
+        </div>
+        <div class="conv-progress-track">
+          <div id="conv-progress-fill" class="conv-progress-fill"></div>
+        </div>
+      </div>
+      <textarea id="conv-progress-log" readonly></textarea>
+      <div class="conversion-actions">
+        <button id="conv-start-btn" disabled>Start</button>
+        <button id="conv-save-btn" class="hidden">Save EPUB</button>
       </div>
     </div>
   </div>

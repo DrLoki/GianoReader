@@ -2,6 +2,7 @@ import ePub from 'epubjs';
 import { translateParagraphs } from './translator.js';
 import { t, RTL_LANGS } from './i18n.js';
 import { clampSearchDepth } from './settings-utils.js';
+import { formatLogLine, updateProgressBar, formatCost, buildLibraryEntry } from './conversion-utils.js';
 
 // ── Stato applicazione ─────────────────────────────────────────────────────
 let book = null;                    // istanza epubjs corrente
@@ -90,11 +91,30 @@ const viewerWrapper = document.getElementById('viewer-wrapper');
 const toggleTranslationModeBtn = document.getElementById('toggle-translation-mode-btn');
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
+const conversionModelSelect = document.getElementById('conversion-model-select');
+const convertBtn = document.getElementById('convert-btn');
+// Conversion Modal
+const conversionModal = document.getElementById('conversion-modal');
+const convCloseBtn = document.getElementById('conv-close-btn');
+const convSelectFileBtn = document.getElementById('conv-select-file-btn');
+const convFileName = document.getElementById('conv-file-name');
+const convProgressLog = document.getElementById('conv-progress-log');
+const convProgressFill = document.getElementById('conv-progress-fill');
+const convProgressSection = document.getElementById('conv-progress-section');
+const convProgressStage = document.getElementById('conv-progress-stage');
+const convProgressCount = document.getElementById('conv-progress-count');
+const convStartBtn = document.getElementById('conv-start-btn');
+const convSaveBtn = document.getElementById('conv-save-btn');
 
 let translationHidden = false;
 let originalHidden = false;
 let pairingEnabled = false;
 let showNumbers = false;
+let conversionInProgress = false;
+let conversionAborted = false;
+let conversionUnlisten = null;
+let conversionOutputPath = null;
+let selectedPdfPath = null;
 
 hideTranslationBtn.addEventListener('click', () => {
   translationHidden = !translationHidden;
@@ -537,7 +557,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.1' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.0' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -603,6 +623,18 @@ function updateTranslationModeVisibility() {
       translateCurrentChapter(scrollPct);
     }
   }
+}
+
+/**
+ * Shows or hides the Conversion Button based on whether both
+ * openrouterApiKey and conversionModelId are non-empty in settings.
+ */
+function updateConvertBtnVisibility() {
+  if (!convertBtn) return;
+  const s = loadSettings();
+  const hasKey = !!(s.openrouterApiKey || '').trim();
+  const hasModel = !!(s.conversionModelId || '').trim();
+  convertBtn.classList.toggle('hidden', !(hasKey && hasModel));
 }
 
 // Init from saved settings
@@ -675,7 +707,13 @@ function updateTranslationModeVisibility() {
     }
   }
 
+  // Restore conversion model selection
+  if (conversionModelSelect && s.conversionModelId) {
+    conversionModelSelect.value = s.conversionModelId;
+  }
+
   updateTranslationModeVisibility();
+  updateConvertBtnVisibility();
 
   // Sostituisce i select lingua con dropdown custom (bandiere emoji)
   createFlagSelect(langSelect);
@@ -757,6 +795,7 @@ if (openrouterKeyInput) {
     s.openrouterApiKey = openrouterKeyInput.value.trim();
     saveSettings(s);
     updateTranslationModeVisibility();
+    updateConvertBtnVisibility();
   };
   openrouterKeyInput.addEventListener('change', handleKeyUpdate);
   openrouterKeyInput.addEventListener('input', handleKeyUpdate);
@@ -767,6 +806,15 @@ if (openrouterModelSelect) {
     const s = loadSettings();
     s.openrouterModel = openrouterModelSelect.value;
     saveSettings(s);
+  });
+}
+
+if (conversionModelSelect) {
+  conversionModelSelect.addEventListener('change', () => {
+    const s = loadSettings();
+    s.conversionModelId = conversionModelSelect.value;
+    saveSettings(s);
+    updateConvertBtnVisibility();
   });
 }
 
@@ -868,9 +916,334 @@ if (toggleTranslationModeBtn) {
   });
 }
 
-settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
-settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
-settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.add('hidden'); });
+settingsBtn.addEventListener('click', () => {
+  settingsModal.classList.remove('hidden');
+  populateConversionModels();
+});
+settingsCloseBtn.addEventListener('click', () => { settingsModal.classList.add('hidden'); updateConvertBtnVisibility(); });
+settingsModal.addEventListener('click', e => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); updateConvertBtnVisibility(); } });
+
+// ── Conversion Model Select Population ─────────────────────────────────────
+/**
+ * Populates the #conversion-model-select with vision-capable models.
+ * Uses the same OpenRouter models already fetched for translation as the source list.
+ * Disables the select with a placeholder if no models are available.
+ */
+async function populateConversionModels() {
+  if (!conversionModelSelect) return;
+
+  const s = loadSettings();
+  const lang = s.uiLang || 'en';
+
+  // Use the same models already fetched for translation (stored in settings)
+  const models = s.openrouterModels || [];
+
+  if (models.length === 0) {
+    conversionModelSelect.innerHTML = `<option value="" id="conversion-model-placeholder">${t(lang, 'conversionNoModels')}</option>`;
+    conversionModelSelect.disabled = true;
+    return;
+  }
+
+  // Populate with all available models (same list as translation)
+  conversionModelSelect.disabled = false;
+  conversionModelSelect.innerHTML = `<option value="" id="conversion-model-placeholder">${t(lang, 'conversionModelSelect')}</option>`;
+  models.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.name;
+    if (m.id === s.conversionModelId) opt.selected = true;
+    conversionModelSelect.appendChild(opt);
+  });
+}
+
+// ── Conversion Modal open/close ────────────────────────────────────────────
+function resetConversionModal() {
+  selectedPdfPath = null;
+  conversionOutputPath = null;
+  if (convFileName) convFileName.textContent = '';
+  if (convProgressLog) convProgressLog.value = '';
+  if (convProgressFill) convProgressFill.style.width = '0%';
+  if (convProgressSection) convProgressSection.classList.add('hidden');
+  if (convProgressStage) convProgressStage.textContent = '';
+  if (convProgressCount) convProgressCount.textContent = '';
+  if (convStartBtn) convStartBtn.disabled = true;
+  if (convSaveBtn) convSaveBtn.classList.add('hidden');
+}
+
+function openConversionModal() {
+  resetConversionModal();
+  conversionModal.classList.remove('hidden');
+}
+
+function closeConversionModal() {
+  if (conversionInProgress) {
+    const confirmed = confirm('A conversion is in progress. Are you sure you want to close?');
+    if (!confirmed) return;
+    // Abort: stop processing further events
+    conversionAborted = true;
+    // Unregister the Tauri event listener if it exists
+    if (conversionUnlisten) {
+      conversionUnlisten();
+      conversionUnlisten = null;
+    }
+    conversionInProgress = false;
+  }
+  conversionModal.classList.add('hidden');
+  resetConversionModal();
+}
+
+if (convertBtn) convertBtn.addEventListener('click', openConversionModal);
+if (convCloseBtn) convCloseBtn.addEventListener('click', closeConversionModal);
+if (conversionModal) conversionModal.addEventListener('click', e => { if (e.target === conversionModal) closeConversionModal(); });
+
+// ── Conversion Start Logic ─────────────────────────────────────────────────
+/**
+ * Appends a log line to the progress textarea.
+ * @param {string} line - Formatted log line
+ */
+function appendLog(line) {
+  if (!convProgressLog) return;
+  convProgressLog.value += (convProgressLog.value ? '\n' : '') + line;
+  convProgressLog.scrollTop = convProgressLog.scrollHeight;
+}
+
+if (convStartBtn) {
+  convStartBtn.addEventListener('click', async () => {
+    // Validate preconditions
+    const settings = loadSettings();
+    const apiKey = (settings.openrouterApiKey || '').trim();
+    const model = (settings.conversionModelId || '').trim();
+
+    if (!selectedPdfPath || !apiKey || !model) {
+      return;
+    }
+
+    // Disable Start button and set conversion in progress
+    conversionAborted = false;
+    conversionInProgress = true;
+    conversionOutputPath = null;
+    convStartBtn.disabled = true;
+
+    // Show progress section
+    if (convProgressSection) convProgressSection.classList.remove('hidden');
+
+    // Track whether we've logged the page count on first RenderingPages event
+    let renderingFirstEvent = true;
+
+    // Register Tauri event listener for conversion-progress events
+    try {
+      const { listen } = await import('@tauri-apps/api/event');
+      conversionUnlisten = await listen('conversion-progress', (event) => {
+        if (conversionAborted) return;
+
+        const payload = event.payload;
+
+        switch (payload.stage) {
+          case 'RenderingPages': {
+            if (renderingFirstEvent) {
+              appendLog(`Rendering ${payload.total} pages...`);
+              renderingFirstEvent = false;
+            }
+            const progress = updateProgressBar('Rendering pages...', payload.current, payload.total);
+            if (convProgressFill) convProgressFill.style.width = progress.width + '%';
+            if (convProgressStage) convProgressStage.textContent = progress.stageText;
+            if (convProgressCount) convProgressCount.textContent = progress.countText;
+            break;
+          }
+          case 'ExtractingText': {
+            const progress = updateProgressBar('Extracting text...', payload.current, payload.total);
+            if (convProgressFill) convProgressFill.style.width = progress.width + '%';
+            if (convProgressStage) convProgressStage.textContent = progress.stageText;
+            if (convProgressCount) convProgressCount.textContent = progress.countText;
+            break;
+          }
+          case 'GeneratingEpub': {
+            const progress = updateProgressBar('Generating EPUB...', 1, 1);
+            if (convProgressFill) convProgressFill.style.width = progress.width + '%';
+            if (convProgressStage) convProgressStage.textContent = progress.stageText;
+            if (convProgressCount) convProgressCount.textContent = '';
+            break;
+          }
+          case 'Completed': {
+            conversionInProgress = false;
+            conversionOutputPath = payload.output_path;
+
+            // Display TOC detection info
+            if (payload.toc_detected !== undefined) {
+              appendLog(`TOC detected in PDF: ${payload.toc_detected ? 'Yes' : 'No'}`);
+            }
+            if (payload.toc_generated !== undefined) {
+              appendLog(`TOC generated in EPUB: ${payload.toc_generated ? 'Yes' : 'No'}`);
+            }
+
+            // Display cost summary
+            if (payload.cost !== undefined && payload.cost !== null) {
+              appendLog(`Cost: ${formatCost(payload.cost)}`);
+            }
+
+            // Update progress bar to 100%
+            if (convProgressFill) convProgressFill.style.width = '100%';
+            if (convProgressStage) convProgressStage.textContent = 'Completed';
+            if (convProgressCount) convProgressCount.textContent = '';
+
+            // Show Save button
+            if (convSaveBtn) convSaveBtn.classList.remove('hidden');
+
+            // Unregister listener
+            if (conversionUnlisten) {
+              conversionUnlisten();
+              conversionUnlisten = null;
+            }
+            break;
+          }
+          case 'Error': {
+            conversionInProgress = false;
+            appendLog(formatLogLine('error', payload.message));
+            if (convStartBtn) convStartBtn.disabled = false;
+
+            // Unregister listener
+            if (conversionUnlisten) {
+              conversionUnlisten();
+              conversionUnlisten = null;
+            }
+            break;
+          }
+          case 'PageError': {
+            // Single-page failure: warn but don't stop conversion
+            appendLog(formatLogLine('warn', `Page ${payload.page}: ${payload.message}`));
+            break;
+          }
+        }
+      });
+    } catch (err) {
+      console.error('[Conversion] Failed to register event listener:', err);
+    }
+
+    // Build ConversionConfig
+    const config = {
+      input_path: selectedPdfPath,
+      api_key: apiKey,
+      model: model,
+      metadata: { title: '', author: '', language: '', publisher: '' }
+    };
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('plugin:pdf2epub|start_conversion', { config });
+    } catch (err) {
+      // On error, re-enable Start button and log the error
+      conversionInProgress = false;
+      convStartBtn.disabled = false;
+      const errMessage = typeof err === 'string' ? err : (err.message || String(err));
+      appendLog(formatLogLine('error', errMessage));
+      // Unregister listener on invoke failure
+      if (conversionUnlisten) {
+        conversionUnlisten();
+        conversionUnlisten = null;
+      }
+    }
+  });
+}
+
+// ── PDF file selection ─────────────────────────────────────────────────────
+if (convSelectFileBtn) {
+  convSelectFileBtn.addEventListener('click', async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+
+      // User cancelled the dialog
+      if (!selected) return;
+
+      selectedPdfPath = selected;
+      // Display the file name (extract from full path)
+      const fileName = selected.split(/[\\/]/).pop();
+      if (convFileName) convFileName.textContent = fileName;
+
+      // Invoke get_page_count to validate the PDF and display page count
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const pageCount = await invoke('plugin:pdf2epub|get_page_count', { pdfPath: selectedPdfPath });
+        appendLog(`PDF: ${fileName} — ${pageCount} pages`);
+        // Enable Start button after successful file selection and page count
+        if (convStartBtn) convStartBtn.disabled = false;
+      } catch (err) {
+        appendLog(`[ERROR] ${err.message || err}`);
+        // Keep Start button disabled on page count failure
+        if (convStartBtn) convStartBtn.disabled = true;
+      }
+    } catch (err) {
+      console.error('[Conversion] File dialog error:', err);
+    }
+  });
+}
+
+// ── Save EPUB button ───────────────────────────────────────────────────────
+if (convSaveBtn) {
+  convSaveBtn.addEventListener('click', async () => {
+    if (!conversionOutputPath) return;
+
+    // Derive default filename from the PDF filename with .epub extension
+    const pdfName = selectedPdfPath ? selectedPdfPath.split(/[\\/]/).pop() : 'output.pdf';
+    const defaultFilename = pdfName.replace(/\.pdf$/i, '.epub');
+
+    try {
+      // Open native save dialog
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const savePath = await save({
+        filters: [{ name: 'EPUB', extensions: ['epub'] }],
+        defaultPath: defaultFilename
+      });
+
+      // User cancelled the save dialog — keep modal open
+      if (!savePath) return;
+
+      // Copy the generated EPUB to the user's chosen location
+      const { readFile, writeFile } = await import('@tauri-apps/plugin-fs');
+      const data = await readFile(conversionOutputPath);
+      await writeFile(savePath, data);
+
+      // Add EPUB to Library
+      const pdfFilename = selectedPdfPath ? selectedPdfPath.split(/[\\/]/).pop() : 'output.pdf';
+      const entry = buildLibraryEntry({ epub_path: savePath, title: '', author: '' }, pdfFilename);
+      // Adapt to the library entry structure used in main.js
+      const fileName = savePath.split(/[\\/]/).pop();
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      const libEntry = {
+        id,
+        filePath: savePath,
+        fileName,
+        title: entry.title,
+        author: entry.author,
+        publisher: '',
+        language: '',
+        pubdate: '',
+        description: '',
+        fileSize: data.byteLength || 0,
+        pageCount: 0,
+        coverDataUrl: null,
+        status: entry.status,
+        notes: '',
+        addedAt: Date.now(),
+      };
+      await addEntries([libEntry]);
+
+      // On successful save, close the modal without confirm dialog
+      conversionInProgress = false;
+      closeConversionModal();
+
+      // Automatically open the EPUB in the reader
+      const epubData = data.buffer ?? data;
+      await loadEpub(epubData, savePath);
+    } catch (err) {
+      // Write failed — display error in progress log and keep modal open for retry
+      const errMessage = typeof err === 'string' ? err : (err.message || String(err));
+      appendLog(formatLogLine('error', `Save failed: ${errMessage}`));
+    }
+  });
+}
 
 // ── RAM Advisor ────────────────────────────────────────────────────────────
 /**

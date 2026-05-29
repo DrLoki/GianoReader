@@ -29,6 +29,10 @@
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }]
-    }
+    },
+    "pdf2epub:allow-start-conversion",
+    "pdf2epub:allow-get-page-count",
+    "pdf2epub:allow-validate-api-key",
+    "pdf2epub:allow-get-available-models"
   ]
 }
