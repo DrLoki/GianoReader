@@ -1,10 +1,10 @@
-# 🚀 GianoReader Release v0.8.1
+# 🚀 GianoReader Release v0.8.2
 
-This release introduces a **Unified Reader Toolbar** for side-by-side reading layout customization, a new **Dual-Pane Hide/Show Toggle** with automatic scroll-sync restoration, **On-Hover TOC Chapter Translations** in the sidebar, and complete multi-language localized labels across all 19 supported languages.
+This release introduces a **Unified Reader Toolbar** for side-by-side reading layout customization, a new **Dual-Pane Hide/Show Toggle** with automatic scroll-sync restoration, **On-Hover TOC Chapter Translations** in the sidebar, complete multi-language localized labels across all 19 supported languages, and a thorough **Dead Code Removal** of the obsolete Python sidecar pipeline.
 
 ---
 
-## 📝 Changelog (v0.8.0 → v0.8.1)
+## 📝 Changelog (v0.8.0 → v0.8.2)
 
 ### 🖥️ Unified Reader Header & Layout Customization
 - **Unified Toolbar UI**: Consolidated the dual independent header sections into a single, clean **Unified Header Toolbar** at the top of the reader area. This eliminates duplicated controls and matches the premium, minimalist design of GianoReader.
@@ -26,6 +26,15 @@ This release introduces a **Unified Reader Toolbar** for side-by-side reading la
 
 ### 🎨 Visual & Icon Styling Refinements
 - **Theme-Compliant SVG Icons**: Configured SVGs inside the layout toggle buttons to use CSS `currentColor`, aligning with the active color palette across sepia, dark, solarized, monokai, and light reader themes without visual filters.
+
+### 🧹 Dead Code Removal — Python Sidecar Pipeline
+- **Complete Sidecar Removal**: Removed all dead code related to the obsolete Python sidecar PDF semantic extraction pipeline (superseded by the JS-only XY-Cut segmentation engine).
+- **Python Sidecar Directory Deleted**: Removed the entire `python-sidecar/` directory including source files, tests, and cache artifacts.
+- **8 Obsolete JS Modules Deleted**: Removed `sidecar-lifecycle.js`, `pdf-reflow-pipeline.js`, `pdf-navigator-reflow.js`, `pdf-navigator-ui.js`, `reflow-renderer.js`, `cache-manager.js`, `lazy-translation.js`, and `scroll-sync.js` along with their test files.
+- **Rust Backend Stripped**: Removed all sidecar Tauri commands (`start_sidecar`, `stop_sidecar`, `extract_page`, `compute_pdf_hash`, `get_cache_dir`), infrastructure structs, and the `giano-assets://` protocol handler from `lib.rs`.
+- **Leaner Dependencies**: Removed `sha2`, `uuid`, `percent-encoding`, and `tokio` from `Cargo.toml` — the Rust backend now only keeps `tauri`, `serde`, `image`, and `sysinfo`.
+- **Dead i18n Keys Cleaned**: Removed 6 sidecar-related error message keys from all locale objects in `i18n.js`.
+- **Verified Clean Build**: All 418 tests pass, `cargo check` and `npm run build` succeed with no stale references.
 
 ---
 

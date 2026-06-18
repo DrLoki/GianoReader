@@ -42,6 +42,9 @@
           <option value="fil">🇵🇭 Filipino</option>
           <option value="ar">🇸🇦 العربية</option>
           <option value="sq">🇦🇱 Shqip</option>
+          <option value="sv">Svenska</option>
+          <option value="uk">Українська</option>
+          <option value="sl">Slovenščina</option>
         </select>
       </div>
       <div id="book-info" class="hidden">
@@ -118,6 +121,58 @@
           <span id="translation-status"></span>
           <span id="sync-disabled-notice" class="hidden sync-notice"></span>
         </div>
+      </div>
+
+      <!-- TTS Control Bar -->
+      <div id="tts-controls">
+        <button id="tts-play-btn" disabled title="Play" aria-label="Play">
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+            <polygon points="6,4 20,12 6,20"/>
+          </svg>
+        </button>
+        <button id="tts-stop-btn" disabled title="Stop" aria-label="Stop">
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" rx="2"/>
+          </svg>
+        </button>
+
+        <label for="tts-panel-select" class="tts-label" data-i18n="tts_panel">Panel</label>
+        <select id="tts-panel-select" disabled>
+          <option value="original" data-i18n="tts_panel_original">Original</option>
+          <option value="translation" data-i18n="tts_panel_translation">Translation</option>
+        </select>
+
+        <label for="tts-mode-select" class="tts-label" data-i18n="tts_mode">Mode</label>
+        <select id="tts-mode-select" disabled>
+          <option value="free">FREE</option>
+          <option value="pro">PRO</option>
+        </select>
+
+        <select id="tts-model-select" disabled>
+          <option value="canopylabs/orpheus-3b-0.1-ft">Orpheus 3B</option>
+          <option value="hexgrad/kokoro-82m">Kokoro 82M</option>
+          <option value="google/gemini-3.1-flash-tts-preview">Gemini 3.1 Flash TTS</option>
+          <option value="x-ai/grok-voice-tts-1.0">Grok Voice TTS</option>
+          <option value="microsoft/mai-voice-2">Microsoft MAI-Voice-2</option>
+        </select>
+
+        <label for="tts-voice-select" class="tts-label" data-i18n="tts_voice">Voice</label>
+        <select id="tts-voice-select" disabled>
+          <option value="" data-i18n="tts_voice_default">Default</option>
+        </select>
+
+        <label for="tts-rate" class="tts-label" data-i18n="tts_rate">Rate</label>
+        <input type="range" id="tts-rate" min="0.5" max="2" step="0.1" value="1" disabled />
+        <span id="tts-rate-value" class="tts-value">1.0×</span>
+
+        <label for="tts-pitch" class="tts-label" data-i18n="tts_pitch">Pitch</label>
+        <input type="range" id="tts-pitch" min="0.5" max="2" step="0.1" value="1" disabled />
+        <span id="tts-pitch-value" class="tts-value">1.0</span>
+
+        <button id="tts-download-btn" disabled title="Download MP3" aria-label="Download MP3">
+          <img src="/icons/download.svg" class="icon" alt="" />
+        </button>
+        <span id="tts-progress" class="tts-value hidden">0%</span>
       </div>
 
       <!-- Layout sempre affiancato -->
@@ -217,6 +272,9 @@
           <option value="fil">🇵🇭 Filipino</option>
           <option value="ar">🇸🇦 العربية</option>
           <option value="sq">🇦🇱 Shqip</option>
+          <option value="sv">Svenska</option>
+          <option value="uk">Українська</option>
+          <option value="sl">Slovenščina</option>
         </select>
       </div>
       <div class="settings-row">

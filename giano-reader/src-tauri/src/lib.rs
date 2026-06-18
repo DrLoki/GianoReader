@@ -1,10 +1,11 @@
 use sysinfo::System;
+use tauri::Manager;
 
 #[tauri::command]
 fn get_system_ram() -> u64 {
     let mut sys = System::new();
     sys.refresh_memory();
-    sys.total_memory() / 1_048_576 // converti byte → MB
+    sys.total_memory() / 1_048_576 // byte → MB
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,14 +17,12 @@ pub fn run() {
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
-                use tauri::Manager;
                 if let Some(win) = app.get_webview_window("main") {
                     win.open_devtools();
                 }
             }
-            // Icona finestra diversa dall'icona app/desktop
+            // Custom window icon
             {
-                use tauri::Manager;
                 use image::ImageReader;
                 use std::io::Cursor;
                 if let Some(win) = app.get_webview_window("main") {

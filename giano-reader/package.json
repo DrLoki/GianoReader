@@ -1,6 +1,6 @@
 {
   "name": "giano-reader",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -14,7 +14,8 @@
   "dependencies": {
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
-    "epubjs": "^0.3.93"
+    "epubjs": "^0.3.93",
+    "pdfjs-dist": "^5.7.284"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.11.0",

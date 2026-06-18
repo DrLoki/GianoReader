@@ -99,6 +99,14 @@ body {
 }
 #toc-list li a:hover  { background: #2a2a2a; color: #fff; }
 #toc-list li a.active { border-left-color: var(--accent); color: #fff; background: #2a2a2a; }
+#toc-list .toc-item {
+  display: block; padding: 7px 16px;
+  color: #bbb; font-size: 0.8rem; cursor: pointer;
+  border-left: 3px solid transparent; transition: all 0.12s;
+}
+#toc-list .toc-item:hover { background: #2a2a2a; color: #fff; }
+#toc-list .toc-item.active { border-left-color: var(--accent); color: #fff; background: #2a2a2a; }
+#toc-list .toc-sub-item { font-size: 0.75rem; }
 
 /* ── Reader area ── */
 #reader-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
@@ -307,6 +315,25 @@ body {
 #translation-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 #translation-status { font-style: italic; text-transform: none; letter-spacing: 0; }
 
+/* ── PDF translation overlay ── */
+.pdf-page-wrapper {
+  overflow: hidden;
+}
+.pdf-text-overlay {
+  font-family: var(--reader-font-family);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+.pdf-text-overlay.pending {
+  background: transparent;
+  color: transparent;
+}
+.pdf-text-overlay.translated {
+  background: rgba(255, 255, 255, 0.8);
+  color: #000;
+}
+
 /* ── Pannelli testo — stile identico ── */
 .text-panel {
   flex: 1;
@@ -323,9 +350,16 @@ body {
   word-break: break-word;
   overflow-wrap: break-word;
 }
-.text-panel p.pending {
+.text-panel p.pending,
+.text-panel .pending {
   color: var(--text-muted);
   opacity: 0.5;
+}
+.text-panel .translation-error {
+  cursor: pointer;
+  border-left: 3px solid var(--accent, #c0392b);
+  padding-left: 0.5em;
+  opacity: 0.7;
 }
 .text-panel .placeholder {
   color: var(--text-muted); font-style: italic; font-size: 0.9em;
@@ -734,6 +768,17 @@ body.theme-sepia {
   min-width: 36px; text-align: right; flex-shrink: 0;
 }
 
+/* Disabled font controls (PDF canvas mode) */
+.controls-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  position: relative;
+}
+.controls-disabled select,
+.controls-disabled input[type="range"] {
+  cursor: not-allowed;
+}
+
 #settings-about {
   display: flex; justify-content: space-between;
   margin-top: 18px; padding-top: 12px;
@@ -747,6 +792,9 @@ html.rtl #sidebar            { border-right: none; border-left: 1px solid var(--
 html.rtl #toc-list li a      { border-left: none; border-right: 3px solid transparent; }
 html.rtl #toc-list li a.active { border-right-color: var(--accent); }
 html.rtl #toc-list li a:hover  { border-right-color: var(--accent); }
+html.rtl #toc-list .toc-item { border-left: none; border-right: 3px solid transparent; }
+html.rtl #toc-list .toc-item.active { border-right-color: var(--accent); }
+html.rtl #toc-list .toc-item:hover  { border-right-color: var(--accent); }
 html.rtl #bookmarks-bar      { flex-direction: row-reverse; }
 html.rtl .bookmark-item      { flex-direction: row-reverse; border-left: none; border-right: 3px solid transparent; }
 html.rtl .bookmark-item:hover { border-right-color: var(--accent); }
@@ -1082,6 +1130,17 @@ body.theme-sepia {
   flex-shrink: 0;
   background: var(--border);
   display: block;
+}
+
+.lib-pdf-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3a1a1a;
+  color: #e74c3c;
+  font-weight: bold;
+  font-size: 12px;
+  letter-spacing: 1px;
 }
 
 .lib-book-info {
@@ -1510,3 +1569,341 @@ html.rtl .text-panel p.para-highlight {
   outline: none;
 }
 
+
+
+/* ── TTS Controls Bar ── */
+#tts-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 38px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* TTS buttons: play/pause, stop */
+#tts-controls button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.12s, opacity 0.12s;
+}
+#tts-controls button:hover:not(:disabled) {
+  background: var(--surface);
+}
+#tts-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+#tts-controls button.active,
+#tts-controls button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* TTS labels */
+#tts-controls label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* TTS select dropdowns (voice, model, panel) */
+#tts-controls select {
+  padding: 4px 24px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-family);
+  max-width: 140px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+#tts-controls select:focus {
+  border-color: var(--accent);
+}
+#tts-controls select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* TTS sliders (rate, pitch) */
+#tts-controls input[type="range"] {
+  width: 60px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+#tts-controls input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* TTS slider value display */
+#tts-controls .tts-value {
+  font-size: 0.72rem;
+  color: var(--text);
+  min-width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* TTS download button */
+#tts-download-btn {
+  margin-left: auto;
+}
+#tts-download-btn .icon {
+  height: 0.9em;
+}
+
+/* TTS progress indicator (adjacent to download button) */
+#tts-progress {
+  font-size: 0.72rem;
+  color: var(--text);
+  min-width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* TTS divider between control groups */
+#tts-controls .tts-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* TTS mode badge (FREE/PRO) */
+#tts-controls .tts-mode-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#tts-controls .tts-mode-badge.pro {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ── TTS Speaking Highlight ── */
+.tts-speaking {
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent) !important;
+  border-left-color: var(--accent) !important;
+  border-radius: 0 4px 4px 0;
+  transition: background-color 0.2s ease;
+}
+html.rtl .tts-speaking {
+  border-left-color: transparent !important;
+  border-right-color: var(--accent) !important;
+  border-radius: 4px 0 0 4px;
+}
+
+/* Ensure TTS highlight has enough contrast in all themes */
+body.theme-light .tts-speaking,
+body.theme-sepia .tts-speaking {
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+body.theme-monokai .tts-speaking {
+  background-color: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+}
+body.theme-solarized-dark .tts-speaking {
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent) !important;
+}
+body.theme-nord .tts-speaking {
+  background-color: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+}
+
+/* ── TTS Controls disabled state (no book loaded) ── */
+#tts-controls.controls-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ── RTL support for TTS controls ── */
+html.rtl #tts-controls {
+  flex-direction: row-reverse;
+}
+
+
+/* ── PDF Semantic Reflow Styles ── */
+
+/* Reflow container: CSS Grid single-column layout at 100% panel width */
+.text-panel[style*="display: grid"] {
+  gap: 0;
+  align-content: start;
+  width: 100%;
+  font-family: var(--reader-font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+}
+
+/* Reflow block elements — shared base */
+.text-panel [data-segment-id] {
+  font-family: var(--reader-font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  color: var(--text);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+/* Headings */
+.text-panel h1[data-segment-id],
+.text-panel h2[data-segment-id],
+.text-panel h3[data-segment-id],
+.text-panel h4[data-segment-id],
+.text-panel h5[data-segment-id],
+.text-panel h6[data-segment-id] {
+  font-family: var(--reader-font-family);
+  margin: 1em 0 0.5em 0;
+  color: var(--text);
+}
+.text-panel h1[data-segment-id] { font-size: 1.8em; }
+.text-panel h2[data-segment-id] { font-size: 1.5em; }
+.text-panel h3[data-segment-id] { font-size: 1.25em; }
+.text-panel h4[data-segment-id] { font-size: 1.1em; }
+.text-panel h5[data-segment-id] { font-size: 1em; }
+.text-panel h6[data-segment-id] { font-size: 0.9em; }
+.text-panel h1[data-segment-id]:first-child,
+.text-panel h2[data-segment-id]:first-child,
+.text-panel h3[data-segment-id]:first-child {
+  margin-top: 0;
+}
+
+/* Paragraphs (reflow) */
+.text-panel p[data-segment-id] {
+  margin: 0 0 1.2em 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Callout box (aside) */
+.text-panel aside[data-segment-id] {
+  margin: 0.8em 0;
+  padding: 0.8em 1em;
+  border-left: 4px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-radius: 0 4px 4px 0;
+  font-size: var(--font-size);
+}
+html.rtl .text-panel aside[data-segment-id] {
+  border-left: none;
+  border-right: 4px solid var(--accent);
+  border-radius: 4px 0 0 4px;
+}
+
+/* Images (reflow) */
+.text-panel img[data-segment-id] {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.8em 0;
+  border-radius: 4px;
+}
+
+/* Lists (reflow) */
+.text-panel ul[data-segment-id] {
+  margin: 0.6em 0;
+  padding-left: 1.5em;
+  list-style: disc;
+}
+html.rtl .text-panel ul[data-segment-id] {
+  padding-left: 0;
+  padding-right: 1.5em;
+}
+.text-panel ul[data-segment-id] li {
+  margin-bottom: 0.3em;
+  line-height: var(--line-height);
+}
+
+/* Table block */
+.text-panel .table-block[data-segment-id] {
+  margin: 0.8em 0;
+  padding: 0.6em 0.8em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--border) 15%, var(--surface));
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+/* Page header / footer */
+.text-panel header[data-segment-id],
+.text-panel footer[data-segment-id] {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin: 0.4em 0;
+  padding: 0.2em 0;
+  border-bottom: 1px solid var(--border);
+}
+.text-panel footer[data-segment-id] {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+
+/* Pending state — applies to all reflow segment types */
+.text-panel [data-segment-id].pending {
+  opacity: 0.5;
+  color: var(--text-muted);
+}
+
+/* Translation error — visual indicator with click-to-retry cursor */
+.text-panel [data-segment-id].translation-error {
+  cursor: pointer;
+  border-left: 3px solid var(--accent);
+  padding-left: 0.5em;
+  opacity: 0.7;
+}
+html.rtl .text-panel [data-segment-id].translation-error {
+  border-left: none;
+  border-right: 3px solid var(--accent);
+  padding-left: 0;
+  padding-right: 0.5em;
+}
+
+/* Extraction error message */
+.text-panel .extraction-error {
+  color: var(--accent);
+  font-style: italic;
+  padding: 1em 0;
+  font-size: 0.9em;
+}

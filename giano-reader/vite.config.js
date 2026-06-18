@@ -17,11 +17,17 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            if (id.includes('pdfjs-dist') && id.includes('pdf.worker')) {
+              return 'pdf.worker';
+            }
             return 'vendor';
           }
         }
       }
     }
+  },
+  optimizeDeps: {
+    include: ['pdfjs-dist'],
   },
   test: {
     environment: 'jsdom',

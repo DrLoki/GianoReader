@@ -2,6 +2,9 @@ import ePub from 'epubjs';
 import { translateParagraphs } from './translator.js';
 import { t, RTL_LANGS } from './i18n.js';
 import { clampSearchDepth } from './settings-utils.js';
+import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfWithOverlayPlaceholders } from './pdf.js';
+import { clearSegmentationCache } from './pdf-xycut-segmenter.js';
+import ttsController, { isProModeAvailable, makeDownloadFilename } from './tts.js';
 
 // ── Stato applicazione ─────────────────────────────────────────────────────
 let book = null;                    // istanza epubjs corrente
@@ -13,8 +16,15 @@ let translationAbortController = null;
 let lazyObserver = null;            // IntersectionObserver per traduzione lazy
 let currentFilePath = null;         // path assoluto del file aperto (solo Tauri)
 let currentViewMode = 'text';       // 'text' | 'original'
+let currentFileType = null;         // 'epub' | 'pdf'
+let pdfDoc = null;                  // PdfDocument instance (null when EPUB)
+let pdfNav = null;                  // PdfNavigator instance (null when EPUB)
+let pdfBufferCopy = null;           // Copy of PDF ArrayBuffer for hash computation
+let currentPdfHash = '';            // Stable hash for the current PDF (used for segmentation cache)
 
 const LAZY_CHUNK = 12; // paragrafi per chunk di traduzione lazy
+let ttsTranslateChunk = null; // Exposed translateChunk for TTS on-demand translation
+let translatedChunksRef = null; // Reference to translatedChunks Set for TTS retry
 
 const DEFAULT_MAX_FILE_SIZE_MB = 150;
 const DEFAULT_WARN_FILE_SIZE_MB = 50;
@@ -90,6 +100,20 @@ const viewerWrapper = document.getElementById('viewer-wrapper');
 const toggleTranslationModeBtn = document.getElementById('toggle-translation-mode-btn');
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
+
+// TTS Controls
+const ttsPlayBtn = document.getElementById('tts-play-btn');
+const ttsStopBtn = document.getElementById('tts-stop-btn');
+const ttsPanelSelect = document.getElementById('tts-panel-select');
+const ttsRate = document.getElementById('tts-rate');
+const ttsRateValue = document.getElementById('tts-rate-value');
+const ttsPitch = document.getElementById('tts-pitch');
+const ttsPitchValue = document.getElementById('tts-pitch-value');
+const ttsVoiceSelect = document.getElementById('tts-voice-select');
+const ttsModeSelect = document.getElementById('tts-mode-select');
+const ttsModelSelect = document.getElementById('tts-model-select');
+const ttsDownloadBtn = document.getElementById('tts-download-btn');
+const ttsProgress = document.getElementById('tts-progress');
 
 let translationHidden = false;
 let originalHidden = false;
@@ -185,7 +209,7 @@ const FLAG_MAP = {
   it: 'it', en: 'gb', fr: 'fr', de: 'de', es: 'es',
   pt: 'pt', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
   fil: 'ph', sq: 'al', hi: 'in', ko: 'kr', th: 'th',
-  bn: 'in', id: 'id',
+  bn: 'in', id: 'id', sv: 'se', uk: 'ua', sl: 'si',
 };
 
 function createFlagSelect(selectEl) {
@@ -537,7 +561,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.1' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.2' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -604,6 +628,595 @@ function updateTranslationModeVisibility() {
     }
   }
 }
+
+// ── TTS Integration ────────────────────────────────────────────────────────
+
+/**
+ * Enable or disable all TTS controls based on book load status.
+ * @param {boolean} enabled
+ */
+function enableTTSControls(enabled) {
+  if (ttsPlayBtn) ttsPlayBtn.disabled = !enabled;
+  if (ttsStopBtn) ttsStopBtn.disabled = !enabled;
+  if (ttsPanelSelect) ttsPanelSelect.disabled = !enabled;
+  if (ttsRate) ttsRate.disabled = !enabled;
+  if (ttsPitch) ttsPitch.disabled = !enabled;
+  if (ttsVoiceSelect) ttsVoiceSelect.disabled = !enabled;
+  if (ttsModeSelect) ttsModeSelect.disabled = !enabled;
+  if (ttsModelSelect) ttsModelSelect.disabled = !enabled;
+}
+
+/**
+ * Show/hide PRO mode TTS controls based on API key presence.
+ */
+function updateTTSModeVisibility() {
+  if (!ttsModeSelect) return;
+  const s = loadSettings();
+  const apiKey = (s.openrouterApiKey || '').trim();
+  const proAvailable = isProModeAvailable(apiKey);
+
+  // Hide mode selector and its label when PRO is not available
+  ttsModeSelect.classList.toggle('hidden', !proAvailable);
+  const modeLabel = document.querySelector('label[for="tts-mode-select"]');
+  if (modeLabel) modeLabel.classList.toggle('hidden', !proAvailable);
+
+  // Hide model selector when PRO is not available or mode is FREE
+  const showModel = proAvailable && ttsModeSelect.value === 'pro';
+  if (ttsModelSelect) ttsModelSelect.classList.toggle('hidden', !showModel);
+
+  // If PRO not available and mode is pro, revert to free
+  if (!proAvailable && ttsModeSelect.value === 'pro') {
+    ttsModeSelect.value = 'free';
+    ttsController.updateSettings({ mode: 'free' });
+  }
+}
+
+/**
+ * Populate the TTS voice selector based on current language and mode.
+ */
+function populateTTSVoices() {
+  if (!ttsVoiceSelect) return;
+  const state = ttsController.getState();
+  const s = loadSettings();
+
+  // Only populate voices for FREE mode
+  if (ttsModeSelect && ttsModeSelect.value === 'pro') {
+    // Voice options depend on the selected TTS model
+    const selectedModel = ttsModelSelect ? ttsModelSelect.value : '';
+    let voiceOptions;
+
+    if (selectedModel.includes('grok')) {
+      // Grok Voice TTS voices: Eve, Ara, Rex, Sal, Leo
+      voiceOptions = '<option value="eve">Eve</option><option value="ara">Ara</option><option value="rex">Rex</option><option value="sal">Sal</option><option value="leo">Leo</option>';
+    } else if (selectedModel.includes('gemini')) {
+      // Gemini TTS voices
+      voiceOptions = '<option value="Zephyr">Zephyr</option><option value="Puck">Puck</option><option value="Charon">Charon</option><option value="Kore">Kore</option><option value="Fenrir">Fenrir</option><option value="Leda">Leda</option>';
+    } else if (selectedModel.includes('orpheus')) {
+      // Orpheus 3B voices — 8 English preset voices
+      voiceOptions =
+        '<option value="tara">Tara ♀️</option>' +
+        '<option value="leah">Leah ♀️</option>' +
+        '<option value="jess">Jess ♀️</option>' +
+        '<option value="mia">Mia ♀️</option>' +
+        '<option value="zoe">Zoe ♀️</option>' +
+        '<option value="leo">Leo ♂️</option>' +
+        '<option value="dan">Dan ♂️</option>' +
+        '<option value="zac">Zac ♂️</option>';
+    } else if (selectedModel.includes('kokoro')) {
+      // Kokoro 82M voices — organized by language
+      voiceOptions =
+        '<optgroup label="🇺🇸 American English">' +
+        '<option value="af_heart">Heart ♀️</option>' +
+        '<option value="af_bella">Bella ♀️</option>' +
+        '<option value="af_nicole">Nicole ♀️</option>' +
+        '<option value="af_nova">Nova ♀️</option>' +
+        '<option value="af_sarah">Sarah ♀️</option>' +
+        '<option value="af_sky">Sky ♀️</option>' +
+        '<option value="am_adam">Adam ♂️</option>' +
+        '<option value="am_michael">Michael ♂️</option>' +
+        '<option value="am_eric">Eric ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇬🇧 British English">' +
+        '<option value="bf_emma">Emma ♀️</option>' +
+        '<option value="bf_isabella">Isabella ♀️</option>' +
+        '<option value="bm_george">George ♂️</option>' +
+        '<option value="bm_fable">Fable ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇮🇹 Italian">' +
+        '<option value="if_sara">Sara ♀️</option>' +
+        '<option value="im_nicola">Nicola ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇫🇷 French">' +
+        '<option value="ff_siwis">Siwis ♀️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇪🇸 Spanish">' +
+        '<option value="ef_dora">Dora ♀️</option>' +
+        '<option value="em_alex">Alex ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇧🇷 Portuguese">' +
+        '<option value="pf_dora">Dora ♀️</option>' +
+        '<option value="pm_alex">Alex ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇯🇵 Japanese">' +
+        '<option value="jf_alpha">Alpha ♀️</option>' +
+        '<option value="jm_kumo">Kumo ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇨🇳 Chinese">' +
+        '<option value="zf_xiaobei">Xiaobei ♀️</option>' +
+        '<option value="zm_yunjian">Yunjian ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇮🇳 Hindi">' +
+        '<option value="hf_alpha">Alpha ♀️</option>' +
+        '<option value="hm_omega">Omega ♂️</option>' +
+        '</optgroup>';
+    } else if (selectedModel.includes('mai-voice')) {
+      // Microsoft MAI-Voice-2 — Azure locale format voices
+      voiceOptions =
+        '<optgroup label="🇺🇸 English (US)">' +
+        '<option value="en-US-Harper:MAI-Voice-2">Harper ♀️</option>' +
+        '<option value="en-US-Olivia:MAI-Voice-2">Olivia ♀️</option>' +
+        '<option value="en-US-Ethan:MAI-Voice-2">Ethan ♂️</option>' +
+        '<option value="en-US-Jasper:MAI-Voice-2">Jasper ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇮🇹 Italian">' +
+        '<option value="it-IT-Rosa:MAI-Voice-2">Rosa ♀️</option>' +
+        '<option value="it-IT-Luca:MAI-Voice-2">Luca ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇩🇪 German">' +
+        '<option value="de-DE-Mia:MAI-Voice-2">Mia ♀️</option>' +
+        '<option value="de-DE-Klaus:MAI-Voice-2">Klaus ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇫🇷 French">' +
+        '<option value="fr-FR-Soleil:MAI-Voice-2">Soleil ♀️</option>' +
+        '<option value="fr-FR-Marc:MAI-Voice-2">Marc ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇪🇸 Spanish">' +
+        '<option value="es-ES-Marta:MAI-Voice-2">Marta ♀️</option>' +
+        '<option value="es-MX-Valeria:MAI-Voice-2">Valeria ♀️</option>' +
+        '<option value="es-MX-Alejo:MAI-Voice-2">Alejo ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇧🇷 Portuguese">' +
+        '<option value="pt-BR-Luana:MAI-Voice-2">Luana ♀️</option>' +
+        '<option value="pt-BR-Caio:MAI-Voice-2">Caio ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇷🇺 Russian">' +
+        '<option value="ru-RU-Masha:MAI-Voice-2">Masha ♀️</option>' +
+        '<option value="ru-RU-Lev:MAI-Voice-2">Lev ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇨🇳 Chinese">' +
+        '<option value="zh-CN-Mei:MAI-Voice-2">Mei ♀️</option>' +
+        '<option value="zh-CN-Bo:MAI-Voice-2">Bo ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇮🇳 Hindi">' +
+        '<option value="hi-IN-Kavya:MAI-Voice-2">Kavya ♀️</option>' +
+        '<option value="hi-IN-Dhruv:MAI-Voice-2">Dhruv ♂️</option>' +
+        '</optgroup>' +
+        '<optgroup label="🇰🇷 Korean">' +
+        '<option value="ko-KR-Hana:MAI-Voice-2">Hana ♀️</option>' +
+        '<option value="ko-KR-Junho:MAI-Voice-2">Junho ♂️</option>' +
+        '</optgroup>';
+    } else {
+      // Fallback generic voices
+      voiceOptions = '<option value="alloy">Alloy</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="onyx">Onyx</option><option value="nova">Nova</option><option value="shimmer">Shimmer</option>';
+    }
+
+    ttsVoiceSelect.innerHTML = voiceOptions;
+    const savedVoice = s.ttsVoice || ttsVoiceSelect.options[0]?.value || 'tara';
+    if ([...ttsVoiceSelect.options].some(o => o.value === savedVoice)) {
+      ttsVoiceSelect.value = savedVoice;
+    } else {
+      ttsVoiceSelect.value = ttsVoiceSelect.options[0]?.value || '';
+      ttsController.updateSettings({ ttsVoice: ttsVoiceSelect.value });
+    }
+    return;
+  }
+
+  // FREE mode: get voices for the active panel's language
+  const langCode = state.panel === 'translation'
+    ? (s.translationLang || 'en')
+    : (s.sourceLang || s.bookLang || 'en');
+
+  const synth = window.speechSynthesis;
+  if (!synth) return;
+
+  const voices = (() => {
+    const bcp47Prefix = getLangBcp47Prefix(langCode);
+    if (!bcp47Prefix) return [];
+    const fullPrefix = bcp47Prefix.toLowerCase();
+    const langPart = fullPrefix.split('-')[0];
+    return synth.getVoices().filter(v => {
+      const voiceLang = v.lang.toLowerCase();
+      if (voiceLang === fullPrefix || voiceLang.startsWith(fullPrefix + '-')) return true;
+      if (voiceLang === langPart) return true;
+      return false;
+    });
+  })();
+
+  ttsVoiceSelect.innerHTML = '';
+  if (voices.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = ui('tts_voice_default') || 'Default';
+    ttsVoiceSelect.appendChild(opt);
+    return;
+  }
+
+  voices.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.voiceURI;
+    opt.textContent = `${v.name} (${v.lang})`;
+    ttsVoiceSelect.appendChild(opt);
+  });
+
+  // Restore saved voice selection
+  const savedVoiceURI = s.ttsVoiceURI || '';
+  if (savedVoiceURI && voices.some(v => v.voiceURI === savedVoiceURI)) {
+    ttsVoiceSelect.value = savedVoiceURI;
+  }
+}
+
+/**
+ * BCP-47 prefix lookup for voice matching.
+ */
+function getLangBcp47Prefix(langCode) {
+  const map = {
+    it: 'it-IT', en: 'en-US', fr: 'fr-FR', de: 'de-DE',
+    es: 'es-ES', pt: 'pt-PT', ru: 'ru-RU', zh: 'zh-CN',
+    ja: 'ja-JP', ar: 'ar-SA', fil: 'fil-PH', sq: 'sq-AL',
+    hi: 'hi-IN', ko: 'ko-KR', th: 'th-TH', bn: 'bn-BD',
+    id: 'id-ID'
+  };
+  return map[langCode] || null;
+}
+
+/**
+ * Callback for TTS state changes — updates play button icon and control states.
+ * @param {{ status: string, currentIndex: number, panel: string }} state
+ */
+function updateTTSUI(state) {
+  if (!ttsPlayBtn) return;
+
+  if (state.status === 'playing') {
+    // Show pause icon
+    ttsPlayBtn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="5" y="4" width="4" height="16"/><rect x="15" y="4" width="4" height="16"/></svg>';
+    ttsPlayBtn.title = 'Pause';
+    ttsPlayBtn.setAttribute('aria-label', 'Pause');
+  } else {
+    // Show play icon (idle or paused)
+    ttsPlayBtn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6,4 20,12 6,20"/></svg>';
+    ttsPlayBtn.title = 'Play';
+    ttsPlayBtn.setAttribute('aria-label', 'Play');
+  }
+
+  // Update download button and progress on state changes
+  updateTTSDownloadState();
+
+  // Reset progress to "0%" on stop/chapter navigation (buffer cleared),
+  // but keep at current value on natural playback end (buffer retained for download)
+  if (state.status === 'idle' && !ttsController.hasAudioData()) {
+    if (ttsProgress) ttsProgress.textContent = '0%';
+    if (ttsDownloadBtn) {
+      ttsDownloadBtn.disabled = true;
+    }
+  }
+}
+
+/**
+ * Update the download button enabled state and progress indicator visibility
+ * based on the current TTS mode and audio data availability.
+ */
+function updateTTSDownloadState() {
+  const mode = ttsModeSelect ? ttsModeSelect.value : 'free';
+  const isPro = mode === 'pro';
+  const hasAudio = ttsController.hasAudioData();
+  const lang = loadSettings().uiLang || 'en';
+
+  if (ttsDownloadBtn) {
+    ttsDownloadBtn.disabled = !(isPro && hasAudio);
+    ttsDownloadBtn.title = isPro ? t(lang, 'tts_download') : t(lang, 'tts_download_pro_only');
+  }
+
+  if (ttsProgress) {
+    const ttsState = ttsController.getState();
+    const isActive = ttsState.status === 'playing' || ttsState.status === 'paused';
+    // Show progress during active TTS playback regardless of mode;
+    // only hide when TTS is idle AND mode is not PRO
+    if (isActive) {
+      ttsProgress.classList.remove('hidden');
+    } else {
+      ttsProgress.classList.toggle('hidden', !isPro);
+    }
+  }
+}
+
+// ── TTS Download Button ────────────────────────────────────────────────────
+
+if (ttsDownloadBtn) {
+  ttsDownloadBtn.addEventListener('click', () => {
+    const blob = ttsController.getAudioBlob();
+    if (!blob) return;
+
+    const title = bookTitle.textContent || 'unknown';
+    const chapterIdx = currentSpineIndex + 1;
+    const filename = makeDownloadFilename(title, chapterIdx);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+
+// ── TTS Event Listeners ────────────────────────────────────────────────────
+
+if (ttsPlayBtn) {
+  ttsPlayBtn.addEventListener('click', () => {
+    const state = ttsController.getState();
+    if (state.status === 'idle' || state.status === 'paused') {
+      // In FREE mode, check if voices are available for the target language before playing
+      const mode = ttsModeSelect ? ttsModeSelect.value : 'free';
+      if (state.status === 'idle' && mode === 'free' && window.speechSynthesis) {
+        const s = loadSettings();
+        const langCode = state.panel === 'translation'
+          ? (s.translationLang || 'en')
+          : (s.sourceLang || s.bookLang || 'en');
+        const bcp47Prefix = getLangBcp47Prefix(langCode);
+        if (bcp47Prefix) {
+          const fullPrefix = bcp47Prefix.toLowerCase();
+          const langPart = fullPrefix.split('-')[0];
+          const voices = window.speechSynthesis.getVoices().filter(v => {
+            const voiceLang = v.lang.toLowerCase();
+            if (voiceLang === fullPrefix || voiceLang.startsWith(fullPrefix + '-')) return true;
+            if (voiceLang === langPart) return true;
+            return false;
+          });
+          if (voices.length === 0) {
+            // Build a helpful message with a link to the installation guide
+            const guideUrl = 'https://github.com/DrLoki/GianoReader/blob/main/INSTALL_TTS_VOICES.md';
+            let msg = ui('tts_no_voice');
+            const platform = navigator.platform || '';
+            if (platform.startsWith('Win')) {
+              msg += '\n\nWindows: Settings → Time & Language → Speech → Add voices';
+            } else if (platform.startsWith('Mac') || platform.includes('Mac')) {
+              msg += '\n\nmacOS: System Settings → Accessibility → Spoken Content → Manage Voices';
+            } else {
+              msg += '\n\nLinux: install espeak-ng or speech-dispatcher voices';
+            }
+            msg += `\n\nFull guide: ${guideUrl}`;
+            showAlert(msg);
+            return;
+          }
+        }
+      }
+      ttsController.play();
+    } else if (state.status === 'playing') {
+      ttsController.pause();
+    }
+  });
+}
+
+if (ttsStopBtn) {
+  ttsStopBtn.addEventListener('click', () => {
+    ttsController.stop();
+  });
+}
+
+if (ttsPanelSelect) {
+  ttsPanelSelect.addEventListener('change', () => {
+    ttsController.updateSettings({ panel: ttsPanelSelect.value });
+    populateTTSVoices();
+  });
+}
+
+if (ttsRate) {
+  ttsRate.addEventListener('input', () => {
+    const val = parseFloat(ttsRate.value);
+    if (ttsRateValue) ttsRateValue.textContent = val.toFixed(1) + '×';
+    ttsController.updateSettings({ rate: val });
+  });
+}
+
+if (ttsPitch) {
+  ttsPitch.addEventListener('input', () => {
+    const val = parseFloat(ttsPitch.value);
+    if (ttsPitchValue) ttsPitchValue.textContent = val.toFixed(1);
+    ttsController.updateSettings({ pitch: val });
+  });
+}
+
+if (ttsVoiceSelect) {
+  ttsVoiceSelect.addEventListener('change', () => {
+    const mode = ttsModeSelect ? ttsModeSelect.value : 'free';
+    if (mode === 'pro') {
+      ttsController.updateSettings({ ttsVoice: ttsVoiceSelect.value });
+    } else {
+      ttsController.updateSettings({ voiceURI: ttsVoiceSelect.value });
+    }
+  });
+}
+
+if (ttsModeSelect) {
+  ttsModeSelect.addEventListener('change', () => {
+    ttsController.updateSettings({ mode: ttsModeSelect.value });
+    populateTTSVoices();
+    updateTTSModeVisibility();
+    updateTTSDownloadState();
+  });
+}
+
+if (ttsModelSelect) {
+  ttsModelSelect.addEventListener('change', () => {
+    ttsController.updateSettings({ ttsModel: ttsModelSelect.value });
+    populateTTSVoices();
+  });
+}
+
+// ── TTS Initialization ─────────────────────────────────────────────────────
+
+// Hide TTS controls entirely if speechSynthesis is not available (Requirement 2.3)
+if (!window.speechSynthesis) {
+  const ttsControlsBar = document.getElementById('tts-controls');
+  if (ttsControlsBar) ttsControlsBar.classList.add('hidden');
+}
+
+/**
+ * Trigger translation for a range of paragraph indices.
+ * Called by TTS controller when it encounters pending paragraphs.
+ * Reuses the translateChunk() function from translateCurrentChapter().
+ * If translateChunk is not available or chunks are already in-flight,
+ * waits for the pending paragraphs in the range to lose their 'pending' class.
+ * @param {number} startIdx - First paragraph index to translate
+ * @param {number} endIdx - Last paragraph index to translate (inclusive)
+ * @returns {Promise<void>}
+ */
+async function triggerTranslationForRange(startIdx, endIdx) {
+  // Trigger translation chunks if available
+  if (ttsTranslateChunk) {
+    const startChunk = Math.floor(startIdx / LAZY_CHUNK);
+    const endChunk = Math.floor(endIdx / LAZY_CHUNK);
+    const promises = [];
+    for (let i = startChunk; i <= endChunk; i++) {
+      promises.push(ttsTranslateChunk(i));
+    }
+    await Promise.all(promises);
+  }
+
+  // After trigger, verify the TARGET paragraph (startIdx) is actually translated.
+  // translateChunk may have returned immediately if chunks were already in-flight
+  // (translatedChunks.has(chunkIdx) is true but translation not yet complete).
+  const targetEl = translationViewer.querySelector(`[data-idx="${startIdx}"]`);
+  if (!targetEl || !targetEl.classList.contains('pending')) return; // Already translated
+
+  // Wait for the TARGET paragraph to lose its `pending` class using
+  // MutationObserver (responsive) + polling fallback (reliable)
+  await new Promise((resolve) => {
+    let observer = null;
+    let timeoutId = null;
+    let pollId = null;
+
+    const cleanup = () => {
+      if (observer) { observer.disconnect(); observer = null; }
+      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+      if (pollId) { clearInterval(pollId); pollId = null; }
+    };
+
+    // Timeout after 30 seconds
+    timeoutId = setTimeout(() => {
+      console.warn('[TTS] triggerTranslationForRange: timeout waiting for paragraph', startIdx);
+      cleanup();
+      resolve();
+    }, 30000);
+
+    // MutationObserver watches the TARGET paragraph element for class changes
+    observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          if (!targetEl.classList.contains('pending')) {
+            cleanup();
+            resolve();
+            return;
+          }
+        }
+      }
+    });
+
+    observer.observe(targetEl, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    // Polling fallback: check every 300ms in case MutationObserver misses
+    pollId = setInterval(() => {
+      if (!targetEl.classList.contains('pending')) {
+        cleanup();
+        resolve();
+      }
+    }, 300);
+  });
+}
+
+/**
+ * Force-retry translation for a specific chunk by clearing it from
+ * the translatedChunks cache, then re-invoking translateChunk.
+ * Called by TTS retry logic when translation times out.
+ * @param {number} paragraphIdx - A paragraph index within the target chunk
+ */
+function retryTranslationForChunk(paragraphIdx) {
+  if (!ttsTranslateChunk) return;
+  const chunkIdx = Math.floor(paragraphIdx / LAZY_CHUNK);
+  if (translatedChunksRef) {
+    translatedChunksRef.delete(chunkIdx);
+  }
+  ttsTranslateChunk(chunkIdx);
+}
+
+// Initialize TTS controller with DOM references
+ttsController.init({
+  originalViewer: originalViewer,
+  translationViewer: translationViewer,
+  onStateChange: updateTTSUI,
+  onTranslationNeeded: triggerTranslationForRange,
+  onRetryTranslation: retryTranslationForChunk,
+  onError: (err) => {
+    // Display PRO mode errors (HTTP errors, network failures) to the user
+    showAlert(err.message || 'TTS error');
+  }
+});
+
+// Subscribe to TTS progress changes to update the progress indicator and download button
+ttsController._onProgressChange = (pct) => {
+  if (ttsProgress) {
+    const ttsState = ttsController.getState();
+    const isActive = ttsState.status === 'playing' || ttsState.status === 'paused';
+    // Only update text content during active playback (reading progress from paragraph transitions).
+    // This prevents AudioBufferStore download-buffer progress from overwriting reading position.
+    if (isActive) {
+      ttsProgress.textContent = pct + '%';
+      ttsProgress.classList.remove('hidden');
+    }
+  }
+  updateTTSDownloadState();
+};
+
+// Restore TTS settings to UI controls
+(function restoreTTSUI() {
+  const s = loadSettings();
+  if (ttsRate) {
+    const rate = s.ttsRate ?? 1.0;
+    ttsRate.value = rate;
+    if (ttsRateValue) ttsRateValue.textContent = rate.toFixed(1) + '×';
+  }
+  if (ttsPitch) {
+    const pitch = s.ttsPitch ?? 1.0;
+    ttsPitch.value = pitch;
+    if (ttsPitchValue) ttsPitchValue.textContent = pitch.toFixed(1);
+  }
+  if (ttsPanelSelect) {
+    ttsPanelSelect.value = s.ttsPanel || 'original';
+  }
+  if (ttsModeSelect) {
+    ttsModeSelect.value = s.ttsMode || 'free';
+  }
+  if (ttsModelSelect) {
+    ttsModelSelect.value = s.ttsModel || 'canopylabs/orpheus-3b-0.1-ft';
+  }
+  updateTTSModeVisibility();
+  updateTTSDownloadState();
+
+  // Populate voices once they're loaded (some browsers load async)
+  if (window.speechSynthesis) {
+    const loadVoices = () => populateTTSVoices();
+    if (window.speechSynthesis.getVoices().length > 0) {
+      loadVoices();
+    }
+    // Always listen for voiceschanged — voices may reload asynchronously (common in Chrome)
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+  }
+})();
 
 // Init from saved settings
 (function initSettings() {
@@ -757,6 +1370,7 @@ if (openrouterKeyInput) {
     s.openrouterApiKey = openrouterKeyInput.value.trim();
     saveSettings(s);
     updateTranslationModeVisibility();
+    updateTTSModeVisibility();
   };
   openrouterKeyInput.addEventListener('change', handleKeyUpdate);
   openrouterKeyInput.addEventListener('input', handleKeyUpdate);
@@ -959,6 +1573,19 @@ function errMsg(err) {
 
 // ── Progress bar ───────────────────────────────────────────────────────────
 function updateProgress() {
+  // PDF navigation
+  if (currentFileType === 'pdf' && pdfNav) {
+    const total = pdfNav.totalUnits;
+    const pct = total <= 1 ? 0 : (pdfNav.currentIndex / (total - 1)) * 100;
+    progressFill.style.width = `${pct}%`;
+    progressThumb.style.left = `${pct}%`;
+    pageInfo.textContent = pdfNav.currentLabel;
+    prevBtn.disabled = pdfNav.currentIndex <= 0;
+    nextBtn.disabled = pdfNav.currentIndex >= total - 1;
+    return;
+  }
+
+  // EPUB navigation
   const total = currentSpineItems.length;
   if (!total) {
     progressFill.style.width = '0%';
@@ -980,6 +1607,19 @@ function updateProgress() {
 // Click sulla barra → naviga al capitolo corrispondente
 progressTrack.addEventListener('click', e => {
   if (e.target.classList.contains('progress-tick')) return;
+
+  // PDF navigation
+  if (currentFileType === 'pdf' && pdfNav) {
+    const rect = progressTrack.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const index = Math.round(ratio * (pdfNav.totalUnits - 1));
+    if (pdfNav.goTo(index)) {
+      displayPdfUnit();
+    }
+    return;
+  }
+
+  // EPUB navigation
   if (!currentSpineItems.length) return;
   const rect = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -1042,6 +1682,24 @@ function updateActiveTick() {
 
 // Tooltip sull'hover generico sulla barra
 progressTrack.addEventListener('mousemove', e => {
+  // PDF tooltip
+  if (currentFileType === 'pdf' && pdfNav) {
+    const rect = progressTrack.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    // Find the nearest tick by position
+    const ticks = progressTicks.querySelectorAll('.progress-tick');
+    let nearest = null;
+    let minDist = Infinity;
+    ticks.forEach(tick => {
+      const tickPos = parseFloat(tick.style.left) / 100;
+      const dist = Math.abs(tickPos - ratio);
+      if (dist < minDist) { minDist = dist; nearest = tick; }
+    });
+    if (nearest) showTooltip(nearest, nearest.dataset.label, parseFloat(nearest.style.left));
+    return;
+  }
+
+  // EPUB tooltip
   if (!currentSpineItems.length) return;
   const rect = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -1130,8 +1788,16 @@ function bindSyncScroll() {
     }, 50); // 50ms per smaltire l'inerzia e gli eventi asincroni del browser
   };
 
-  originalViewer.onscroll = () => handleScroll(originalViewer, translationViewer);
-  translationViewer.onscroll = () => handleScroll(translationViewer, originalViewer);
+  // In PDF Original View mode, sync between originalNative (canvas panel) and translationViewer
+  if (currentViewMode === 'original' && currentFileType === 'pdf') {
+    originalViewer.onscroll = null;
+    originalNative.onscroll = () => handleScroll(originalNative, translationViewer);
+    translationViewer.onscroll = () => handleScroll(translationViewer, originalNative);
+  } else {
+    originalNative.onscroll = null;
+    originalViewer.onscroll = () => handleScroll(originalViewer, translationViewer);
+    translationViewer.onscroll = () => handleScroll(translationViewer, originalViewer);
+  }
 }
 
 // ── View mode ──────────────────────────────────────────────────────────────
@@ -1151,23 +1817,101 @@ function setViewMode(mode, { skipRender = false } = {}) {
   if (isOriginal) {
     originalViewer.onscroll = null;
     translationViewer.onscroll = null;
-    if (!skipRender && book && currentSpineItems.length) {
-      renderNativeView();
+    if (!skipRender) {
+      if (currentFileType === 'pdf' && pdfDoc && pdfNav) {
+        renderNativeView();
+        // For PDF, also trigger translation overlay
+        if (!translationHidden) {
+          translateCurrentChapter(0);
+        }
+      } else if (book && currentSpineItems.length) {
+        renderNativeView();
+      }
     }
   } else {
+    // Switching back to text mode — abort any active PDF overlay translation and clean up
+    if (currentFileType === 'pdf') {
+      // Abort active translation immediately (Req 6.2)
+      if (translationAbortController) translationAbortController.abort();
+      if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
+      // Remove all overlay placeholders from the Translation Panel DOM (Req 6.2)
+      translationViewer.innerHTML = '';
+      disableFontControls(false);
+      originalNative.innerHTML = '';
+      originalNative.onscroll = null;
+    }
     bindSyncScroll();
-    if (!skipRender && book && currentSpineItems.length) {
-      displayChapter(currentSpineIndex);
+    if (!skipRender) {
+      if (currentFileType === 'pdf' && pdfDoc && pdfNav) {
+        displayChapter(pdfNav.currentIndex);
+      } else if (book && currentSpineItems.length) {
+        displayChapter(currentSpineIndex);
+      }
     }
   }
 
-  // Avviso nel pannello di traduzione
-  syncDisabledNotice.classList.toggle('hidden', !isOriginal);
+  // Avviso nel pannello di traduzione (hide for PDF since translation works in both modes)
+  syncDisabledNotice.classList.toggle('hidden', !isOriginal || currentFileType === 'pdf');
+}
+
+// ── Font controls disable/enable (PDF canvas mode) ────────────────────────
+function disableFontControls(disabled) {
+  const fontRow = fontFamilySelect ? fontFamilySelect.closest('.settings-row') : null;
+  const sizeRow = fontSizeRange ? fontSizeRange.closest('.settings-row-inline') : null;
+  const ctxFontSelect = document.getElementById('ctx-font-select');
+  const ctxSizeRange = document.getElementById('ctx-size-range');
+  const ctxFontGroup = ctxFontSelect ? ctxFontSelect.closest('.context-menu-group') : null;
+  const ctxSizeGroup = ctxSizeRange ? ctxSizeRange.closest('.context-menu-group') : null;
+
+  const elements = [fontRow, sizeRow, ctxFontGroup, ctxSizeGroup].filter(Boolean);
+
+  if (disabled) {
+    const tooltip = ui('pdf_canvas_tooltip');
+    elements.forEach(el => {
+      el.classList.add('controls-disabled');
+      el.title = tooltip;
+    });
+    if (fontFamilySelect) fontFamilySelect.disabled = true;
+    if (fontSizeRange) fontSizeRange.disabled = true;
+    if (ctxFontSelect) ctxFontSelect.disabled = true;
+    if (ctxSizeRange) ctxSizeRange.disabled = true;
+  } else {
+    elements.forEach(el => {
+      el.classList.remove('controls-disabled');
+      el.title = '';
+    });
+    if (fontFamilySelect) fontFamilySelect.disabled = false;
+    if (fontSizeRange) fontSizeRange.disabled = false;
+    if (ctxFontSelect) ctxFontSelect.disabled = false;
+    if (ctxSizeRange) ctxSizeRange.disabled = false;
+  }
 }
 
 // ── Native view rendering ──────────────────────────────────────────────────
 async function renderNativeView() {
   originalNative.innerHTML = '';
+
+  // ── PDF canvas rendering ──────────────────────────────────────────────────
+  if (currentFileType === 'pdf') {
+    if (!pdfDoc || !pdfNav) {
+      originalNative.innerHTML = `<p class="placeholder">${ui('noContent')}</p>`;
+      return;
+    }
+    try {
+      const range = pdfNav.pageRange;
+      const pageNumbers = [];
+      for (let i = range.start; i <= range.end; i++) pageNumbers.push(i);
+
+      await renderPdfCanvas(pdfDoc.proxy, pageNumbers, originalNative);
+      disableFontControls(true);
+    } catch (err) {
+      console.error('[native] PDF canvas rendering error:', err);
+      originalNative.innerHTML = `<p class="placeholder">${ui('pdf_rendering_unavailable')}</p>`;
+    }
+    return;
+  }
+
+  // ── EPUB iframe rendering ─────────────────────────────────────────────────
   if (book) {
     try {
       const spineItem = currentSpineItems[currentSpineIndex];
@@ -1290,16 +2034,173 @@ function renderTranslationPlaceholder(msg) {
   translationViewer.scrollTop = 0;
 }
 
+/**
+ * Shrinks the font size of an overlay element until its content fits within its maxHeight.
+ * Reduces font by 0.5px steps down to a minimum of 6px.
+ */
+function shrinkFontToFit(el) {
+  const maxH = parseFloat(el.style.maxHeight);
+  if (!maxH || maxH <= 0) return;
+  let fontSize = parseFloat(el.style.fontSize);
+  const minFontSize = 6;
+  // Check if content overflows
+  while (el.scrollHeight > maxH && fontSize > minFontSize) {
+    fontSize -= 0.5;
+    el.style.fontSize = fontSize + 'px';
+  }
+}
+
+// ── PDF overlay translation ────────────────────────────────────────────────
+// Renders the PDF canvas in the translation panel with translated text overlaid
+// at the exact position of each paragraph, using the full column width.
+async function translatePdfOverlay(startPct = 0) {
+  translationAbortController = new AbortController();
+  const signal = translationAbortController.signal;
+
+  const lang = langSelect.value;
+  const rawLabel = langSelect.options[langSelect.selectedIndex].text;
+  translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
+
+  if (!currentChapterParagraphs.length) {
+    renderTranslationPlaceholder(ui('noTextToTranslate'));
+    return;
+  }
+
+  translationViewer.innerHTML = '';
+  translationViewer.scrollTop = 0;
+  setTranslationStatus('');
+
+  try {
+    const pageRange = pdfNav.pageRange;
+    const pageNumbers = [];
+    for (let i = pageRange.start; i <= pageRange.end; i++) pageNumbers.push(i);
+
+    // Render PDF canvas with overlay placeholders
+    const pagesData = await renderPdfWithOverlayPlaceholders(
+      pdfDoc.proxy, pageNumbers, translationViewer, currentPdfHash
+    );
+
+    if (signal.aborted) return;
+
+    // Enable scroll sync
+    bindSyncScroll();
+
+    // Skip translation entirely when all pages have no text (Requirement 7.3)
+    if (pagesData.allEmpty) {
+      setTranslationStatus('');
+      return;
+    }
+
+    // Collect all translatable blocks across pages (skip noTranslate placeholders)
+    const allBlocks = [];
+    for (const page of pagesData) {
+      for (const block of page.blocks) {
+        if (!block.noTranslate) {
+          allBlocks.push(block);
+        }
+      }
+    }
+
+    if (allBlocks.length === 0) {
+      setTranslationStatus('');
+      return;
+    }
+
+    // Translate in chunks
+    const total = allBlocks.length;
+    const totalChunks = Math.ceil(total / LAZY_CHUNK);
+    const translatedChunks = new Set();
+
+    async function translateOverlayChunk(chunkIdx) {
+      if (signal.aborted || translatedChunks.has(chunkIdx) || chunkIdx < 0 || chunkIdx >= totalChunks) return;
+      translatedChunks.add(chunkIdx);
+      const start = chunkIdx * LAZY_CHUNK;
+      const end = Math.min(start + LAZY_CHUNK, total);
+      const slice = allBlocks.slice(start, end).map(b => b.text);
+      setTranslationStatus(`${Math.round((translatedChunks.size / totalChunks) * 100)}%`);
+
+      try {
+        const translated = await translateParagraphs(slice, lang, signal);
+        if (signal.aborted) return;
+        for (let i = 0; i < translated.length; i++) {
+          const block = allBlocks[start + i];
+          block.el.textContent = translated[i] || slice[i];
+          block.el.classList.remove('pending');
+          block.el.classList.add('translated');
+          // Auto-shrink font if text overflows the box
+          shrinkFontToFit(block.el);
+        }
+        if (translatedChunks.size >= totalChunks) setTranslationStatus('');
+      } catch (err) {
+        if (signal.aborted) return;
+        // Requirement 4.6: keep placeholders in pending state, continue other batches
+        console.warn('[translate-overlay] chunk error', chunkIdx, err);
+      }
+    }
+
+    // Start from chunk corresponding to startPct
+    const startChunk = Math.min(
+      Math.floor((startPct / 100) * totalChunks),
+      totalChunks - 1
+    );
+
+    await translateOverlayChunk(startChunk);
+    if (signal.aborted) return;
+
+    // Translate chunks above (fire-and-forget)
+    for (let i = startChunk - 1; i >= 0; i--) {
+      translateOverlayChunk(i);
+    }
+
+    // Lazy translate chunks below
+    let nextDownChunk = startChunk + 1;
+    function observeNextOverlaySentinel() {
+      if (nextDownChunk >= totalChunks) return;
+      const sentinelIdx = Math.min(nextDownChunk * LAZY_CHUNK - 1, total - 1);
+      const sentinel = allBlocks[sentinelIdx]?.el;
+      if (!sentinel) return;
+
+      lazyObserver = new IntersectionObserver(async (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          lazyObserver.unobserve(entry.target);
+          await translateOverlayChunk(nextDownChunk++);
+          if (signal.aborted) return;
+          observeNextOverlaySentinel();
+        }
+      }, { root: translationViewer, threshold: 0.1 });
+      lazyObserver.observe(sentinel);
+    }
+    observeNextOverlaySentinel();
+
+  } catch (err) {
+    if (signal.aborted) return;
+    console.error('[translate-overlay] rendering error:', err);
+    renderTranslationPlaceholder(ui('errorChapter') + errMsg(err));
+  }
+}
+
+  const lang = langSelect.value;
+  const rawLabel = langSelect.options[langSelect.selectedIndex].text;
+  translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
 // ── Traduzione lazy ────────────────────────────────────────────────────────
 // startPct: percentuale di scroll da cui partire (0-100). Traduce prima il chunk
 // visibile a quella posizione, poi espande lazy verso il basso e verso l'alto.
 async function translateCurrentChapter(startPct = 0) {
+  ttsTranslateChunk = null; // Reset on re-entry / chapter change
+  translatedChunksRef = null;
   if (translationAbortController) translationAbortController.abort();
   if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
 
   if (translationHidden) {
     setTranslationStatus('');
     translationViewer.innerHTML = '';
+    return;
+  }
+
+  // PDF overlay mode: render canvas + translated text overlay (only in original view mode)
+  if (currentFileType === 'pdf' && pdfDoc && pdfNav && currentViewMode === 'original') {
+    await translatePdfOverlay(startPct);
     return;
   }
 
@@ -1345,6 +2246,7 @@ async function translateCurrentChapter(startPct = 0) {
 
   // Traduce un chunk specifico per indice
   const translatedChunks = new Set();
+  translatedChunksRef = translatedChunks;
   async function translateChunk(chunkIdx) {
     if (signal.aborted || translatedChunks.has(chunkIdx) || chunkIdx < 0 || chunkIdx >= totalChunks) return;
     translatedChunks.add(chunkIdx);
@@ -1357,6 +2259,7 @@ async function translateCurrentChapter(startPct = 0) {
       if (signal.aborted) return;
       for (let i = 0; i < translated.length; i++) {
         pEls[start + i].innerHTML = `<span class="para-num">${start + i + 1}</span>${escapeHtml(translated[i] || slice[i])}`;
+        pEls[start + i].setAttribute('data-translated', 'true');
         pEls[start + i].classList.remove('pending');
       }
       if (translatedChunks.size >= totalChunks) setTranslationStatus('');
@@ -1371,6 +2274,9 @@ async function translateCurrentChapter(startPct = 0) {
       }
     }
   }
+
+  // Expose translateChunk for TTS on-demand translation
+  ttsTranslateChunk = translateChunk;
 
   // Traduce il chunk visibile per primo, poi quelli precedenti (verso l'alto), poi lazy verso il basso
   await translateChunk(startChunk);
@@ -1429,7 +2335,7 @@ openBtn.addEventListener('click', async () => {
     if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
       const { open } = await import('@tauri-apps/plugin-dialog');
       const { readFile, stat } = await import('@tauri-apps/plugin-fs');
-      const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub'] }] });
+      const selected = await open({ filters: [{ name: 'Books', extensions: ['epub', 'pdf'] }] });
       if (!selected) return;
       fileName = selected;
       // Get file size before reading
@@ -1485,6 +2391,7 @@ openBtn.addEventListener('click', async () => {
     }
     const ext = fileName.split('.').pop().toLowerCase();
     if (ext === 'epub') await loadEpub(fileData, fileName);
+    else if (ext === 'pdf') await loadPdfFile(fileData, fileName);
     else await showAlert(ui('unsupportedFormat'));
   } catch (err) {
     console.error('[open]', err);
@@ -1497,7 +2404,7 @@ function pickFileViaInput() {
   return new Promise(resolve => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.epub';
+    input.accept = '.epub,.pdf';
     input.onchange = async () => {
       const file = input.files[0];
       if (!file) return resolve(null);
@@ -1524,6 +2431,10 @@ function isOomError(err) {
 }
 
 async function loadEpub(arrayBuffer, filePath = '') {
+  // Stop TTS and disable controls before loading new book
+  ttsController.stop();
+  enableTTSControls(false);
+
   // Distruggi il libro precedente
   if (book) {
     try { book.destroy(); } catch (_) { }
@@ -1532,6 +2443,10 @@ async function loadEpub(arrayBuffer, filePath = '') {
     currentChapterParagraphs = [];
     currentFilePath = null;
   }
+  // Clear PDF state when loading EPUB
+  currentFileType = 'epub';
+  pdfDoc = null;
+  pdfNav = null;
 
   showLoading(ui('loadingEpub'));
   hideNoBookPlaceholder();
@@ -1552,6 +2467,15 @@ async function loadEpub(arrayBuffer, filePath = '') {
     bookAuthor.textContent = meta.creator || '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
+
+    // Save the book's source language for TTS voice matching
+    if (meta.language) {
+      const bookLang = meta.language.split('-')[0].toLowerCase(); // e.g. 'it-IT' → 'it'
+      const s = loadSettings();
+      s.sourceLang = bookLang;
+      saveSettings(s);
+    }
+
     try { const url = await book.coverUrl(); if (url) coverImg.src = url; } catch (_) { }
 
     // Auto-aggiunta alla libreria quando si apre un libro (solo in Tauri con path assoluto)
@@ -1576,6 +2500,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
     updateProgress();
     buildProgressTicks(currentSpineItems, nav.toc);
     addBookmarkBtn.disabled = false;
+    enableTTSControls(true);
+    populateTTSVoices();
 
     // Trova il primo capitolo con contenuto reale (salta copertina/frontmatter).
     // Prima passa: cerca "chapter/capitolo" nel nome file.
@@ -1609,8 +2535,328 @@ async function loadEpub(arrayBuffer, filePath = '') {
   }
 }
 
+// ── Carica PDF ─────────────────────────────────────────────────────────────
+
+// ── PDF Navigation UI ──────────────────────────────────────────────────────
+
+/**
+ * Updates the UI after navigating to a new PDF unit (chapter or page).
+ * Updates progress bar, page indicator, active tick, and renders content.
+ */
+function displayPdfUnit() {
+  if (!pdfNav) return;
+  updateProgress();
+  updatePdfActiveTick();
+  updatePdfTocActive();
+  // Render content for the new unit (handles both text and original modes)
+  displayChapter(pdfNav.currentIndex);
+}
+
+/**
+ * Renders tick marks on the progress bar for PDF navigation units.
+ */
+function renderPdfTicks() {
+  progressTicks.innerHTML = '';
+  if (!pdfNav) return;
+
+  const positions = pdfNav.getTickPositions();
+  const total = pdfNav.totalUnits;
+
+  positions.forEach((pos, i) => {
+    const pct = pos * 100;
+    const tick = document.createElement('div');
+    tick.className = 'progress-tick';
+    tick.style.left = `${pct}%`;
+    tick.dataset.idx = i;
+
+    // Determine the navigation unit index this tick corresponds to
+    let unitIndex;
+    if (pdfNav.mode === 'chapter') {
+      unitIndex = i;
+    } else if (total <= 20) {
+      unitIndex = i;
+    } else {
+      // Page mode P > 20: ticks are every 10 pages
+      unitIndex = i * 10;
+    }
+
+    // Label for tooltip
+    let label;
+    if (pdfNav.mode === 'chapter') {
+      const saved = pdfNav.currentIndex;
+      pdfNav.goTo(unitIndex);
+      label = pdfNav.currentLabel;
+      pdfNav.goTo(saved);
+    } else {
+      label = `Pag. ${unitIndex + 1}`;
+    }
+    tick.dataset.label = label;
+    tick.dataset.unitIndex = unitIndex;
+
+    tick.addEventListener('click', e => {
+      e.stopPropagation();
+      if (pdfNav.goTo(unitIndex)) {
+        displayPdfUnit();
+      }
+    });
+    tick.addEventListener('mouseenter', () => showTooltip(tick, label, pct));
+    tick.addEventListener('mouseleave', hideTooltip);
+    progressTicks.appendChild(tick);
+  });
+}
+
+/**
+ * Highlights the active tick for the current PDF navigation unit.
+ */
+function updatePdfActiveTick() {
+  const currentUnit = pdfNav.currentIndex;
+  progressTicks.querySelectorAll('.progress-tick').forEach(el => {
+    const tickUnit = parseInt(el.dataset.unitIndex ?? el.dataset.idx);
+    // In page mode P > 20, highlight the tick whose unit range includes the current page
+    if (pdfNav.mode === 'page' && pdfNav.totalUnits > 20) {
+      const nextTickUnit = tickUnit + 10;
+      el.classList.toggle('active', currentUnit >= tickUnit && currentUnit < nextTickUnit);
+    } else {
+      el.classList.toggle('active', tickUnit === currentUnit);
+    }
+  });
+}
+
+// ── PDF TOC Sidebar ──────────────────────────────────────────────────────────
+
+/**
+ * Renders the PDF table of contents in the sidebar.
+ * In chapter mode: populates tocList with entries from pdfNav.getTocEntries().
+ * In page mode: shows the localized "No table of contents available" placeholder.
+ */
+function renderPdfToc() {
+  tocList.innerHTML = '';
+
+  if (!pdfNav || pdfNav.mode === 'page') {
+    // Show placeholder message for page mode (no outline)
+    tocPlaceholder.textContent = ui('pdf_toc_placeholder');
+    tocPlaceholder.style.display = '';
+    return;
+  }
+
+  tocPlaceholder.style.display = 'none';
+
+  const entries = pdfNav.getTocEntries();
+  entries.forEach(entry => {
+    const li = document.createElement('li');
+    li.textContent = entry.label;
+    li.style.paddingLeft = (entry.level * 16) + 'px';
+    li.classList.add('toc-item');
+    if (entry.level > 0) li.classList.add('toc-sub-item');
+
+    li.addEventListener('click', () => {
+      pdfNav.goTo(entry.index);
+      displayPdfUnit();
+      updatePdfTocActive();
+    });
+
+    tocList.appendChild(li);
+  });
+
+  updatePdfTocActive();
+}
+
+/**
+ * Highlights the active TOC entry matching the current PDF navigation unit.
+ */
+function updatePdfTocActive() {
+  if (!pdfNav || pdfNav.mode === 'page') return;
+
+  const items = tocList.querySelectorAll('.toc-item');
+  const entries = pdfNav.getTocEntries();
+
+  items.forEach((item, i) => {
+    if (entries[i] && entries[i].index === pdfNav.currentIndex) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+async function loadPdfFile(arrayBuffer, filePath = '') {
+  // Stop TTS and disable controls before loading new book
+  ttsController.stop();
+  enableTTSControls(false);
+
+  // Destroy previous book if any
+  if (book) {
+    try { book.destroy(); } catch (_) { }
+    book = null;
+    currentSpineItems = [];
+    currentChapterParagraphs = [];
+  }
+  // Clear previous PDF state
+  pdfDoc = null;
+  pdfNav = null;
+  // Clear segmentation cache for new document
+  clearSegmentationCache();
+  currentPdfHash = '';
+  currentFilePath = filePath || null;
+
+  showLoading(ui('readingFile'));
+  hideNoBookPlaceholder();
+
+  try {
+    const s = loadSettings();
+    const maxMB = typeof s.maxFileSizeMB === 'number' ? s.maxFileSizeMB : DEFAULT_MAX_FILE_SIZE_MB;
+
+    // File size check
+    if (!checkFileSize(arrayBuffer.byteLength, maxMB)) {
+      hideLoading();
+      await showAlert(ui('pdf_error_too_large', { size: (arrayBuffer.byteLength / 1024 / 1024).toFixed(1), max: maxMB }));
+      return;
+    }
+
+    // Copy the buffer before loadPdf consumes it (pdf.js transfers the ArrayBuffer to its worker)
+    pdfBufferCopy = arrayBuffer.slice(0);
+
+    // Load PDF
+    let doc;
+    try {
+      const filename = (filePath || '').split(/[\\/]/).pop() || '';
+      doc = await loadPdf(arrayBuffer, filename);
+    } catch (err) {
+      hideLoading();
+      const msg = (err && err.message && err.message.includes('magic bytes'))
+        ? ui('pdf_error_invalid')
+        : ui('pdf_error_open');
+      await showAlert(msg);
+      return;
+    }
+
+    // Validate text content
+    const validation = await validateTextContent(doc.proxy);
+    if (validation === 'blocked') {
+      hideLoading();
+      await showAlert(ui('pdf_blocked_dialog'));
+      return;
+    }
+
+    // Create navigator
+    const nav = await PdfNavigator.create(doc.proxy, doc.outline);
+
+    // Success — set state
+    pdfDoc = doc;
+    pdfNav = nav;
+    currentFileType = 'pdf';
+    currentFilePath = filePath || null;
+
+    // Compute pdfHash from filename + file size (stable, cheap)
+    const pdfFilename = (filePath || '').split(/[\\/]/).pop() || '';
+    currentPdfHash = `${pdfFilename}:${pdfBufferCopy.byteLength}`;
+
+    // Display title in sidebar
+    bookTitle.textContent = doc.title || ui('unknownTitle');
+    bookAuthor.textContent = doc.author || '';
+    bookInfo.classList.remove('hidden');
+    tocPlaceholder.style.display = 'none';
+    coverImg.src = '';
+
+    // Auto-add to library (Tauri with absolute path)
+    if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
+      autoAddToLibrary(arrayBuffer, filePath, { title: doc.title, creator: doc.author });
+    }
+
+    addBookmarkBtn.disabled = false;
+    enableTTSControls(true);
+    populateTTSVoices();
+    setViewMode('text'); // Normal view mode — old pipeline handles rendering
+    viewToggleBtn.disabled = false;
+
+    // Initialize PDF progress bar and navigation UI
+    renderPdfTicks();
+    renderPdfToc();
+    displayPdfUnit();
+
+    hideLoading();
+  } catch (err) {
+    pdfDoc = null;
+    pdfNav = null;
+    currentFileType = null;
+    hideLoading();
+    await showAlert(ui('pdf_error_open') + ' ' + errMsg(err));
+  }
+}
+
 // ── Naviga a un capitolo (parsing diretto, senza iframe) ───────────────────
 async function displayChapter(index, scrollPct = 0) {
+  // Stop TTS on chapter navigation
+  ttsController.stop();
+
+  // ── PDF branch ──────────────────────────────────────────────────────────
+  if (currentFileType === 'pdf') {
+    if (!pdfDoc || !pdfNav) return;
+    if (translationAbortController) translationAbortController.abort();
+
+    // Navigate to the requested unit
+    pdfNav.goTo(index);
+    currentChapterParagraphs = [];
+    renderOriginal([]);
+    renderTranslationPlaceholder(ui('loadingChapter'));
+    updateProgress();
+
+    try {
+      // Get the page range for current unit
+      const pageRange = pdfNav.pageRange;
+
+      // Get UI language for localized messages
+      const s = loadSettings();
+      const lang = s.uiLang || 'en';
+
+      // Extract text from all pages in the range
+      const paragraphs = await extractChapterText(pdfDoc.proxy, pageRange, lang);
+
+      // Store for translation use
+      currentChapterParagraphs = paragraphs;
+
+      // Update progress and ticks
+      updateProgress();
+      updateActiveTick();
+
+      if (currentViewMode === 'original') {
+        await renderNativeView();
+        // For PDF, also trigger translation overlay in the translation panel
+        if (!translationHidden) {
+          await translateCurrentChapter(scrollPct);
+        }
+      } else {
+        // Render in the original panel
+        renderOriginal(paragraphs);
+
+        // Detect "all scanned-image" case: every paragraph is a notice (starts with '[')
+        const allScanned = paragraphs.length > 0 && paragraphs.every(p => {
+          const text = (typeof p === 'string') ? p : (p.text || '');
+          return text.trimStart().startsWith('[');
+        });
+
+        if (allScanned) {
+          // Show "no text to translate" message instead of attempting translation
+          renderTranslationPlaceholder(ui('pdf_no_text_translate'));
+          bindSyncScroll();
+        } else {
+          // Trigger translation pipeline
+          await translateCurrentChapter(scrollPct);
+        }
+
+        // Restore scroll position if provided
+        if (scrollPct > 0) restoreScrollPct(scrollPct);
+      }
+    } catch (err) {
+      console.error('[nav] PDF chapter load error:', err);
+      renderOriginal([]);
+      renderTranslationPlaceholder(ui('errorChapter') + errMsg(err));
+    }
+    return;
+  }
+
+  // ── EPUB branch ─────────────────────────────────────────────────────────
   if (!book || !currentSpineItems.length) return;
   if (translationAbortController) translationAbortController.abort();
 
@@ -1746,10 +2992,18 @@ function renderToc(items, parent = tocList) {
 
 // ── Navigazione capitoli ───────────────────────────────────────────────────
 prevBtn.addEventListener('click', () => {
+  if (currentFileType === 'pdf' && pdfNav) {
+    if (pdfNav.prev()) { displayPdfUnit(); }
+    return;
+  }
   if (!book || currentSpineIndex <= 0) return;
   displayChapter(currentSpineIndex - 1);
 });
 nextBtn.addEventListener('click', () => {
+  if (currentFileType === 'pdf' && pdfNav) {
+    if (pdfNav.next()) { displayPdfUnit(); }
+    return;
+  }
   if (!book || currentSpineIndex >= currentSpineItems.length - 1) return;
   displayChapter(currentSpineIndex + 1);
 });
@@ -1759,6 +3013,12 @@ langSelect.addEventListener('change', () => {
   const s = loadSettings();
   s.translationLang = langSelect.value;
   saveSettings(s);
+  // Stop TTS if reading the translation panel (language changed)
+  const ttsState = ttsController.getState();
+  if (ttsState.panel === 'translation' && ttsState.status !== 'idle') {
+    ttsController.stop();
+  }
+  populateTTSVoices();
   if (currentChapterParagraphs.length) translateCurrentChapter();
 });
 
@@ -1776,6 +3036,20 @@ document.addEventListener('keydown', e => {
     if (!nextBtn.disabled) nextBtn.click();
     e.preventDefault();
     return;
+  }
+
+  // Left/Right arrow keys navigate PDF units (without alt)
+  if (currentFileType === 'pdf' && pdfNav) {
+    if (e.key === 'ArrowLeft') {
+      if (pdfNav.prev()) { displayPdfUnit(); }
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'ArrowRight') {
+      if (pdfNav.next()) { displayPdfUnit(); }
+      e.preventDefault();
+      return;
+    }
   }
 
   const lineH = 16 * 1.8;
@@ -1820,17 +3094,34 @@ addBookmarkBtn.addEventListener('click', async () => {
   const bms = await loadBookmarks();
   const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
   const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
-  const bm = {
-    id: Date.now(),
-    filePath: currentFilePath || '',
-    fileName: currentFilePath
-      ? currentFilePath.split(/[\\/]/).pop()
-      : (bookTitle.textContent || 'libro'),
-    bookTitle: bookTitle.textContent || '',
-    chapterIndex: currentSpineIndex,
-    chapterLabel: getChapterLabel(currentSpineIndex),
-    scrollPct,
-  };
+
+  let bm;
+  if (currentFileType === 'pdf') {
+    bm = {
+      id: Date.now(),
+      filePath: currentFilePath || '',
+      fileName: (currentFilePath || '').split(/[\\/]/).pop() || '',
+      bookTitle: (pdfDoc && pdfDoc.title) || bookTitle.textContent || '',
+      chapterIndex: pdfNav ? pdfNav.currentIndex : 0,
+      chapterLabel: pdfNav ? pdfNav.currentLabel : '',
+      scrollPct,
+      fileType: 'pdf',
+      pageNumber: pdfNav ? pdfNav.pageRange.start : 1,
+    };
+  } else {
+    bm = {
+      id: Date.now(),
+      filePath: currentFilePath || '',
+      fileName: currentFilePath
+        ? currentFilePath.split(/[\\/]/).pop()
+        : (bookTitle.textContent || 'libro'),
+      bookTitle: bookTitle.textContent || '',
+      chapterIndex: currentSpineIndex,
+      chapterLabel: getChapterLabel(currentSpineIndex),
+      scrollPct,
+    };
+  }
+
   bms.push(bm);
   await saveBookmarks(bms);
   await renderBookmarks();
@@ -1967,7 +3258,10 @@ async function askRelocate(bm) {
       bookmarkMissingModal.classList.add('hidden');
       try {
         const { open } = await import('@tauri-apps/plugin-dialog');
-        const selected = await open({ filters: [{ name: 'eBook', extensions: ['epub'] }] });
+        const filters = bm.fileType === 'pdf'
+          ? [{ name: 'PDF', extensions: ['pdf'] }]
+          : [{ name: 'eBook', extensions: ['epub'] }];
+        const selected = await open({ filters });
         resolve(selected || null);
       } catch (err) {
         console.error('[bookmark] relocation dialog error:', err);
@@ -2065,6 +3359,14 @@ async function loadBookmarkFile(bm) {
         setViewMode('original', { skipRender: true });
       }
       if (bm.chapterIndex > 0 && bm.chapterIndex < currentSpineItems.length) {
+        await displayChapter(bm.chapterIndex, bm.scrollPct ?? 0);
+      } else if (bm.scrollPct > 0) {
+        restoreScrollPct(bm.scrollPct);
+      }
+    } else if (ext === 'pdf' || bm.fileType === 'pdf') {
+      await loadPdfFile(fileData, bm.filePath);
+      // Navigate to saved unit and restore scroll position
+      if (pdfNav && typeof bm.chapterIndex === 'number') {
         await displayChapter(bm.chapterIndex, bm.scrollPct ?? 0);
       } else if (bm.scrollPct > 0) {
         restoreScrollPct(bm.scrollPct);
@@ -2208,8 +3510,8 @@ async function readDirRecursive(dirPath, maxDepth = 3) {
           await walk(entryPath, currentDepth + 1);
         }
       } else {
-        const name = entry.name || '';
-        if (name.toLowerCase().endsWith('.epub')) {
+        const name = (entry.name || '').toLowerCase();
+        if (name.endsWith('.epub') || name.endsWith('.pdf')) {
           results.push(entryPath);
         }
       }
@@ -2221,9 +3523,30 @@ async function readDirRecursive(dirPath, maxDepth = 3) {
 
 async function extractMetadata(filePath) {
   const fileName = filePath.split(/[\\/]/).pop();
-  const titleFallback = fileName.replace(/\.epub$/i, '');
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
   const addedAt = Date.now();
+
+  // ── PDF branch ──────────────────────────────────────────────────────────
+  if (fileName.toLowerCase().endsWith('.pdf')) {
+    const titleFallback = fileName.replace(/\.pdf$/i, '');
+    try {
+      const { readFile } = await import('@tauri-apps/plugin-fs');
+      const raw = await readFile(filePath);
+      const buffer = raw.buffer ?? raw;
+      const fileSize = buffer.byteLength;
+      try {
+        const doc = await loadPdf(buffer, fileName);
+        return { id, filePath, fileName, title: doc.title || titleFallback, author: doc.author || '', publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: doc.pageCount || 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
+      } catch {
+        return { id, filePath, fileName, title: titleFallback, author: '', fileSize: fileSize ?? 0, pageCount: 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
+      }
+    } catch {
+      return { id, filePath, fileName, title: titleFallback, author: '', fileSize: 0, pageCount: 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
+    }
+  }
+
+  // ── EPUB branch ─────────────────────────────────────────────────────────
+  const titleFallback = fileName.replace(/\.epub$/i, '');
 
   try {
     const { readFile } = await import('@tauri-apps/plugin-fs');
@@ -2330,15 +3653,25 @@ async function autoAddToLibrary(arrayBuffer, filePath, meta) {
     const lib = await loadLibrary();
     if (lib.some(e => e.filePath === filePath)) return; // already in library
     const fileName = filePath.split(/[\\/]/).pop();
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const addedAt = Date.now();
+    const fileSize = arrayBuffer.byteLength || 0;
+
+    // ── PDF branch ──────────────────────────────────────────────────────
+    if (currentFileType === 'pdf') {
+      const title = meta.title || fileName.replace(/\.pdf$/i, '');
+      const author = meta.creator || '';
+      await addEntries([{ id, filePath, fileName, title, author, publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt }]);
+      return;
+    }
+
+    // ── EPUB branch ─────────────────────────────────────────────────────
     const title = meta.title || fileName.replace(/\.epub$/i, '');
     const author = meta.creator || '';
     const publisher = meta.publisher || '';
     const language = meta.language || '';
     const pubdate = meta.pubdate ? meta.pubdate.slice(0, 4) : '';
     const description = meta.description || '';
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    const addedAt = Date.now();
-    const fileSize = arrayBuffer.byteLength || 0;
     // Add immediately without cover so the entry appears right away
     await addEntries([{ id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount: 0, coverDataUrl: null, status: 'to-read', notes: '', addedAt }]);
     // Extract cover in background and update the entry
@@ -2391,7 +3724,7 @@ async function scanFolder(rootPath) {
     const maxDepth = loadSettings().searchDepth ?? 3;
     const epubPaths = await readDirRecursive(rootPath, maxDepth);
     if (!epubPaths.length) {
-      libStatus.textContent = ui('libNoEpubFound');
+      libStatus.textContent = ui('libNoBooksFound');
       return;
     }
     const newEntries = [];
@@ -2465,6 +3798,13 @@ async function renderLibraryGrid(query = '', statusFilter = '', appendMore = fal
     } else {
       img.src = '';
       img.style.background = '#2a2a2a';
+      if (entry.fileType === 'pdf') {
+        img.style.display = 'none';
+        const placeholder = document.createElement('div');
+        placeholder.className = 'lib-book-cover lib-pdf-placeholder';
+        placeholder.textContent = 'PDF';
+        card.appendChild(placeholder);
+      }
     }
     const info = document.createElement('div');
     info.className = 'lib-book-info';
@@ -2650,7 +3990,12 @@ async function openBookFromLibrary(entry) {
         const idx = lib.findIndex(e => e.id === entry.id);
         if (idx >= 0) { lib[idx].status = 'reading'; await saveLibrary(lib); }
       }
-      await loadEpub(fileData, entry.filePath);
+      // Route to the correct loader based on file type
+      if (entry.fileType === 'pdf' || (entry.filePath || '').toLowerCase().endsWith('.pdf')) {
+        await loadPdfFile(fileData, entry.filePath);
+      } else {
+        await loadEpub(fileData, entry.filePath);
+      }
     } catch (err) {
       await showAlert(ui('errorOpening') + errMsg(err));
     }
