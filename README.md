@@ -52,12 +52,15 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 - SVG icons (Font Awesome 6 Free) instead of emoji
 - Language dropdowns with SVG flag images (compatible with WebView2 on Windows)
 - Window geometry persistence across restarts (Tauri only)
-- **i18n Developer Automations**: Integrated script in `.antigravity/` to automatically align and synchronize all 17 translation locales instantly
+- **AI Text-to-Speech (TTS)**: Multi-model TTS engine with FREE (browser SpeechSynthesis) and PRO (OpenRouter) modes supporting Orpheus 3B, Kokoro 82M, Gemini Flash TTS, Grok Voice TTS, and Microsoft MAI-Voice-2 — with audio download to WAV/MP3
+- **Resizable Library Modal**: User-resizable library window for comfortable browsing of large collections
+- **Clean Library Tool**: One-click verification of all book file links with removal of broken entries
+- **i18n Developer Automations**: Integrated script in `.antigravity/` to automatically align and synchronize all 20 translation locales instantly
 
 ## 🌍 Supported Languages
 
-Giano Reader supports 17 interface languages:
-English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Filipino, Arabic, Albanian.
+Giano Reader supports 20 interface languages:
+English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Filipino, Arabic, Albanian, Swedish, Ukrainian, Slovenian.
 
 ---
 
@@ -108,8 +111,9 @@ giano-reader/
 │       ├── ru.svg, cn.svg, jp.svg, sa.svg, ph.svg, al.svg
 ├── src/
 │   ├── main.js             # All frontend logic: reader, UI, bookmarks, library, scroll sync
+│   ├── tts.js              # Text-to-Speech engine (FREE/PRO, multi-model, audio download)
 │   ├── translator.js       # Google Translate integration (chunked, lazy)
-│   ├── i18n.js             # UI translations (17 languages); exports t(lang, key, vars)
+│   ├── i18n.js             # UI translations (20 languages); exports t(lang, key, vars)
 │   ├── settings-utils.js   # Pure utility functions (no DOM); used by main.js and tests
 │   └── style.css           # All styles (dark mode via body.dark)
 └── src-tauri/
@@ -151,6 +155,24 @@ Giano Reader includes premium tools designed to speed up comprehension and make 
 The library scans local folders for EPUB files and stores book metadata (title, author, publisher, year, language, description, cover thumbnail, estimated page count, file size) persistently. 
 
 To prevent web browser storage quota limitations (`localStorage` is limited to ~5MB), **Giano Reader desktop (Tauri) automatically migrates all library metadata and bookmarks to secure JSON files directly on your local filesystem** (`giano-library.json` and `giano-bookmarks.json` in the app's system data directory). This supports virtually unlimited library sizes and prevents `QuotaExceededError` crashes when scanning thousands of ebooks. The browser version retains a fast fallback storage mode. Books can be filtered by reading status (To read / Reading / Read) and searched by title or author. The scan depth (1–10 folder levels) is configurable in Settings.
+
+The **Clean Library** tool verifies that all stored book paths still exist on disk. Any broken links are presented in a modal with the option to remove them in one click.
+
+---
+
+## 🎙️ Text-to-Speech (TTS)
+
+Giano Reader includes a dual-mode TTS engine for listening to your books:
+
+*   **FREE Mode**: Uses the browser's built-in `SpeechSynthesis` API with available system voices. No configuration needed.
+*   **PRO Mode**: Connects to **OpenRouter** to access high-quality neural TTS models:
+    - **Orpheus 3B** — 8 English voices (Tara, Leah, Jess, Mia, Zoe, Leo, Dan, Zac)
+    - **Kokoro 82M** — Multilingual voices across English, Italian, French, Spanish, Portuguese, Japanese, Chinese, Hindi
+    - **Gemini 3.1 Flash TTS** — 30 expressive voices with style descriptors
+    - **Grok Voice TTS** — 5 voices (Eve, Ara, Rex, Sal, Leo) with 20+ language support
+    - **Microsoft MAI-Voice-2** — Natural voices across 10 languages
+
+All voices display ♀️/♂️ gender indicators. PRO mode accumulates audio as you listen and enables a **Download** button (far right of the TTS toolbar) that opens a native "Save As" dialog to export the chapter audio as MP3 or WAV.
 
 ---
 
