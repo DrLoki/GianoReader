@@ -561,7 +561,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.2' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.3' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -579,6 +579,8 @@ function applyUiLang(lang) {
   if (_libPlaceholder) _libPlaceholder.textContent = t(lang, 'libEmpty');
   const _libClearBtn = document.getElementById('lib-clear-btn');
   if (_libClearBtn) _libClearBtn.title = t(lang, 'libClear');
+  const _libCheckBtn = document.getElementById('lib-check-btn');
+  if (_libCheckBtn) _libCheckBtn.title = t(lang, 'libCheck');
   const _libSearchInput = document.getElementById('lib-search-input');
   if (_libSearchInput) _libSearchInput.placeholder = t(lang, 'libSearchPlaceholder');
   // Status filter options
@@ -686,11 +688,45 @@ function populateTTSVoices() {
     let voiceOptions;
 
     if (selectedModel.includes('grok')) {
-      // Grok Voice TTS voices: Eve, Ara, Rex, Sal, Leo
-      voiceOptions = '<option value="eve">Eve</option><option value="ara">Ara</option><option value="rex">Rex</option><option value="sal">Sal</option><option value="leo">Leo</option>';
+      // Grok Voice TTS voices
+      voiceOptions = '<option value="eve">Eve ♀️</option><option value="ara">Ara ♀️</option><option value="rex">Rex ♂️</option><option value="sal">Sal ♂️</option><option value="leo">Leo ♂️</option>';
     } else if (selectedModel.includes('gemini')) {
-      // Gemini TTS voices
-      voiceOptions = '<option value="Zephyr">Zephyr</option><option value="Puck">Puck</option><option value="Charon">Charon</option><option value="Kore">Kore</option><option value="Fenrir">Fenrir</option><option value="Leda">Leda</option>';
+      // Gemini TTS voices (30 prebuilt voices, subset shown)
+      voiceOptions =
+        '<optgroup label="Female">' +
+        '<option value="Zephyr">Zephyr ♀️ — Bright</option>' +
+        '<option value="Kore">Kore ♀️ — Firm</option>' +
+        '<option value="Leda">Leda ♀️ — Youthful</option>' +
+        '<option value="Aoede">Aoede ♀️ — Breezy</option>' +
+        '<option value="Callirrhoe">Callirrhoe ♀️ — Easy-going</option>' +
+        '<option value="Autonoe">Autonoe ♀️ — Bright</option>' +
+        '<option value="Despina">Despina ♀️ — Smooth</option>' +
+        '<option value="Erinome">Erinome ♀️ — Clear</option>' +
+        '<option value="Laomedeia">Laomedeia ♀️ — Upbeat</option>' +
+        '<option value="Achernar">Achernar ♀️ — Soft</option>' +
+        '<option value="Pulcherrima">Pulcherrima ♀️ — Forward</option>' +
+        '<option value="Vindemiatrix">Vindemiatrix ♀️ — Gentle</option>' +
+        '<option value="Sadachbia">Sadachbia ♀️ — Lively</option>' +
+        '<option value="Sulafat">Sulafat ♀️ — Warm</option>' +
+        '</optgroup>' +
+        '<optgroup label="Male">' +
+        '<option value="Puck">Puck ♂️ — Upbeat</option>' +
+        '<option value="Charon">Charon ♂️ — Informative</option>' +
+        '<option value="Fenrir">Fenrir ♂️ — Excitable</option>' +
+        '<option value="Orus">Orus ♂️ — Firm</option>' +
+        '<option value="Enceladus">Enceladus ♂️ — Breathy</option>' +
+        '<option value="Iapetus">Iapetus ♂️ — Clear</option>' +
+        '<option value="Umbriel">Umbriel ♂️ — Easy-going</option>' +
+        '<option value="Algieba">Algieba ♂️ — Smooth</option>' +
+        '<option value="Algenib">Algenib ♂️ — Gravelly</option>' +
+        '<option value="Rasalgethi">Rasalgethi ♂️ — Informative</option>' +
+        '<option value="Alnilam">Alnilam ♂️ — Firm</option>' +
+        '<option value="Schedar">Schedar ♂️ — Even</option>' +
+        '<option value="Gacrux">Gacrux ♂️ — Mature</option>' +
+        '<option value="Achird">Achird ♂️ — Friendly</option>' +
+        '<option value="Zubenelgenubi">Zubenelgenubi ♂️ — Casual</option>' +
+        '<option value="Sadaltager">Sadaltager ♂️ — Knowledgeable</option>' +
+        '</optgroup>';
     } else if (selectedModel.includes('orpheus')) {
       // Orpheus 3B voices — 8 English preset voices
       voiceOptions =
@@ -796,8 +832,8 @@ function populateTTSVoices() {
         '<option value="ko-KR-Junho:MAI-Voice-2">Junho ♂️</option>' +
         '</optgroup>';
     } else {
-      // Fallback generic voices
-      voiceOptions = '<option value="alloy">Alloy</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="onyx">Onyx</option><option value="nova">Nova</option><option value="shimmer">Shimmer</option>';
+      // Fallback generic voices (OpenAI-style)
+      voiceOptions = '<option value="alloy">Alloy ♀️</option><option value="echo">Echo ♂️</option><option value="fable">Fable ♂️</option><option value="onyx">Onyx ♂️</option><option value="nova">Nova ♀️</option><option value="shimmer">Shimmer ♀️</option>';
     }
 
     ttsVoiceSelect.innerHTML = voiceOptions;
@@ -932,22 +968,47 @@ function updateTTSDownloadState() {
 // ── TTS Download Button ────────────────────────────────────────────────────
 
 if (ttsDownloadBtn) {
-  ttsDownloadBtn.addEventListener('click', () => {
+  ttsDownloadBtn.addEventListener('click', async () => {
     const blob = ttsController.getAudioBlob();
     if (!blob) return;
 
     const title = bookTitle.textContent || 'unknown';
     const chapterIdx = currentSpineIndex + 1;
-    const filename = makeDownloadFilename(title, chapterIdx);
+    let filename = makeDownloadFilename(title, chapterIdx);
+    const model = ttsModelSelect ? ttsModelSelect.value : '';
+    const isGemini = model.includes('gemini');
+    if (isGemini) {
+      filename = filename.replace(/\.mp3$/, '.wav');
+    }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+    if (isTauri) {
+      try {
+        const { save } = await import('@tauri-apps/plugin-dialog');
+        const { writeFile } = await import('@tauri-apps/plugin-fs');
+        const ext = isGemini ? 'wav' : 'mp3';
+        const filterName = isGemini ? 'WAV Audio' : 'MP3 Audio';
+        const savePath = await save({
+          defaultPath: filename,
+          filters: [{ name: filterName, extensions: [ext] }]
+        });
+        if (!savePath) return;
+        const arrayBuffer = await blob.arrayBuffer();
+        await writeFile(savePath, new Uint8Array(arrayBuffer));
+      } catch (err) {
+        console.error('[TTS] Download error:', err);
+        await showAlert(ui('errorOpening') + errMsg(err));
+      }
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   });
 }
 
@@ -1745,22 +1806,36 @@ function safeInnerHtml(el) {
 }
 
 // Estrae paragrafi da un nodo DOM (body di un capitolo EPUB)
-// Restituisce oggetti { text, html } — text per la traduzione, html per il rendering
+// Restituisce oggetti { text, html, id } — text per la traduzione, html per il rendering, id per la navigazione
 function extractParagraphs(body) {
   const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'];
   const blocks = body.querySelectorAll?.(selectors.join(', '));
   if (blocks && blocks.length > 0) {
     const r = [];
+    const seenIds = new Set();
     blocks.forEach(el => {
       const text = (el.textContent || '').trim();
-      if (text) r.push({ text, html: safeInnerHtml(el) });
+      if (!text) return;
+      // Prefer the element's own ID; fall back to the nearest ancestor with an ID
+      let id = el.id || null;
+      if (!id) {
+        let parent = el.parentElement;
+        while (parent && parent !== body) {
+          if (parent.id) { id = parent.id; break; }
+          parent = parent.parentElement;
+        }
+      }
+      // Avoid assigning the same ancestor ID to multiple paragraphs
+      if (id && seenIds.has(id)) id = null;
+      if (id) seenIds.add(id);
+      r.push({ text, html: safeInnerHtml(el), id });
     });
     if (r.length) return r;
   }
   // Fallback: split per newline (funziona anche su XMLDocument)
   return (body.textContent || '').split('\n')
     .map(l => l.trim()).filter(l => l.length > 2)
-    .map(text => ({ text, html: escapeHtml(text) }));
+    .map(text => ({ text, html: escapeHtml(text), id: null }));
 }
 
 // ── Scroll sincronizzato tra i due pannelli ────────────────────────────────
@@ -1961,9 +2036,15 @@ window.addEventListener('message', e => {
 
   if (filePart) {
     // Link a un altro capitolo (con o senza ancora)
-    const idx = currentSpineItems.findIndex(i =>
-      i.href === filePart || i.href?.endsWith(filePart) || filePart?.endsWith(i.href)
-    );
+    const spineItem = book.spine.get(filePart);
+    let idx = spineItem ? currentSpineItems.indexOf(spineItem) : -1;
+    if (idx < 0) {
+      const fileBase = filePart.split('/').pop();
+      idx = currentSpineItems.findIndex(i => {
+        if (i.href === filePart) return true;
+        return (i.href || '').split('/').pop() === fileBase;
+      });
+    }
     if (idx >= 0) {
       displayChapter(idx).then(() => {
         if (anchor) scrollToAnchor(anchor);
@@ -1984,6 +2065,21 @@ function scrollToAnchor(anchor) {
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Scrolla all'elemento con id corrispondente nel pannello testo originale
+function scrollToTocAnchor(anchor) {
+  if (!anchor) return;
+  // Look for the element in the text panel first
+  const target = originalViewer.querySelector(`[id="${anchor}"]`);
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  // If in native/original view mode, try the iframe
+  if (currentViewMode === 'original') {
+    scrollToAnchor(anchor);
+  }
+}
+
 // ── Render pannelli testo ──────────────────────────────────────────────────
 function renderOriginal(paragraphs) {
   originalViewer.innerHTML = '';
@@ -1994,6 +2090,7 @@ function renderOriginal(paragraphs) {
       const html = p.html !== undefined ? p.html : escapeHtml(p);
       const pEl = document.createElement('p');
       pEl.dataset.idx = i;
+      if (p.id) pEl.id = p.id;
       pEl.classList.add(`pair-color-${i % 5}`);
       pEl.innerHTML = `<span class="para-num">${i + 1}</span>${html}`;
       originalViewer.appendChild(pEl);
@@ -2942,11 +3039,29 @@ function renderToc(items, parent = tocList) {
       document.querySelectorAll('#toc-list a').forEach(el => el.classList.remove('active'));
       a.classList.add('active');
       if (!book) return;
-      const href = item.href.split('#')[0];
-      const idx = currentSpineItems.findIndex(i =>
-        i.href === href || i.href?.endsWith(href) || href?.endsWith(i.href)
-      );
-      if (idx >= 0) displayChapter(idx);
+      const [href, fragment] = item.href.split('#');
+      // Try spine.get() first — epubjs resolves relative paths internally
+      const spineItem = book.spine.get(href);
+      let idx = spineItem ? currentSpineItems.indexOf(spineItem) : -1;
+      if (idx < 0) {
+        // Fallback: compare basenames (handles mismatched directory prefixes)
+        const hrefBase = href.split('/').pop();
+        idx = currentSpineItems.findIndex(i => {
+          if (i.href === href) return true;
+          const iBase = (i.href || '').split('/').pop();
+          return iBase === hrefBase;
+        });
+      }
+      if (idx >= 0) {
+        if (idx === currentSpineIndex && fragment) {
+          // Same chapter — just scroll to the anchor
+          scrollToTocAnchor(fragment);
+        } else {
+          displayChapter(idx).then(() => {
+            if (fragment) scrollToTocAnchor(fragment);
+          });
+        }
+      }
     });
 
     const handleTranslateTooltip = async () => {
@@ -4172,6 +4287,83 @@ document.getElementById('lib-clear-btn').addEventListener('click', async () => {
   if (!confirmed) return;
   await saveLibrary([]);
   await renderLibraryGrid();
+});
+
+// ── Clean library: verify all book file links ──────────────────────────────
+const libCheckModal = document.getElementById('lib-check-modal');
+const libCheckTitle = document.getElementById('lib-check-modal-title');
+const libCheckCloseBtn = document.getElementById('lib-check-close-btn');
+const libCheckMsg = document.getElementById('lib-check-msg');
+const libCheckList = document.getElementById('lib-check-list');
+const libCheckRemoveBtn = document.getElementById('lib-check-remove-btn');
+const libCheckCancelBtn = document.getElementById('lib-check-cancel-btn');
+
+let _brokenEntries = [];
+
+function closeLibCheckModal() {
+  libCheckModal.classList.add('hidden');
+}
+libCheckCloseBtn.addEventListener('click', closeLibCheckModal);
+libCheckCancelBtn.addEventListener('click', closeLibCheckModal);
+libCheckModal.addEventListener('click', e => { if (e.target === libCheckModal) closeLibCheckModal(); });
+
+libCheckRemoveBtn.addEventListener('click', async () => {
+  if (!_brokenEntries.length) return;
+  const brokenIds = new Set(_brokenEntries.map(e => e.id));
+  const lib = await loadLibrary();
+  const cleaned = lib.filter(e => !brokenIds.has(e.id));
+  await saveLibrary(cleaned);
+  await renderLibraryGrid();
+  libStatus.textContent = ui('libCheckRemoved', { count: _brokenEntries.length });
+  libStatus.classList.remove('hidden');
+  _brokenEntries = [];
+  closeLibCheckModal();
+});
+
+document.getElementById('lib-check-btn').addEventListener('click', async () => {
+  const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+  if (!isTauri) {
+    libStatus.textContent = ui('libBrowserOnly');
+    libStatus.classList.remove('hidden');
+    return;
+  }
+  const lib = await loadLibrary();
+  if (!lib.length) return;
+
+  libStatus.textContent = ui('libCheckRunning');
+  libStatus.classList.remove('hidden');
+
+  const { exists } = await import('@tauri-apps/plugin-fs');
+  const broken = [];
+  for (const entry of lib) {
+    try {
+      const found = await exists(entry.filePath);
+      if (!found) broken.push(entry);
+    } catch {
+      broken.push(entry);
+    }
+  }
+
+  libStatus.textContent = '';
+  libStatus.classList.add('hidden');
+
+  if (!broken.length) {
+    libStatus.textContent = ui('libCheckAllGood');
+    libStatus.classList.remove('hidden');
+    return;
+  }
+
+  // Show in-app modal with broken entries
+  _brokenEntries = broken;
+  libCheckTitle.textContent = ui('libCheck');
+  libCheckMsg.textContent = ui('libCheckBroken');
+  libCheckList.innerHTML = broken.map(e =>
+    `<li><span class="lib-check-title">${e.title || '?'}</span><span class="lib-check-path">${e.filePath}</span></li>`
+  ).join('');
+  document.getElementById('lib-check-confirm-msg').textContent = ui('libCheckConfirm');
+  libCheckRemoveBtn.textContent = ui('libCheckRemoveAction', { count: broken.length });
+  libCheckCancelBtn.textContent = ui('cancel');
+  libCheckModal.classList.remove('hidden');
 });
 
 // ── Custom Context Menu Logic ──────────────────────────────────────────────

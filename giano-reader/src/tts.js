@@ -333,7 +333,9 @@ export class ProTTSEngine {
       }
       const audioBuffer = audioCtx.createBuffer(1, floatData.length, 24000);
       audioBuffer.getChannelData(0).set(floatData);
-      return { audioBuffer, rawMp3Bytes: null };
+      // Store raw PCM bytes for WAV download
+      const rawMp3Bytes = new Uint8Array(arrayBuffer.slice(0));
+      return { audioBuffer, rawMp3Bytes };
     }
 
     // MP3 path — clone bytes BEFORE decodeAudioData consumes them
@@ -622,10 +624,14 @@ export class TTSController {
   }
 
   /**
-   * Get the assembled MP3 blob from the audio buffer store.
-   * @returns {Blob} MP3 blob containing all accumulated audio in paragraph order
+   * Get the assembled audio blob from the audio buffer store.
+   * Returns MP3 for non-Gemini models, WAV for Gemini models.
+   * @returns {Blob} Audio blob containing all accumulated audio in paragraph order
    */
   getAudioBlob() {
+    if (this._isGeminiSession) {
+      return this._bufferStore.assembleWavBlob();
+    }
     return this._bufferStore.assembleBlob();
   }
 
@@ -967,8 +973,8 @@ export class TTSController {
         rawMp3Bytes = result.rawMp3Bytes;
       }
 
-      // Store raw MP3 bytes in the buffer store for download
-      if (rawMp3Bytes && !this._isGeminiSession) {
+      // Store raw audio bytes in the buffer store for download
+      if (rawMp3Bytes) {
         this._bufferStore.add(item.index, rawMp3Bytes);
       }
 
@@ -1237,6 +1243,49 @@ export class AudioBufferStore {
       .sort(([a], [b]) => a - b)
       .map(([, bytes]) => bytes);
     return new Blob(sorted, { type: 'audio/mpeg' });
+  }
+
+  /**
+   * Assemble all stored PCM bytes into a WAV blob.
+   * PCM is assumed to be 16-bit signed LE mono at 24000 Hz (Gemini format).
+   * @returns {Blob} WAV blob
+   */
+  assembleWavBlob() {
+    const sorted = [...this._store.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([, bytes]) => bytes);
+    const totalLen = sorted.reduce((sum, b) => sum + b.byteLength, 0);
+    const sampleRate = 24000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+    const blockAlign = numChannels * (bitsPerSample / 8);
+    const headerSize = 44;
+    const buffer = new ArrayBuffer(headerSize + totalLen);
+    const view = new DataView(buffer);
+    // RIFF header
+    const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + totalLen, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true); // subchunk1 size
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+    writeStr(36, 'data');
+    view.setUint32(40, totalLen, true);
+    // PCM data
+    const output = new Uint8Array(buffer);
+    let offset = headerSize;
+    for (const chunk of sorted) {
+      output.set(new Uint8Array(chunk.buffer || chunk), offset);
+      offset += chunk.byteLength;
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
   }
 
   /** Clear all stored data and reset progress. */

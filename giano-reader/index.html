@@ -169,10 +169,10 @@
         <input type="range" id="tts-pitch" min="0.5" max="2" step="0.1" value="1" disabled />
         <span id="tts-pitch-value" class="tts-value">1.0</span>
 
-        <button id="tts-download-btn" disabled title="Download MP3" aria-label="Download MP3">
+        <span id="tts-progress" class="tts-value hidden">0%</span>
+        <button id="tts-download-btn" disabled title="Download" aria-label="Download">
           <img src="/icons/download.svg" class="icon" alt="" />
         </button>
-        <span id="tts-progress" class="tts-value hidden">0%</span>
       </div>
 
       <!-- Layout sempre affiancato -->
@@ -376,6 +376,14 @@
       <p id="lib-placeholder">Your library is empty. Select a folder to scan for EPUB files.</p>
       <div id="lib-toolbar">
         <button id="lib-scan-btn"><img src="/icons/upload.svg" class="icon" alt="" /> Select folder</button>
+        <button id="lib-check-btn" title="Clean library">
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18.84 12.25l1.72-1.71a4.04 4.04 0 0 0-5.7-5.71L13.15 6.55"/>
+            <path d="M5.16 11.75l-1.72 1.71a4.04 4.04 0 0 0 5.7 5.71l1.71-1.72"/>
+            <line x1="2" y1="2" x2="6" y2="6"/>
+            <line x1="18" y1="18" x2="22" y2="22"/>
+          </svg>
+        </button>
         <button id="lib-import-btn" title="Import library"><img src="/icons/upload.svg" class="icon" alt="" /></button>
         <button id="lib-export-btn" title="Export library"><img src="/icons/download.svg" class="icon" alt="" /></button>
         <button id="lib-clear-btn" title="Clear library">
@@ -387,6 +395,23 @@
           </svg>
         </button>
         <input type="file" id="lib-import-input" accept=".json" style="display:none" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: library clean results -->
+  <div id="lib-check-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lib-check-modal-title">
+    <div class="modal-box modal-box--lib-check">
+      <div class="modal-header">
+        <h2 id="lib-check-modal-title">Clean library</h2>
+        <button id="lib-check-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+      </div>
+      <p id="lib-check-msg"></p>
+      <ul id="lib-check-list"></ul>
+      <p id="lib-check-confirm-msg"></p>
+      <div class="modal-actions">
+        <button id="lib-check-remove-btn">Remove</button>
+        <button id="lib-check-cancel-btn" class="secondary">Cancel</button>
       </div>
     </div>
   </div>

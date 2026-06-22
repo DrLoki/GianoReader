@@ -1000,9 +1000,11 @@ body.theme-sepia {
 
 /* ── Library modal ── */
 .modal-box--library {
-  max-width: 640px; width: 95%;
-  max-height: 85vh;
+  max-width: 90vw; width: 640px;
+  max-height: 90vh; min-width: 320px; min-height: 300px;
   display: flex; flex-direction: column;
+  resize: both;
+  overflow: hidden;
 }
 
 #lib-toolbar {
@@ -1022,7 +1024,7 @@ body.theme-sepia {
 #lib-scan-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 #lib-scan-btn .icon { filter: var(--icon-filter-on-dark) !important; }
 
-#lib-import-btn, #lib-export-btn, #lib-clear-btn {
+#lib-import-btn, #lib-export-btn, #lib-check-btn, #lib-clear-btn {
   width: 34px; height: 34px;
   border-radius: 4px; border: 1px solid var(--border);
   cursor: pointer; background: var(--modal-btn-bg); color: var(--modal-text);
@@ -1032,7 +1034,11 @@ body.theme-sepia {
 #lib-import-btn .icon, #lib-export-btn .icon {
   filter: var(--icon-filter-on-surface) !important;
 }
-#lib-import-btn:hover, #lib-export-btn:hover { background: var(--modal-btn-hover); }
+#lib-import-btn:hover, #lib-export-btn:hover, #lib-check-btn:hover { background: var(--modal-btn-hover); }
+#lib-check-btn .icon {
+  filter: var(--icon-filter-on-surface) !important;
+  width: 1.1em; height: 1.1em;
+}
 #lib-clear-btn:hover { background: #5a1a1a; border-color: #c0392b; }
 #lib-clear-btn .icon {
   filter: var(--icon-filter-on-surface) !important;
@@ -1227,6 +1233,49 @@ html.rtl .lib-book-card { flex-direction: row-reverse; }
 .lib-book-action-btn--danger { border-color: #5a1a1a; color: #c0392b; }
 .lib-book-action-btn--danger:hover { background: #c0392b !important; color: #fff !important; border-color: #c0392b !important; }
 .lib-book-action-btn--danger svg { stroke: currentColor; }
+
+/* ── Library clean results modal ── */
+.modal-box--lib-check {
+  max-width: 600px; width: 92%;
+  max-height: 80vh;
+  display: flex; flex-direction: column;
+}
+#lib-check-msg {
+  margin: 0 0 12px 0;
+  font-size: 0.92rem;
+  color: var(--modal-text);
+}
+#lib-check-list {
+  list-style: none; padding: 0; margin: 0 0 16px 0;
+  overflow-y: auto; flex: 1;
+  max-height: 45vh;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--modal-list-bg, rgba(0,0,0,0.15));
+}
+#lib-check-list li {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+#lib-check-list li:last-child { border-bottom: none; }
+#lib-check-list .lib-check-title {
+  font-weight: 600;
+  color: var(--modal-text);
+}
+#lib-check-list .lib-check-path {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+#lib-check-confirm-msg {
+  margin: 12px 0 0 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--modal-text);
+}
 
 /* ── Book detail modal ── */
 .modal-box--book-detail {
@@ -1678,7 +1727,7 @@ html.rtl .text-panel p.para-highlight {
 
 /* TTS download button */
 #tts-download-btn {
-  margin-left: auto;
+  flex-shrink: 0;
 }
 #tts-download-btn .icon {
   height: 0.9em;
@@ -1686,6 +1735,7 @@ html.rtl .text-panel p.para-highlight {
 
 /* TTS progress indicator (adjacent to download button) */
 #tts-progress {
+  margin-left: auto;
   font-size: 0.72rem;
   color: var(--text);
   min-width: 24px;
