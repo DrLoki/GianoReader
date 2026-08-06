@@ -305,7 +305,7 @@ body {
 .sync-notice {
   font-size: 0.7rem;
   color: #e67e22;
-  margin-left: auto;
+  margin-left: 1rem;
   text-transform: none;
   letter-spacing: 0;
 }
