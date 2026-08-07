@@ -1,5 +1,5 @@
 use sysinfo::System;
-use tauri::Manager;
+use tauri::{Manager, WebviewWindow};
 
 #[tauri::command]
 fn get_system_ram() -> u64 {
@@ -14,6 +14,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![get_system_ram])
+        .invoke_handler(tauri::generate_handler![initialize_desktop_features])
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -21,26 +22,35 @@ pub fn run() {
                     win.open_devtools();
                 }
             }
-            // Custom window icon
-            {
-                use image::ImageReader;
-                use std::io::Cursor;
-                if let Some(win) = app.get_webview_window("main") {
-                    let bytes = include_bytes!("../icons/windows-icon.png");
-                    let img = ImageReader::new(Cursor::new(bytes))
-                        .with_guessed_format()
-                        .unwrap()
-                        .decode()
-                        .unwrap()
-                        .into_rgba8();
-                    let (w, h) = img.dimensions();
-                    let icon = tauri::image::Image::new_owned(img.into_raw(), w, h);
 
-                    //win.set_icon(icon)?;
-                }
-            }
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("Errore avvio applicazione");
 }
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn initialize_desktop_features(app: WebviewWindow) {
+    {   // Set custom window icon
+        use image::ImageReader;
+        use std::io::Cursor;
+        if let Some(win) = app.get_webview_window("main") {
+            let bytes = include_bytes!("../icons/windows-icon.png");
+            let img = ImageReader::new(Cursor::new(bytes))
+                .with_guessed_format()
+                .unwrap()
+                .decode()
+                .unwrap()
+                .into_rgba8();
+            let (w, h) = img.dimensions();
+            let icon = tauri::image::Image::new_owned(img.into_raw(), w, h);
+
+            let _ = win.set_icon(icon);
+        }
+    }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+fn initialize_desktop_features(_app: WebviewWindow) { }

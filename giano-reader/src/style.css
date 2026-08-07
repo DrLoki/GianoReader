@@ -868,6 +868,7 @@ body.theme-sepia {
 #toggle-numbers-btn svg.icon,
 #hide-original-btn svg.icon,
 #hide-translation-btn svg.icon,
+#swap-panels-btn svg.icon,
 #view-toggle-btn svg.icon {
   filter: none !important;
   color: var(--text-muted);
@@ -879,6 +880,7 @@ body.theme-sepia {
 #toggle-numbers-btn:hover:not(:disabled) svg.icon,
 #hide-original-btn:hover:not(:disabled) svg.icon,
 #hide-translation-btn:hover:not(:disabled) svg.icon,
+#swap-panels-btn:hover:not(:disabled) svg.icon,
 #view-toggle-btn:hover:not(:disabled) svg.icon {
   color: var(--text);
 }
@@ -890,6 +892,8 @@ body.theme-sepia {
 #hide-original-btn[aria-pressed="true"] svg.icon,
 #hide-translation-btn.active svg.icon,
 #hide-translation-btn[aria-pressed="true"] svg.icon,
+#swap-panels-btn.active svg.icon,
+#swap-panels-btn[aria-pressed="true"] svg.icon,
 #view-toggle-btn.active svg.icon,
 #view-toggle-btn[aria-pressed="true"] svg.icon {
   filter: none !important;
