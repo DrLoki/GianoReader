@@ -45,10 +45,17 @@ body {
   font-family: var(--font-family);
   background: var(--bg);
   color: var(--text);
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
-#app { display: flex; height: 100vh; }
+#app {
+  display: flex;
+  height: 100dvh;
+
+  /* Required for edge-to-edge Android rendering; works with iOS */
+  margin-top: var(--safe-area-top, env(safe-area-inset-top, 0px));
+  margin-bottom: var(--safe-area-bottom, env(safe-area-inset-bottom, 0px));
+}
 
 /* ── Sidebar ── */
 #sidebar {

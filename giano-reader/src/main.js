@@ -1,3 +1,5 @@
+import '@saurl/tauri-plugin-safe-area-insets-css-api';
+
 import ePub from 'epubjs';
 import { translateParagraphs } from './translator.js';
 import { t, RTL_LANGS } from './i18n.js';
@@ -156,20 +158,20 @@ hideTranslationBtn.addEventListener('click', () => {
 
 swapPanelsBtn.addEventListener('click', () => {
   panelsSwapped = !panelsSwapped;
-  
+
   swapPanelsBtn.setAttribute('aria-pressed', String(panelsSwapped));
   swapPanelsBtn.classList.toggle('active', panelsSwapped);
 
   // Rearrange the original & translation panels with the divider in the middle
   // Also reassign the textContent of the language labels to match
-  if (panelsSwapped) {    
+  if (panelsSwapped) {
     viewerWrapper.appendChild(translationPanel);
     viewerWrapper.appendChild(divider);
     viewerWrapper.appendChild(originalPanel);
-    
+
     document.getElementById('original-header-label').textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
     translationLangLabel.textContent = t(lang, 'original');
-  
+
   } else {
     viewerWrapper.appendChild(originalPanel);
     viewerWrapper.appendChild(divider);
@@ -529,7 +531,7 @@ function applyUiLang(lang) {
   } else {
     document.getElementById('original-header-label').textContent = t(lang, 'original');
   }
-  
+
   // Settings modal labels
   document.querySelector('label[for="ui-lang-select"]').textContent = t(lang, 'interfaceLanguage');
   document.querySelector('label[for="theme-select"]').textContent = t(lang, 'theme');
@@ -2207,7 +2209,7 @@ async function translatePdfOverlay(startPct = 0) {
   if (panelsSwapped) {
     document.getElementById('original-header-label').textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
   } else {
-    translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();  
+    translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
   }
 
   if (!currentChapterParagraphs.length) {
@@ -2331,13 +2333,13 @@ async function translatePdfOverlay(startPct = 0) {
 
   const lang = langSelect.value;
   const rawLabel = langSelect.options[langSelect.selectedIndex].text;
-  
+
   if (panelsSwapped) {
     document.getElementById('original-header-label').textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
   } else {
-    translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();  
+    translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
   }
-  
+
 // ── Traduzione lazy ────────────────────────────────────────────────────────
 // startPct: percentuale di scroll da cui partire (0-100). Traduce prima il chunk
 // visibile a quella posizione, poi espande lazy verso il basso e verso l'alto.
