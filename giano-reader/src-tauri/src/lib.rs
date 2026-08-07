@@ -35,7 +35,8 @@ pub fn run() {
                         .into_rgba8();
                     let (w, h) = img.dimensions();
                     let icon = tauri::image::Image::new_owned(img.into_raw(), w, h);
-                    let _ = win.set_icon(icon);
+
+                    //win.set_icon(icon)?;
                 }
             }
             Ok(())

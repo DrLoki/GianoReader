@@ -12,7 +12,7 @@
 
 ### 📖 Bridging the Gap in Foreign Literature
 
-**Giano Reader** is a lightweight, high-performance desktop application designed for those who refuse to let a language barrier stand between them and a great book. 
+**Giano Reader** is a lightweight, high-performance desktop application designed for those who refuse to let a language barrier stand between them and a great book.
 
 Named after the Roman god of dualities and transitions, Giano provides a **synchronized, side-by-side reading experience**. It is specifically crafted for language learners who want to dive into foreign literature without losing the flow, the context, or the original book's formatting.
 
@@ -70,7 +70,7 @@ You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and L
 👉 [Download Giano Reader v0.8.3](https://github.com/DrLoki/GianoReader/releases/tag/v/v0.8.3)
 
 > [!IMPORTANT]
-> **Migration Note (from v0.7.x to v0.8.x):**  
+> **Migration Note (from v0.7.x to v0.8.x):**
 > Before installing version 0.8.x, it is highly recommended to **export your Library** (using the export feature in Settings) to prevent any potential data or metadata loss during the schema migration.
 
 ---
@@ -84,6 +84,10 @@ For build requirements and instructions see [BUILD.md](giano-reader/BUILD.md).
 1. Clone the repo: `git clone https://github.com/user/giano-reader.git`
 2. Install dependencies: `npm install`
 3. Run in dev mode: `npm run tauri dev`
+
+For Android:
+1. Initiate the Android dependencies: `npm run tauri android init`
+2. Run in dev mode: `npm run tauri android dev`
 
 ---
 
@@ -152,7 +156,7 @@ Giano Reader includes premium tools designed to speed up comprehension and make 
 
 ## Library
 
-The library scans local folders for EPUB files and stores book metadata (title, author, publisher, year, language, description, cover thumbnail, estimated page count, file size) persistently. 
+The library scans local folders for EPUB files and stores book metadata (title, author, publisher, year, language, description, cover thumbnail, estimated page count, file size) persistently.
 
 To prevent web browser storage quota limitations (`localStorage` is limited to ~5MB), **Giano Reader desktop (Tauri) automatically migrates all library metadata and bookmarks to secure JSON files directly on your local filesystem** (`giano-library.json` and `giano-bookmarks.json` in the app's system data directory). This supports virtually unlimited library sizes and prevents `QuotaExceededError` crashes when scanning thousands of ebooks. The browser version retains a fast fallback storage mode. Books can be filtered by reading status (To read / Reading / Read) and searched by title or author. The scan depth (1–10 folder levels) is configurable in Settings.
 
