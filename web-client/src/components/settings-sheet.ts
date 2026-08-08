@@ -1,5 +1,5 @@
 import { getLanguages } from '../api/translate';
-import { putPreferences } from '../api/preferences';
+import { getPreferences, putPreferences } from '../api/preferences';
 import { showToast } from './toast';
 import { applyPreferences } from '../main';
 import { t, setLocale } from '../i18n/index';
@@ -203,7 +203,19 @@ class SettingsSheet extends HTMLElement {
 
   connectedCallback(): void {
     injectStyles();
-    this.loadCurrentPrefs();
+    this.initFromServer();
+  }
+
+  private async initFromServer(): Promise<void> {
+    // Load actual preferences from the server
+    try {
+      const prefs = await getPreferences();
+      this.currentPrefs = { ...prefs };
+    } catch {
+      // Fall back to reading what we can from the DOM
+      this.loadCurrentPrefs();
+    }
+
     this.render();
     this.fetchLanguages();
     this.bindEvents();
@@ -364,6 +376,8 @@ class SettingsSheet extends HTMLElement {
       this.currentPrefs.uiLanguage = uiLanguage;
       setLocale(uiLanguage);
       this.applyAndPersist({ uiLanguage });
+      // Notify app to re-render all components with new locale
+      document.dispatchEvent(new CustomEvent('locale-changed', { detail: { locale: uiLanguage } }));
     });
 
     // Swipe down to close

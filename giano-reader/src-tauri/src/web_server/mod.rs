@@ -28,6 +28,7 @@ pub async fn start(
     server_state: &ServerState,
     app_state: Arc<AppState>,
 ) -> Result<ServerInfo, String> {
+    println!("[web_server] start() called with port {}", port);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     // Bind listener, detect AddrInUse
@@ -65,10 +66,14 @@ pub async fn start(
 
     // Spawn server task with graceful shutdown
     let server_task = tokio::spawn(async move {
-        axum::serve(listener, router)
+        println!("[web_server] Starting on {}", addr);
+        if let Err(e) = axum::serve(listener, router.into_make_service())
             .with_graceful_shutdown(shutdown_token.cancelled_owned())
             .await
-            .ok();
+        {
+            eprintln!("[web_server] Server error: {}", e);
+        }
+        println!("[web_server] Server stopped");
     });
 
     // Store handle in ServerState
@@ -134,18 +139,18 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let api_routes = Router::new()
         // Books
         .route("/books", get(handlers::books::list_books))
-        .route("/books/:id/cover", get(handlers::books::get_cover))
-        .route("/books/:id/toc", get(handlers::books::get_toc))
+        .route("/books/{id}/cover", get(handlers::books::get_cover))
+        .route("/books/{id}/toc", get(handlers::books::get_toc))
         // Chapters
-        .route("/books/:id/chapter/:chapterIndex", get(handlers::chapters::get_chapter))
+        .route("/books/{id}/chapter/{chapterIndex}", get(handlers::chapters::get_chapter))
         // Translate
         .route("/translate", post(handlers::translate::post_translate))
         .route("/translate/languages", get(handlers::translate::get_languages))
         // Reading state
-        .route("/books/:id/state", get(handlers::state::get_reading_state).put(handlers::state::put_reading_state))
+        .route("/books/{id}/state", get(handlers::state::get_reading_state).put(handlers::state::put_reading_state))
         // Bookmarks
-        .route("/books/:id/bookmarks", get(handlers::bookmarks::list_bookmarks).post(handlers::bookmarks::create_bookmark))
-        .route("/books/:id/bookmarks/:bookmarkId", delete(handlers::bookmarks::delete_bookmark))
+        .route("/books/{id}/bookmarks", get(handlers::bookmarks::list_bookmarks).post(handlers::bookmarks::create_bookmark))
+        .route("/books/{id}/bookmarks/{bookmarkId}", delete(handlers::bookmarks::delete_bookmark))
         // Preferences
         .route("/preferences", get(handlers::prefs::get_preferences).put(handlers::prefs::put_preferences))
         .with_state(state);

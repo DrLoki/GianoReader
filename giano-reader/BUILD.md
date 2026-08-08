@@ -7,6 +7,7 @@
 - [Tauri CLI prerequisites](https://tauri.app/start/prerequisites/) for your operating system
 
 On Windows, make sure you have installed:
+
 - Microsoft Visual Studio C++ Build Tools
 - WebView2 Runtime (included in Windows 11, downloadable for Windows 10)
 
@@ -52,6 +53,7 @@ npm run tauri build
 Outputs the installable package to `src-tauri/target/release/bundle/`.
 
 Release profile settings (defined in `Cargo.toml`):
+
 - LTO enabled
 - `opt-level = "s"` (size optimisation)
 - `strip = true`
@@ -99,7 +101,7 @@ The `dist/` output is embedded into the Tauri binary at compile time via `rust-e
 Each installer format must be compiled on its native OS:
 
 | Output | Built on |
-|---|---|
+| --- | --- |
 | `.msi` + NSIS `.exe` | Windows |
 | `.dmg` + `.app` (universal) | macOS |
 | `.deb` + `.AppImage` | Linux |
@@ -114,6 +116,7 @@ git push origin v0.9.0
 ```
 
 GitHub Actions will:
+
 1. Build on `windows-latest`, `macos-latest`, and `ubuntu-22.04` in parallel.
 2. Produce a universal macOS binary (Intel + Apple Silicon).
 3. Create a **draft** GitHub Release with all installers attached.
@@ -135,7 +138,7 @@ Outputs land in `src-tauri/target/release/bundle/`.
 To distribute outside the Mac App Store without Gatekeeper warnings, add these secrets to your GitHub repository (`Settings → Secrets → Actions`):
 
 | Secret | Description |
-|---|---|
+| --- | --- |
 | `APPLE_CERTIFICATE` | Base64-encoded `.p12` export of your Developer ID certificate |
 | `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` file |
 | `APPLE_SIGNING_IDENTITY` | Certificate name (e.g. `Developer ID Application: Your Name (TEAMID)`) |
@@ -161,7 +164,7 @@ npm run tauri build
 ## Build targets
 
 | Target | Value |
-|---|---|
+| --- | --- |
 | ES target | `es2021` |
 | Browser targets | `chrome105`, `safari13` |
 | Minification | Disabled when `TAURI_DEBUG` is set |

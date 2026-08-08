@@ -8,9 +8,119 @@ use super::models::{BookSummary, ChapterResponse, Paragraph, TocEntry};
 use super::persistence::PersistenceStore;
 
 /// Scans `library_path` for `.epub` files and returns a summary for each one.
-/// Skips unreadable files with a warning. Returns an empty vec if the directory
-/// doesn't exist or contains no epubs.
+/// First checks for a `giano-reader-library.json` file (desktop app library) in
+/// the parent directory and uses those file paths. Falls back to scanning the
+/// directory for `.epub` files.
+/// Skips unreadable files with a warning. Returns an empty vec if no books are found.
 pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSummary> {
+    println!("[epub_parser] list_books called, library_path={:?}", library_path);
+
+    // Try to read from the desktop app's library JSON first
+    let library_json_path = library_path.parent()
+        .unwrap_or(library_path)
+        .join("giano-reader-library.json");
+
+    println!("[epub_parser] Looking for library JSON at: {:?}", library_json_path);
+    println!("[epub_parser] JSON file exists: {}", library_json_path.exists());
+
+    if library_json_path.exists() {
+        if let Ok(content) = fs::read_to_string(&library_json_path) {
+            println!("[epub_parser] JSON file read OK, length={} bytes", content.len());
+            match serde_json::from_str::<Vec<LibraryEntry>>(&content) {
+                Ok(entries) => {
+                    println!("[epub_parser] Parsed {} library entries from JSON", entries.len());
+                    let mut books = Vec::new();
+                    for entry in &entries {
+                        let path = PathBuf::from(&entry.file_path);
+
+                        // Skip non-epub files by extension (fast check before opening)
+                        match path.extension().and_then(|ext| ext.to_str()) {
+                            Some(ext) if ext.eq_ignore_ascii_case("epub") => {}
+                            _ => continue,
+                        }
+
+                        if !path.exists() {
+                            continue;
+                        }
+                        if let Some(book) = book_summary_from_path(&path, store) {
+                            books.push(book);
+                        }
+                    }
+                    println!("[epub_parser] Found {} valid books from JSON", books.len());
+                    if !books.is_empty() {
+                        return books;
+                    }
+                }
+                Err(e) => {
+                    println!("[epub_parser] Failed to parse JSON: {}", e);
+                }
+            }
+        } else {
+            println!("[epub_parser] Failed to read JSON file");
+        }
+    }
+
+    // Fallback: scan library_path directory for .epub files
+    println!("[epub_parser] Falling back to directory scan of {:?}", library_path);
+    list_books_from_directory(library_path, store)
+}
+
+/// Entry from the desktop app's `giano-reader-library.json` file.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LibraryEntry {
+    file_path: String,
+    #[allow(dead_code)]
+    #[serde(default)]
+    title: Option<String>,
+    #[allow(dead_code)]
+    #[serde(default)]
+    author: Option<String>,
+}
+
+/// Creates a BookSummary from an epub file path.
+fn book_summary_from_path(path: &Path, store: &PersistenceStore) -> Option<BookSummary> {
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let id = generate_book_id(&canonical);
+
+    let doc = match EpubDoc::new(path) {
+        Ok(doc) => doc,
+        Err(e) => {
+            eprintln!("[epub_parser] Skipping {:?}: failed to open epub: {}", path, e);
+            return None;
+        }
+    };
+
+    let title = doc.get_title().unwrap_or_else(|| {
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string()
+    });
+
+    let author = doc
+        .mdata("creator")
+        .map(|item| item.value.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    let cover_url = Some(format!("/api/books/{}/cover", id));
+
+    let progress = store
+        .get_reading_state(&id)
+        .map(|state| state.progress)
+        .unwrap_or(0);
+
+    Some(BookSummary {
+        id,
+        title,
+        author,
+        cover_url,
+        progress,
+    })
+}
+
+/// Scans a directory for .epub files and returns summaries.
+fn list_books_from_directory(library_path: &Path, store: &PersistenceStore) -> Vec<BookSummary> {
     let entries = match fs::read_dir(library_path) {
         Ok(entries) => entries,
         Err(e) => {
@@ -38,52 +148,9 @@ pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSumm
             _ => continue,
         }
 
-        // Generate stable id from canonical path
-        let canonical = match path.canonicalize() {
-            Ok(p) => p,
-            Err(_) => path.clone(),
-        };
-        let id = generate_book_id(&canonical);
-
-        // Open the epub
-        let doc = match EpubDoc::new(&path) {
-            Ok(doc) => doc,
-            Err(e) => {
-                eprintln!("[epub_parser] Skipping {:?}: failed to open epub: {}", path, e);
-                continue;
-            }
-        };
-
-        // Extract title (fallback to filename)
-        let title = doc.get_title().unwrap_or_else(|| {
-            path.file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("Untitled")
-                .to_string()
-        });
-
-        // Extract author (fallback to "Unknown")
-        let author = doc
-            .mdata("creator")
-            .map(|item| item.value.clone())
-            .unwrap_or_else(|| "Unknown".to_string());
-
-        // Cover URL
-        let cover_url = Some(format!("/api/books/{}/cover", id));
-
-        // Look up progress from persistence store
-        let progress = store
-            .get_reading_state(&id)
-            .map(|state| state.progress)
-            .unwrap_or(0);
-
-        books.push(BookSummary {
-            id,
-            title,
-            author,
-            cover_url,
-            progress,
-        });
+        if let Some(book) = book_summary_from_path(&path, store) {
+            books.push(book);
+        }
     }
 
     books
@@ -100,9 +167,37 @@ pub fn generate_book_id(path: &Path) -> String {
 }
 
 /// Finds the epub file in `library_path` whose canonical path hashes to `book_id`.
+/// Finds the epub file matching `book_id` by checking the library JSON first,
+/// then falling back to scanning `library_path` directory.
 /// Returns the path to the epub file, or None if not found.
 pub fn find_epub_by_id(library_path: &Path, book_id: &str) -> Option<PathBuf> {
-    let entries = fs::read_dir(library_path).ok()?;
+    // First: check the desktop app's library JSON
+    let library_json_path = library_path.parent()
+        .unwrap_or(library_path)
+        .join("giano-reader-library.json");
+
+    if library_json_path.exists() {
+        if let Ok(content) = fs::read_to_string(&library_json_path) {
+            if let Ok(entries) = serde_json::from_str::<Vec<LibraryEntry>>(&content) {
+                for entry in entries {
+                    let path = PathBuf::from(&entry.file_path);
+                    if !path.exists() {
+                        continue;
+                    }
+                    let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+                    if generate_book_id(&canonical) == book_id {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: scan directory
+    let entries = match fs::read_dir(library_path) {
+        Ok(e) => e,
+        Err(_) => return None,
+    };
 
     for entry in entries {
         let entry = match entry {
@@ -112,17 +207,12 @@ pub fn find_epub_by_id(library_path: &Path, book_id: &str) -> Option<PathBuf> {
 
         let path = entry.path();
 
-        // Only process .epub files
         match path.extension().and_then(|ext| ext.to_str()) {
             Some(ext) if ext.eq_ignore_ascii_case("epub") => {}
             _ => continue,
         }
 
-        let canonical = match path.canonicalize() {
-            Ok(p) => p,
-            Err(_) => path.clone(),
-        };
-
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
         if generate_book_id(&canonical) == book_id {
             return Some(path);
         }

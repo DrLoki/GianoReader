@@ -64,7 +64,12 @@ class ReadingScreen extends HTMLElement {
   connectedCallback(): void {
     this.render();
     this.attachEventListeners();
-    this.loadChapter(this.initialState.currentChapter);
+    this.initTargetLang();
+    // Use rAF to ensure nested custom elements (card-ui) have completed
+    // their connectedCallback and rendered their internal DOM.
+    requestAnimationFrame(() => {
+      this.loadChapter(this.initialState.currentChapter);
+    });
   }
 
   disconnectedCallback(): void {
@@ -79,6 +84,20 @@ class ReadingScreen extends HTMLElement {
     if (this.translationObserver) {
       this.translationObserver.disconnect();
       this.translationObserver = null;
+    }
+  }
+
+  /**
+   * Fetches the user's preferred translation language once and caches it
+   * for the lifetime of this component instance. Avoids repeated
+   * /api/preferences calls on every chapter load.
+   */
+  private async initTargetLang(): Promise<void> {
+    try {
+      const prefs = await getPreferences();
+      this.targetLang = prefs.translationLang;
+    } catch {
+      // Keep default targetLang ('it')
     }
   }
 
@@ -107,6 +126,27 @@ class ReadingScreen extends HTMLElement {
           background: var(--header-bg, #1a1a1a);
           border-bottom: 1px solid var(--border-color, #333);
           z-index: 50;
+        }
+
+        reading-screen .fab-library-btn {
+          min-width: 44px;
+          min-height: 44px;
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: none;
+          background: transparent;
+          font-size: 1.4rem;
+          cursor: pointer;
+          border-radius: 8px;
+          color: var(--text-color, #e0e0e0);
+        }
+
+        reading-screen .fab-library-btn:hover,
+        reading-screen .fab-library-btn:focus-visible {
+          background: var(--hover-bg, rgba(255, 255, 255, 0.1));
         }
 
         reading-screen .settings-btn {
@@ -165,19 +205,25 @@ class ReadingScreen extends HTMLElement {
           top: 56px;
           left: 0;
           right: 0;
-          bottom: 0;
+          bottom: 52px;
           overflow: hidden;
         }
 
         reading-screen .reading-content card-ui {
-          display: block;
           width: 100%;
           height: 100%;
         }
 
+        /* Hide Original/Translated tabs in wide mode (both panels visible) */
+        @media (min-width: 768px) {
+          reading-screen .tab-group {
+            display: none;
+          }
+        }
+
         reading-screen .fab-group {
           position: fixed;
-          bottom: 16px;
+          bottom: 68px;
           right: 16px;
           display: flex;
           flex-direction: column;
@@ -216,6 +262,49 @@ class ReadingScreen extends HTMLElement {
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
+        reading-screen .chapter-nav {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 52px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 12px;
+          background: var(--header-bg, #1a1a1a);
+          border-top: 1px solid var(--border-color, #333);
+          z-index: 40;
+        }
+
+        reading-screen .chapter-nav-btn {
+          min-width: 44px;
+          min-height: 44px;
+          padding: 8px 16px;
+          border: none;
+          background: transparent;
+          color: var(--text-color, #e0e0e0);
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          border-radius: 6px;
+          transition: background 0.15s;
+        }
+
+        reading-screen .chapter-nav-btn:hover,
+        reading-screen .chapter-nav-btn:focus-visible {
+          background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+        }
+
+        reading-screen .chapter-nav-btn:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+        }
+
+        reading-screen .chapter-nav-btn:disabled:hover {
+          background: transparent;
+        }
+
         reading-screen .translation-placeholder {
           background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
           background-size: 200% 100%;
@@ -242,7 +331,7 @@ class ReadingScreen extends HTMLElement {
         }
       </style>
       <header class="reading-header">
-        <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">⚙</button>
+        <button class="fab-library-btn" aria-label="${t('fab.library')}">📚</button>
         <div class="tab-group" role="tablist">
           <button class="tab-btn tab-original active" role="tab" aria-selected="true" aria-label="${t('reading.tabOriginal')}">${t('reading.tabOriginal')}</button>
           <button class="tab-btn tab-translated" role="tab" aria-selected="false" aria-label="${t('reading.tabTranslated')}">${t('reading.tabTranslated')}</button>
@@ -251,10 +340,13 @@ class ReadingScreen extends HTMLElement {
       <div class="reading-content">
         <card-ui></card-ui>
       </div>
+      <nav class="chapter-nav">
+        <button class="chapter-nav-btn nav-prev" aria-label="${t('reading.prevChapter')}">← ${t('reading.prevChapter')}</button>
+        <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">⚙</button>
+        <button class="chapter-nav-btn nav-next" aria-label="${t('reading.nextChapter')}">${t('reading.nextChapter')} →</button>
+      </nav>
       <div class="fab-group">
         <button class="fab fab-bookmark" aria-label="${t('fab.bookmark')}">🔖</button>
-        <button class="fab fab-library" aria-label="${t('fab.library')}">📚</button>
-        <button class="fab fab-tts" aria-label="${t('fab.tts')}" disabled>🔊</button>
       </div>
     `;
   }
@@ -289,9 +381,9 @@ class ReadingScreen extends HTMLElement {
       this.handleAddBookmark();
     });
 
-    // Library FAB: navigate back to library screen
-    const libraryFab = this.querySelector('.fab-library') as HTMLButtonElement;
-    libraryFab?.addEventListener('click', () => {
+    // Library button: navigate back to library screen
+    const libraryBtn = this.querySelector('.fab-library-btn') as HTMLButtonElement;
+    libraryBtn?.addEventListener('click', () => {
       this.dispatchEvent(
         new CustomEvent('navigate', {
           bubbles: true,
@@ -299,6 +391,20 @@ class ReadingScreen extends HTMLElement {
           detail: { screen: 'library' },
         })
       );
+    });
+
+    // Chapter navigation buttons
+    const prevBtn = this.querySelector('.nav-prev') as HTMLButtonElement;
+    const nextBtn = this.querySelector('.nav-next') as HTMLButtonElement;
+
+    prevBtn?.addEventListener('click', () => {
+      if (this.currentChapter > 0) {
+        this.loadChapter(this.currentChapter - 1);
+      }
+    });
+
+    nextBtn?.addEventListener('click', () => {
+      this.loadChapter(this.currentChapter + 1);
     });
   }
 
@@ -347,6 +453,9 @@ class ReadingScreen extends HTMLElement {
    * into both the Original and Translated card slots.
    * After rendering, scrolls to the saved position from initialState
    * and sets up lazy translation via IntersectionObserver.
+   *
+   * If the loaded chapter has no paragraphs (e.g. cover page, title page),
+   * automatically advances to the next chapter that has content.
    */
   public async loadChapter(chapterIndex: number): Promise<void> {
     if (!this.bookId) return;
@@ -357,6 +466,17 @@ class ReadingScreen extends HTMLElement {
     const chapter: ChapterResponse = await response.json();
     this.currentChapter = chapterIndex;
     this.paragraphData = chapter.paragraphs;
+
+    // If chapter has no paragraphs (cover/title page), skip to next chapter
+    if (chapter.paragraphs.length === 0) {
+      const nextIndex = chapterIndex + 1;
+      const nextResponse = await apiFetch(`/api/books/${this.bookId}/chapter/${nextIndex}`);
+      if (nextResponse.ok) {
+        return this.loadChapter(nextIndex);
+      }
+      // If no next chapter either, just stay on empty (end of book)
+      return;
+    }
 
     const cardUi = this.querySelector('card-ui') as HTMLElement & {
       getOriginalSlot: () => HTMLElement | null;
@@ -377,20 +497,37 @@ class ReadingScreen extends HTMLElement {
       `<p data-index="${p.index}" data-id="${p.id}" class="translation-placeholder"></p>`
     ).join('');
 
-    // Fetch current targetLang from preferences
-    try {
-      const prefs = await getPreferences();
-      this.targetLang = prefs.translationLang;
-    } catch {
-      // Keep default targetLang
-    }
-
     // Scroll to saved position after rendering, then set up observer
     requestAnimationFrame(() => {
-      this.restoreScrollPosition(originalSlot);
+      // Only restore saved position for the initial chapter load
+      if (chapterIndex === this.initialState.currentChapter) {
+        this.restoreScrollPosition(originalSlot);
+      } else {
+        originalSlot.scrollTop = 0;
+      }
       this.attachScrollListener(originalSlot);
       this.setupTranslationObserver(originalSlot, translatedSlot);
     });
+
+    this.updateNavButtons();
+  }
+
+  /**
+   * Updates the disabled state of the prev/next chapter buttons
+   * based on the current chapter index.
+   */
+  private updateNavButtons(): void {
+    const prevBtn = this.querySelector('.nav-prev') as HTMLButtonElement | null;
+    const nextBtn = this.querySelector('.nav-next') as HTMLButtonElement | null;
+
+    if (prevBtn) {
+      prevBtn.disabled = this.currentChapter <= 0;
+    }
+    if (nextBtn) {
+      // We don't know total chapters, so always enable next.
+      // loadChapter will handle the case where the chapter doesn't exist.
+      nextBtn.disabled = false;
+    }
   }
 
   /**
@@ -480,146 +617,129 @@ class ReadingScreen extends HTMLElement {
 
   // ─── Lazy Translation ──────────────────────────────────────────────────────
 
+  private readonly LAZY_CHUNK = 12;
+
   /**
-   * Sets up an IntersectionObserver on paragraphs in the Original card.
-   * When paragraphs become visible, they are queued for batched translation.
+   * Sets up lazy translation using the sentinel pattern (like the desktop app).
+   * Uses IntersectionObserver with root: translatedSlot.
+   * The translated slot is always in the DOM and visible (even in narrow mode,
+   * it's positioned off-screen but still has layout), so the observer works.
    *
-   * Validates: Requirements 11.1, 11.7
+   * Flow:
+   * 1. Translate the chunk at the current scroll position immediately
+   * 2. Fire-and-forget chunks above (upward)
+   * 3. Set up observer on the last paragraph of current chunk → on intersect,
+   *    translate next chunk and move sentinel forward
    */
-  private setupTranslationObserver(originalSlot: HTMLElement, translatedSlot: HTMLElement): void {
-    // Clean up previous observer
+  private setupTranslationObserver(_originalSlot: HTMLElement, translatedSlot: HTMLElement): void {
     if (this.translationObserver) {
       this.translationObserver.disconnect();
+      this.translationObserver = null;
+    }
+    if (this.batchTimer !== null) {
+      clearTimeout(this.batchTimer);
+      this.batchTimer = null;
     }
     this.pendingBatch.clear();
     this.inFlightIndices.clear();
 
-    this.translationObserver = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const index = parseInt(
-              (entry.target as HTMLElement).getAttribute('data-index') || '-1',
-              10
-            );
-            if (index >= 0 && !this.inFlightIndices.has(index)) {
-              this.pendingBatch.add(index);
-            }
-          }
-        }
+    const total = this.paragraphData.length;
+    if (total === 0) return;
 
-        if (this.pendingBatch.size > 0) {
-          this.scheduleBatch(translatedSlot);
-        }
-      },
-      {
-        root: originalSlot,
-        threshold: 0,
-      }
-    );
+    const totalChunks = Math.ceil(total / this.LAZY_CHUNK);
+    const translatedChunks = new Set<number>();
 
-    // Observe all paragraph elements in the original slot
-    const paragraphs = originalSlot.querySelectorAll<HTMLElement>('[data-index]');
-    for (const p of paragraphs) {
-      this.translationObserver.observe(p);
-    }
-  }
+    // Determine starting chunk based on scroll position
+    const startChunk = 0;
 
-  /**
-   * Debounces batch requests: waits 100ms to collect visible paragraphs
-   * before firing a single batched translation request.
-   */
-  private scheduleBatch(translatedSlot: HTMLElement): void {
-    if (this.batchTimer !== null) {
-      clearTimeout(this.batchTimer);
-    }
-    this.batchTimer = setTimeout(() => {
-      this.batchTimer = null;
-      this.processBatch(translatedSlot);
-    }, 100);
-  }
+    // Translate a single chunk by index
+    const translateChunk = async (chunkIdx: number): Promise<void> => {
+      if (translatedChunks.has(chunkIdx) || chunkIdx < 0 || chunkIdx >= totalChunks) return;
+      translatedChunks.add(chunkIdx);
 
-  /**
-   * Processes the pending batch: checks cache for each paragraph,
-   * sends uncached paragraphs in a single POST /api/translate call,
-   * and updates the Translated card.
-   *
-   * Validates: Requirements 11.2, 11.3, 11.4, 11.5, 11.6, 11.7
-   */
-  private async processBatch(translatedSlot: HTMLElement): Promise<void> {
-    const indices = Array.from(this.pendingBatch).sort((a, b) => a - b);
-    this.pendingBatch.clear();
+      const start = chunkIdx * this.LAZY_CHUNK;
+      const end = Math.min(start + this.LAZY_CHUNK, total);
+      const indices = Array.from({ length: end - start }, (_, i) => start + i);
 
-    if (indices.length === 0) return;
-
-    // Check cache for each paragraph
-    const uncachedIndices: number[] = [];
-    for (const idx of indices) {
-      const paragraph = this.paragraphData[idx];
-      if (!paragraph) continue;
-
-      const cacheKey: CacheKey = {
-        bookId: this.bookId,
-        chapterIndex: this.currentChapter,
-        paragraphId: paragraph.id,
-        targetLang: this.targetLang,
-      };
-
-      const cached = await translationCache.get(cacheKey);
-      if (cached !== undefined) {
-        // Populate from cache immediately
-        this.setTranslatedText(translatedSlot, idx, cached);
-      } else {
-        uncachedIndices.push(idx);
-      }
-    }
-
-    if (uncachedIndices.length === 0) return;
-
-    // Mark all uncached paragraphs as in-flight and show placeholder
-    for (const idx of uncachedIndices) {
-      this.inFlightIndices.add(idx);
-      this.showPlaceholder(translatedSlot, idx);
-    }
-
-    // Batch all uncached texts into a single POST /api/translate
-    const texts = uncachedIndices.map(idx => this.paragraphData[idx].text);
-    const batchStartTime = Date.now();
-
-    try {
-      const translations = await postTranslate(texts, 'auto', this.targetLang);
-
-      // Enforce minimum 150ms hold before showing results (Req 11.4)
-      const elapsed = Date.now() - batchStartTime;
-      if (elapsed < 150) {
-        await new Promise(resolve => setTimeout(resolve, 150 - elapsed));
-      }
-
-      // Populate translations and cache them
-      for (let i = 0; i < uncachedIndices.length; i++) {
-        const idx = uncachedIndices[i];
-        const translated = translations[i];
+      // Check cache first, collect uncached
+      const uncachedIndices: number[] = [];
+      for (const idx of indices) {
         const paragraph = this.paragraphData[idx];
-
-        this.setTranslatedText(translatedSlot, idx, translated);
-        this.inFlightIndices.delete(idx);
-
-        // Store in cache
-        const cacheKey: CacheKey = {
+        if (!paragraph) continue;
+        const cacheKey = {
           bookId: this.bookId,
           chapterIndex: this.currentChapter,
           paragraphId: paragraph.id,
           targetLang: this.targetLang,
         };
-        translationCache.set(cacheKey, translated);
+        const cached = await translationCache.get(cacheKey);
+        if (cached !== undefined) {
+          this.setTranslatedText(translatedSlot, idx, cached);
+        } else {
+          uncachedIndices.push(idx);
+        }
       }
-    } catch {
-      // On failure: show inline error indicators with tap-to-retry (Req 11.6)
+
+      if (uncachedIndices.length === 0) return;
+
+      // Show placeholders
       for (const idx of uncachedIndices) {
-        this.inFlightIndices.delete(idx);
-        this.showError(translatedSlot, idx);
+        this.showPlaceholder(translatedSlot, idx);
       }
-    }
+
+      // Batch translate
+      const texts = uncachedIndices.map(idx => this.paragraphData[idx].text);
+      try {
+        const translations = await postTranslate(texts, 'auto', this.targetLang);
+        for (let i = 0; i < uncachedIndices.length; i++) {
+          const idx = uncachedIndices[i];
+          const translated = translations[i];
+          this.setTranslatedText(translatedSlot, idx, translated);
+          // Cache it
+          const paragraph = this.paragraphData[idx];
+          translationCache.set({
+            bookId: this.bookId,
+            chapterIndex: this.currentChapter,
+            paragraphId: paragraph.id,
+            targetLang: this.targetLang,
+          }, translated);
+        }
+      } catch {
+        for (const idx of uncachedIndices) {
+          this.showError(translatedSlot, idx);
+        }
+      }
+    };
+
+    // Translate first chunk immediately
+    translateChunk(startChunk);
+
+    // Set up sentinel observer for lazy loading downward
+    let nextDownChunk = startChunk + 1;
+
+    const observeNextSentinel = () => {
+      if (nextDownChunk >= totalChunks) return;
+
+      const sentinelIdx = Math.min(nextDownChunk * this.LAZY_CHUNK - 1, total - 1);
+      const sentinel = translatedSlot.querySelector<HTMLElement>(`[data-index="${sentinelIdx}"]`);
+      if (!sentinel) return;
+
+      this.translationObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            this.translationObserver?.unobserve(entry.target);
+            translateChunk(nextDownChunk++);
+            observeNextSentinel();
+          }
+        },
+        { root: translatedSlot, threshold: 0.1 }
+      );
+
+      this.translationObserver.observe(sentinel);
+    };
+
+    observeNextSentinel();
   }
 
   /**
@@ -653,11 +773,22 @@ class ReadingScreen extends HTMLElement {
     if (el) {
       el.className = 'translation-error';
       el.textContent = t('reading.translationError');
-      el.onclick = () => {
-        // Re-queue this paragraph for translation
-        this.pendingBatch.add(index);
+      el.onclick = async () => {
         this.showPlaceholder(translatedSlot, index);
-        this.scheduleBatch(translatedSlot);
+        const paragraph = this.paragraphData[index];
+        if (!paragraph) return;
+        try {
+          const translations = await postTranslate([paragraph.text], 'auto', this.targetLang);
+          this.setTranslatedText(translatedSlot, index, translations[0]);
+          translationCache.set({
+            bookId: this.bookId,
+            chapterIndex: this.currentChapter,
+            paragraphId: paragraph.id,
+            targetLang: this.targetLang,
+          }, translations[0]);
+        } catch {
+          this.showError(translatedSlot, index);
+        }
       };
     }
   }

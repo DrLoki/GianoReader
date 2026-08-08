@@ -16,6 +16,8 @@
   "reading.tabTranslated": "Tradotto",
   "reading.settingsTooltip": "Impostazioni",
   "reading.translationError": "Traduzione fallita — tocca per riprovare",
+  "reading.prevChapter": "Capitolo precedente",
+  "reading.nextChapter": "Capitolo successivo",
 
   "card.originalLabel": "Testo originale",
   "card.translatedLabel": "Testo tradotto",

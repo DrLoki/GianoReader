@@ -68,10 +68,10 @@ pub fn run() {
             app.manage(server_state);
 
             // Initialize AppState with library path and persistence store
-            let app_data_dir = app.path().app_data_dir().map_err(|e| {
+            let app_data_dir = app.path().app_local_data_dir().map_err(|e| {
                 Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("Failed to resolve app data dir: {}", e),
+                    format!("Failed to resolve app local data dir: {}", e),
                 )) as Box<dyn std::error::Error>
             })?;
 

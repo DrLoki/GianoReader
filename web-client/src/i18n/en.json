@@ -16,6 +16,8 @@
   "reading.tabTranslated": "Translated",
   "reading.settingsTooltip": "Settings",
   "reading.translationError": "Translation failed — tap to retry",
+  "reading.prevChapter": "Previous chapter",
+  "reading.nextChapter": "Next chapter",
 
   "card.originalLabel": "Original text",
   "card.translatedLabel": "Translated text",

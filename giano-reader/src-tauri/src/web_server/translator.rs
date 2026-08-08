@@ -16,6 +16,7 @@ pub enum TranslateError {
     /// The HTTP request to Google Translate failed.
     NetworkFailure(String),
     /// The translation engine is not configured or unavailable.
+    #[allow(dead_code)]
     NotConfigured,
 }
 

@@ -29,6 +29,7 @@ pub fn cors_layer() -> CorsLayer {
 ///
 /// Satisfies Requirements 1.4 and 1.5 — while the server is inactive, all REST API
 /// endpoints and static asset paths return HTTP 401.
+#[allow(dead_code)]
 pub async fn require_active_server(
     State(state): State<Arc<ServerState>>,
     req: Request<Body>,

@@ -55,6 +55,7 @@ Starting with **v0.9.0**, Giano Reader includes a **Web Server Mode** that lets 
 Click the **+ Open book** button in the left sidebar. A native file dialog will open to let you select an `.epub` file.
 
 Once the book is loaded:
+
 - The title and author will appear at the top of the sidebar.
 - The table of contents (TOC) is populated automatically.
 - The first chapter containing actual text will be displayed.
@@ -66,7 +67,7 @@ Once the book is loaded:
 
 ## Main Interface
 
-```
+```text
 ┌──────────────────┬───────────────────────┬──────────────────────┐
 │          Sidebar │        Original Panel │    Translation Panel │
 │                  │                       │                      │
@@ -88,7 +89,7 @@ The bar at the bottom shows your reading position. Each tick mark corresponds to
 ### Sidebar Buttons
 
 | Button | Function |
-|---|---|
+| --- | --- |
 | **+ Open book** | Opens an EPUB file |
 | Bookmark icon | Opens the bookmarks modal |
 | Star icon | Adds a bookmark at the current position |
@@ -114,7 +115,7 @@ The two panels (original and translation) scroll in a synchronized manner: movin
 **Keyboard Shortcuts:**
 
 | Key | Action |
-|---|---|
+| --- | --- |
 | `↓` / `↑` | Scrolls by 3 lines |
 | `Space` | Scrolls down by one page |
 | `Shift + Space` | Scrolls up by one page |
@@ -127,9 +128,9 @@ Click the **image** icon (file-image) to toggle the original EPUB view: the chap
 
 To make comparative reading natural and highly efficient, Giano Reader features three interactive paragraph-level helpers:
 
-* **Synchronized Hover Highlight:** By default, hovering over any paragraph in either the original or the translation panel will instantly highlight it with a subtle background tint and a colored border at the side. In perfect synchronization, the corresponding paragraph in the opposite panel is highlighted as well, letting you easily track complex narratives. This is fully compatible with RTL (Right-to-Left) layouts like Arabic.
-* **Chromatic Paragraph Pairing:** Click the **Palette** icon in the translation header to toggle chromatic pairing. When active, adjacent paragraphs in the original and translated panels are color-coded in alternating HSL colors. Giano Reader dynamically uses customized palettes optimized separately for light and dark/nord/solarized backgrounds to maintain high text contrast and readability.
-* **Paragraph Numbers Toggle:** Click the **#** (hash) icon in the translation header to toggle inline paragraph numbers. This displays small, unobtrusive numbers at the start of each text block, aiding in precise academic comparison and line-by-line verification across both languages.
+- **Synchronized Hover Highlight:** By default, hovering over any paragraph in either the original or the translation panel will instantly highlight it with a subtle background tint and a colored border at the side. In perfect synchronization, the corresponding paragraph in the opposite panel is highlighted as well, letting you easily track complex narratives. This is fully compatible with RTL (Right-to-Left) layouts like Arabic.
+- **Chromatic Paragraph Pairing:** Click the **Palette** icon in the translation header to toggle chromatic pairing. When active, adjacent paragraphs in the original and translated panels are color-coded in alternating HSL colors. Giano Reader dynamically uses customized palettes optimized separately for light and dark/nord/solarized backgrounds to maintain high text contrast and readability.
+- **Paragraph Numbers Toggle:** Click the **#** (hash) icon in the translation header to toggle inline paragraph numbers. This displays small, unobtrusive numbers at the start of each text block, aiding in precise academic comparison and line-by-line verification across both languages.
 
 ---
 
@@ -140,16 +141,20 @@ To make comparative reading natural and highly efficient, Giano Reader features 
 Giano Reader supports a dual translation architecture to meet both simplicity and literary excellence:
 
 #### 1. FREE Mode (Google Translate)
+
 The basic translation uses the unofficial public endpoint of Google Translate (`translate.googleapis.com`) — **no API key required**. Text is split into ~4500-character chunks and translated **lazily**:
-* Upon loading a chapter, the visible block is translated immediately.
-* As you scroll down, subsequent blocks are automatically translated.
-* Previous blocks (above the initial position) are translated in the background.
+
+- Upon loading a chapter, the visible block is translated immediately.
+- As you scroll down, subsequent blocks are automatically translated.
+- Previous blocks (above the initial position) are translated in the background.
 
 #### 2. PRO Mode (OpenRouter API)
+
 For a premium, context-aware translation that preserves literary style, nuances, and vocabulary consistency, you can activate the **PRO** mode based on the **OpenRouter** API:
-* **Activation:** Paste a valid API Key in **Settings**. As soon as it is entered, the **FREE / PRO** switch will appear in the sidebar.
-* **Model Selection:** You can load the list of available models directly from OpenRouter servers and select your preferred one. Fast and efficient models are highly recommended (such as `google/gemini-2.5-flash` or `meta-llama/llama-3-8b-instruct`) to reduce response times to just a few seconds.
-* **Timing & Network:** When using PRO mode, OpenRouter uses *Chunked Transfer Encoding*. Consequently, the translation is generated in the background and rendered as soon as it is finished; paragraphs currently being translated remain grayed out until the process completes.
+
+- **Activation:** Paste a valid API Key in **Settings**. As soon as it is entered, the **FREE / PRO** switch will appear in the sidebar.
+- **Model Selection:** You can load the list of available models directly from OpenRouter servers and select your preferred one. Fast and efficient models are highly recommended (such as `google/gemini-2.5-flash` or `meta-llama/llama-3-8b-instruct`) to reduce response times to just a few seconds.
+- **Timing & Network:** When using PRO mode, OpenRouter uses *Chunked Transfer Encoding*. Consequently, the translation is generated in the background and rendered as soon as it is finished; paragraphs currently being translated remain grayed out until the process completes.
 
 ### Changing Translation Language
 
@@ -309,7 +314,7 @@ Toggle the switch **OFF** in Settings, or close GianoReader. The server stops ac
 Open Settings by clicking the **gear** icon in the sidebar.
 
 | Setting | Description |
-|---|---|
+| --- | ---|
 | **Interface language** | UI text language (17 languages available with automatic i18n alignment) |
 | **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
 | **Font** | Font family for reading text |

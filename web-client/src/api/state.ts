@@ -10,6 +10,9 @@ import type { ReadingState } from '../types';
  */
 export async function getReadingState(bookId: string): Promise<ReadingState> {
   const response = await apiFetch(`/api/books/${bookId}/state`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch reading state: ${response.status}`);
+  }
   return response.json();
 }
 

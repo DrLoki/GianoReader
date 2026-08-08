@@ -1,0 +1,64 @@
+/* CSS Reset + Custom Properties */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--font-size, 16px);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root {
+  --font-size: 16px;
+  --accent: #c0392b;
+  --bg: #121212;
+  --fg: #e0e0e0;
+  --surface: #1e1e1e;
+  --border: #333;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-muted: #999999;
+  --header-bg: #1a1a1a;
+  --card-bg: #1e1e1e;
+  --fab-bg: #2a2a2a;
+  --hover-bg: rgba(255, 255, 255, 0.1);
+  --tab-active-bg: rgba(255, 255, 255, 0.15);
+  --on-surface: #ffffff;
+  --on-surface-muted: #aaaaaa;
+  --surface-variant: #2a2a2a;
+  --border-color: #333333;
+  --text-color: #e0e0e0;
+  --card-label-color: #aaaaaa;
+  --icon-filter: brightness(0) invert(1);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

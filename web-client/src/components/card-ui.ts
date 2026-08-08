@@ -1,32 +1,34 @@
 import { t } from '../i18n/index';
 
 /**
- * <card-ui> — Dual overlapping card layout for reading Original and Translated text.
+ * <card-ui> — Dual-panel reading layout.
  *
- * The active card is in the foreground (higher z-index); the inactive card shows
- * a visible strip of at least 12px on the opposite edge as a swipe affordance.
- * Switching cards is purely visual (CSS transform transition ≤ 300ms) — no content
- * is re-fetched on card switch.
+ * - On wide screens (≥768px): side-by-side panels with synchronized scroll.
+ * - On narrow screens (<768px): single panel visible at a time, slide to switch.
  *
- * Validates: Requirements 10.1, 10.2, 10.5
+ * Both panels are always rendered and in the DOM. On narrow screens, the inactive
+ * panel is positioned off-screen but remains part of the layout for
+ * IntersectionObserver to work with root: translatedSlot.
  */
 class CardUI extends HTMLElement {
   private activeCard: 'original' | 'translated' = 'original';
   private startX = 0;
   private startY = 0;
   private tracking = false;
+  private syncingScroll = false;
+  private syncTimeout: ReturnType<typeof setTimeout> | null = null;
 
   connectedCallback(): void {
     this.render();
-    this.addEventListener('pointerdown', this.onPointerDown);
-    this.addEventListener('pointermove', this.onPointerMove);
-    this.addEventListener('pointerup', this.onPointerUp);
+    this.setupScrollSync();
+    this.addEventListener('pointerdown', this.onPointerDown, { passive: true });
+    this.addEventListener('pointerup', this.onPointerUp, { passive: true });
   }
 
   disconnectedCallback(): void {
     this.removeEventListener('pointerdown', this.onPointerDown);
-    this.removeEventListener('pointermove', this.onPointerMove);
     this.removeEventListener('pointerup', this.onPointerUp);
+    if (this.syncTimeout) clearTimeout(this.syncTimeout);
   }
 
   private onPointerDown = (e: PointerEvent): void => {
@@ -35,76 +37,32 @@ class CardUI extends HTMLElement {
     this.tracking = true;
   };
 
-  private onPointerMove = (_e: PointerEvent): void => {
-    // Reserved for optional visual drag feedback
-  };
-
   private onPointerUp = (e: PointerEvent): void => {
     if (!this.tracking) return;
     this.tracking = false;
+
+    // Only handle swipe in narrow mode
+    if (window.innerWidth >= 768) return;
 
     const dx = e.clientX - this.startX;
     const dy = e.clientY - this.startY;
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
 
-    // Must have ≥ 40px horizontal displacement and horizontal:vertical ratio ≥ 2:1
     if (absDx >= 40 && (absDy === 0 || absDx / absDy >= 2)) {
       if (dx < 0) {
-        // Swipe left → show translated
         this.switchTo('translated');
       } else {
-        // Swipe right → show original
         this.switchTo('original');
       }
     }
   };
 
-  /** Switch the visible card. No-op if already active. No re-fetch. */
+  /** Switch the visible card (narrow mode). In wide mode this is a no-op visually. */
   public switchTo(card: 'original' | 'translated'): void {
     if (card === this.activeCard) return;
-
-    // Sync scroll position before switching
-    this.syncScroll(this.activeCard, card);
-
     this.activeCard = card;
     this.updatePositions();
-  }
-
-  /**
-   * Synchronise scroll position between cards: find the first paragraph whose
-   * top edge is ≥ 1px inside the source viewport, then scroll the destination
-   * card to align that paragraph at the top.
-   *
-   * Validates: Requirements 10.4
-   */
-  private syncScroll(fromCard: 'original' | 'translated', toCard: 'original' | 'translated'): void {
-    const fromSlot = fromCard === 'original' ? this.getOriginalSlot() : this.getTranslatedSlot();
-    const toSlot = toCard === 'original' ? this.getOriginalSlot() : this.getTranslatedSlot();
-
-    if (!fromSlot || !toSlot) return;
-
-    // Find the first paragraph whose top edge is ≥ 1px inside the source viewport
-    const paragraphs = fromSlot.querySelectorAll<HTMLElement>('[data-index]');
-    const containerRect = fromSlot.getBoundingClientRect();
-
-    let targetIndex: string | null = null;
-    for (const p of paragraphs) {
-      const rect = p.getBoundingClientRect();
-      // Top edge is at least 1px inside the container's visible area
-      if (rect.top >= containerRect.top + 1) {
-        targetIndex = p.getAttribute('data-index');
-        break;
-      }
-    }
-
-    if (targetIndex === null) return;
-
-    // Scroll the destination card to align that paragraph at the top
-    const targetParagraph = toSlot.querySelector<HTMLElement>(`[data-index="${targetIndex}"]`);
-    if (targetParagraph) {
-      targetParagraph.scrollIntoView({ block: 'start' });
-    }
   }
 
   /** Returns the currently active card identifier. */
@@ -112,62 +70,114 @@ class CardUI extends HTMLElement {
     return this.activeCard;
   }
 
-  /** Returns the content container for the Original card so the parent can inject paragraphs. */
+  /** Returns the content container for the Original card. */
   public getOriginalSlot(): HTMLElement | null {
     return this.querySelector('.card-original .card-content');
   }
 
-  /** Returns the content container for the Translated card so the parent can inject paragraphs. */
+  /** Returns the content container for the Translated card. */
   public getTranslatedSlot(): HTMLElement | null {
     return this.querySelector('.card-translated .card-content');
+  }
+
+  private setupScrollSync(): void {
+    const originalSlot = this.getOriginalSlot();
+    const translatedSlot = this.getTranslatedSlot();
+    if (!originalSlot || !translatedSlot) return;
+
+    const sync = (source: HTMLElement, target: HTMLElement) => {
+      if (this.syncingScroll) return;
+      // Only sync in wide mode (both panels visible)
+      if (window.innerWidth < 768) return;
+
+      this.syncingScroll = true;
+      const maxSource = Math.max(1, source.scrollHeight - source.clientHeight);
+      const ratio = source.scrollTop / maxSource;
+      target.scrollTop = ratio * Math.max(1, target.scrollHeight - target.clientHeight);
+
+      if (this.syncTimeout) clearTimeout(this.syncTimeout);
+      this.syncTimeout = setTimeout(() => {
+        this.syncingScroll = false;
+      }, 50);
+    };
+
+    originalSlot.addEventListener('scroll', () => sync(originalSlot, translatedSlot), { passive: true });
+    translatedSlot.addEventListener('scroll', () => sync(translatedSlot, originalSlot), { passive: true });
   }
 
   private render(): void {
     this.innerHTML = `
       <style>
         card-ui {
-          display: block;
-          position: relative;
+          display: flex;
           width: 100%;
           height: 100%;
           overflow: hidden;
+          touch-action: pan-y;
+          position: relative;
+        }
+
+        /* ─── Wide layout: side by side ─── */
+        @media (min-width: 768px) {
+          card-ui .card-panel {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            background: var(--card-bg, #1e1e1e);
+          }
+
+          card-ui .card-original {
+            border-right: 1px solid var(--border-color, #333);
+          }
+        }
+
+        /* ─── Narrow layout: one panel at a time ─── */
+        @media (max-width: 767px) {
+          card-ui {
+            display: block;
+          }
+
+          card-ui .card-panel {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            background: var(--card-bg, #1e1e1e);
+            transition: left 0.3s ease;
+          }
+
+          card-ui .card-original {
+            left: 0;
+          }
+
+          card-ui .card-translated {
+            left: 100%;
+          }
+
+          card-ui .card-original.slide-out {
+            left: -100%;
+          }
+
+          card-ui .card-translated.slide-in {
+            left: 0;
+          }
         }
 
         card-ui .card-panel {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          border-radius: 8px;
-          background: var(--card-bg, #1e1e1e);
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-          transition: transform 0.3s ease;
-          will-change: transform;
+          border-top: 3px solid transparent;
         }
 
         card-ui .card-original {
-          border-top: 3px solid #00bcd4;
-          z-index: 2;
-          transform: translateX(0);
+          border-top-color: #00bcd4;
         }
 
         card-ui .card-translated {
-          border-top: 3px solid #ff9800;
-          z-index: 1;
-          transform: translateX(calc(100% - 12px));
-        }
-
-        card-ui .card-original.inactive {
-          z-index: 1;
-          transform: translateX(calc(-100% + 12px));
-        }
-
-        card-ui .card-translated.active {
-          z-index: 2;
-          transform: translateX(0);
+          border-top-color: #ff9800;
         }
 
         card-ui .card-label {
@@ -176,7 +186,6 @@ class CardUI extends HTMLElement {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.5px;
-          color: var(--card-label-color, #aaa);
           flex-shrink: 0;
         }
 
@@ -191,6 +200,7 @@ class CardUI extends HTMLElement {
         card-ui .card-content {
           flex: 1;
           overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           padding: 0 12px 12px;
           font-size: var(--font-size, 16px);
           line-height: 1.7;
@@ -211,17 +221,17 @@ class CardUI extends HTMLElement {
   }
 
   private updatePositions(): void {
+    // Only relevant in narrow mode
     const original = this.querySelector('.card-original') as HTMLElement | null;
     const translated = this.querySelector('.card-translated') as HTMLElement | null;
-
     if (!original || !translated) return;
 
-    if (this.activeCard === 'original') {
-      original.classList.remove('inactive');
-      translated.classList.remove('active');
+    if (this.activeCard === 'translated') {
+      original.classList.add('slide-out');
+      translated.classList.add('slide-in');
     } else {
-      original.classList.add('inactive');
-      translated.classList.add('active');
+      original.classList.remove('slide-out');
+      translated.classList.remove('slide-in');
     }
   }
 }

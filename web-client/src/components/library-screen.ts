@@ -1,91 +1,122 @@
 import { getBooks, getCoverUrl } from '../api/books';
+import { getBookmarks } from '../api/bookmarks';
 import { getReadingState } from '../api/state';
 import { t } from '../i18n/index';
-import type { BookSummary } from '../types';
+import type { BookSummary, Bookmark } from '../types';
+
+interface BookmarkWithBook extends Bookmark {
+  bookId: string;
+  bookTitle: string;
+}
 
 /**
- * Library screen component — displays a responsive grid of book cards.
+ * Library screen component — displays a responsive grid of book cards
+ * with tabs to switch between Library and Bookmarks views.
  *
- * Fetches GET /api/books on mount, shows loading/empty/error states,
- * and dispatches 'navigate' on card tap (after fetching reading state).
- *
- * Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8
+ * Header: Settings gear (left) + Library/Bookmarks tabs (right).
+ * Dispatches 'navigate' on card tap and 'open-settings' on gear tap.
  */
 class LibraryScreen extends HTMLElement {
+  private books: BookSummary[] = [];
+  private activeTab: 'library' | 'bookmarks' = 'library';
+
   connectedCallback(): void {
+    this.render();
     this.loadBooks();
   }
 
+  private render(): void {
+    this.innerHTML = `
+      <style>${LibraryScreen.styles}</style>
+      <div class="library-container">
+        <header class="library-header">
+          <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">⚙</button>
+          <div class="tab-group" role="tablist">
+            <button class="tab-btn tab-library active" role="tab" aria-selected="true">${t('library.title')}</button>
+            <button class="tab-btn tab-bookmarks" role="tab" aria-selected="false">${t('bookmarks.title')}</button>
+          </div>
+        </header>
+        <div class="library-content"></div>
+      </div>
+    `;
+
+    this.attachHeaderListeners();
+  }
+
+  private attachHeaderListeners(): void {
+    const settingsBtn = this.querySelector('.settings-btn') as HTMLButtonElement;
+    settingsBtn?.addEventListener('click', () => {
+      this.dispatchEvent(new CustomEvent('open-settings', { bubbles: true, composed: true }));
+    });
+
+    const tabLibrary = this.querySelector('.tab-library') as HTMLButtonElement;
+    const tabBookmarks = this.querySelector('.tab-bookmarks') as HTMLButtonElement;
+
+    tabLibrary?.addEventListener('click', () => {
+      if (this.activeTab === 'library') return;
+      this.activeTab = 'library';
+      tabLibrary.classList.add('active');
+      tabLibrary.setAttribute('aria-selected', 'true');
+      tabBookmarks.classList.remove('active');
+      tabBookmarks.setAttribute('aria-selected', 'false');
+      this.showLibrary();
+    });
+
+    tabBookmarks?.addEventListener('click', () => {
+      if (this.activeTab === 'bookmarks') return;
+      this.activeTab = 'bookmarks';
+      tabBookmarks.classList.add('active');
+      tabBookmarks.setAttribute('aria-selected', 'true');
+      tabLibrary.classList.remove('active');
+      tabLibrary.setAttribute('aria-selected', 'false');
+      this.showBookmarks();
+    });
+  }
+
   private async loadBooks(): Promise<void> {
-    this.renderLoading();
+    const content = this.querySelector('.library-content') as HTMLElement;
+    if (!content) return;
+
+    content.innerHTML = `
+      <div class="library-loading" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>${t('library.loading')}</p>
+      </div>
+    `;
+
     try {
-      const books = await getBooks();
-      if (books.length === 0) {
-        this.renderEmpty();
-      } else {
-        this.renderGrid(books);
-      }
+      this.books = await getBooks();
+      this.showLibrary();
     } catch {
-      this.renderError();
-    }
-  }
-
-  private renderLoading(): void {
-    this.innerHTML = `
-      <style>${LibraryScreen.styles}</style>
-      <div class="library-container">
-        <h1 class="library-title">${t('library.title')}</h1>
-        <div class="library-loading" role="status" aria-live="polite">
-          <div class="spinner" aria-hidden="true"></div>
-          <p>${t('library.loading')}</p>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderEmpty(): void {
-    this.innerHTML = `
-      <style>${LibraryScreen.styles}</style>
-      <div class="library-container">
-        <h1 class="library-title">${t('library.title')}</h1>
-        <div class="library-empty" role="status" aria-live="polite">
-          <p>${t('library.empty')}</p>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderError(): void {
-    this.innerHTML = `
-      <style>${LibraryScreen.styles}</style>
-      <div class="library-container">
-        <h1 class="library-title">${t('library.title')}</h1>
+      content.innerHTML = `
         <div class="library-error" role="alert" aria-live="assertive">
           <p>${t('library.error')}</p>
           <button class="retry-btn" aria-label="${t('library.retry')}">${t('library.retry')}</button>
         </div>
-      </div>
-    `;
-
-    const btn = this.querySelector('.retry-btn') as HTMLButtonElement;
-    btn?.addEventListener('click', () => this.loadBooks());
+      `;
+      const btn = content.querySelector('.retry-btn') as HTMLButtonElement;
+      btn?.addEventListener('click', () => this.loadBooks());
+    }
   }
 
-  private renderGrid(books: BookSummary[]): void {
-    const cards = books.map((book) => this.renderCard(book)).join('');
+  private showLibrary(): void {
+    const content = this.querySelector('.library-content') as HTMLElement;
+    if (!content) return;
 
-    this.innerHTML = `
-      <style>${LibraryScreen.styles}</style>
-      <div class="library-container">
-        <h1 class="library-title">${t('library.title')}</h1>
-        <div class="book-grid" role="list">
-          ${cards}
+    if (this.books.length === 0) {
+      content.innerHTML = `
+        <div class="library-empty" role="status" aria-live="polite">
+          <p>${t('library.empty')}</p>
         </div>
-      </div>
-    `;
+      `;
+      return;
+    }
+
+    const cards = this.books.map((book) => this.renderCard(book)).join('');
+    content.innerHTML = `<div class="book-grid" role="list">${cards}</div>`;
 
     // Attach click listeners to each card
-    this.querySelectorAll<HTMLElement>('.book-card').forEach((card) => {
+    content.querySelectorAll<HTMLElement>('.book-card').forEach((card) => {
       card.addEventListener('click', async () => {
         const bookId = card.dataset.bookId;
         if (!bookId) return;
@@ -108,11 +139,107 @@ class LibraryScreen extends HTMLElement {
     });
 
     // Attach fallback handlers for cover images
-    this.querySelectorAll<HTMLImageElement>('.book-cover').forEach((img) => {
+    content.querySelectorAll<HTMLImageElement>('.book-cover').forEach((img) => {
       img.addEventListener('error', () => {
         img.src = LibraryScreen.placeholderSvg;
       });
     });
+  }
+
+  private async showBookmarks(): Promise<void> {
+    const content = this.querySelector('.library-content') as HTMLElement;
+    if (!content) return;
+
+    content.innerHTML = `
+      <div class="library-loading" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>${t('general.loading')}</p>
+      </div>
+    `;
+
+    // If books haven't been loaded yet, load them first
+    if (this.books.length === 0) {
+      try {
+        this.books = await getBooks();
+      } catch {
+        content.innerHTML = `
+          <div class="library-error" role="alert">
+            <p>${t('library.error')}</p>
+          </div>
+        `;
+        return;
+      }
+    }
+
+    // Fetch bookmarks for all books
+    const allBookmarks: BookmarkWithBook[] = [];
+    await Promise.all(
+      this.books.map(async (book) => {
+        try {
+          const bookmarks = await getBookmarks(book.id);
+          for (const bm of bookmarks) {
+            allBookmarks.push({ ...bm, bookId: book.id, bookTitle: book.title });
+          }
+        } catch {
+          // Skip books with failed bookmark fetches
+        }
+      }),
+    );
+
+    // Sort by creation date descending (most recent first)
+    allBookmarks.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    if (allBookmarks.length === 0) {
+      content.innerHTML = `
+        <div class="library-empty" role="status" aria-live="polite">
+          <p>${t('bookmarks.empty')}</p>
+        </div>
+      `;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="bookmarks-list" role="list">
+        ${allBookmarks.map((bm) => this.renderBookmarkItem(bm)).join('')}
+      </div>
+    `;
+
+    // Attach click listeners
+    content.querySelectorAll<HTMLElement>('.bookmark-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        const bookId = item.dataset.bookId;
+        const chapter = parseInt(item.dataset.chapter || '0', 10);
+        const paragraphId = item.dataset.paragraphId || null;
+
+        if (!bookId) return;
+
+        this.dispatchEvent(
+          new CustomEvent('navigate', {
+            detail: {
+              screen: 'reading',
+              bookId,
+              state: { currentChapter: chapter, paragraphId, scrollOffset: 0, progress: 0 },
+            },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      });
+    });
+  }
+
+  private renderBookmarkItem(bm: BookmarkWithBook): string {
+    const label = bm.label || t('bookmarks.defaultLabel', { chapter: String(bm.chapterIndex + 1) });
+    const date = new Date(bm.createdAt).toLocaleDateString();
+
+    return `
+      <div class="bookmark-item" role="listitem" tabindex="0"
+           data-book-id="${bm.bookId}" data-chapter="${bm.chapterIndex}" data-paragraph-id="${bm.paragraphId}">
+        <div class="bookmark-book-title">${escapeHtml(bm.bookTitle)}</div>
+        <div class="bookmark-label">${escapeHtml(label)}</div>
+        <div class="bookmark-date">${date}</div>
+      </div>
+    `;
   }
 
   private renderCard(book: BookSummary): string {
@@ -146,7 +273,7 @@ class LibraryScreen extends HTMLElement {
       display: block;
       width: 100%;
       min-height: 100vh;
-      padding: 1rem;
+      padding: 0;
       box-sizing: border-box;
     }
 
@@ -155,11 +282,71 @@ class LibraryScreen extends HTMLElement {
       margin: 0 auto;
     }
 
-    .library-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin: 0 0 1.25rem;
-      color: var(--text-primary, #fff);
+    .library-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--header-bg, #1a1a1a);
+      border-bottom: 1px solid var(--border-color, #333);
+    }
+
+    .library-header .settings-btn {
+      min-width: 44px;
+      min-height: 44px;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      font-size: 1.4rem;
+      cursor: pointer;
+      border-radius: 8px;
+      color: var(--text-color, #e0e0e0);
+    }
+
+    .library-header .settings-btn:hover,
+    .library-header .settings-btn:focus-visible {
+      background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+    }
+
+    .library-header .tab-group {
+      display: flex;
+      gap: 4px;
+    }
+
+    .library-header .tab-btn {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 6px;
+      color: var(--text-muted, #999);
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .library-header .tab-btn:hover,
+    .library-header .tab-btn:focus-visible {
+      background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+    }
+
+    .library-header .tab-btn.active {
+      color: var(--text-color, #e0e0e0);
+      background: var(--tab-active-bg, rgba(255, 255, 255, 0.15));
+      font-weight: 600;
+    }
+
+    .library-content {
+      padding: 1rem;
     }
 
     /* Loading state */
@@ -303,6 +490,49 @@ class LibraryScreen extends HTMLElement {
       font-size: 0.7rem;
       color: var(--accent, #c0392b);
       font-weight: 500;
+    }
+
+    /* Bookmarks list */
+    .bookmarks-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bookmark-item {
+      padding: 12px 16px;
+      background: var(--surface, #1e1e1e);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .bookmark-item:hover,
+    .bookmark-item:focus-visible {
+      background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+    }
+
+    .bookmark-item:focus-visible {
+      outline: 2px solid var(--accent, #c0392b);
+      outline-offset: 2px;
+    }
+
+    .bookmark-book-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-primary, #fff);
+      margin-bottom: 2px;
+    }
+
+    .bookmark-label {
+      font-size: 0.8rem;
+      color: var(--text-secondary, #aaa);
+    }
+
+    .bookmark-date {
+      font-size: 0.7rem;
+      color: var(--text-muted, #666);
+      margin-top: 4px;
     }
   `;
 }

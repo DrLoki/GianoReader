@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 // ── REST response shapes ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BookSummary {
     pub id: String,
     pub title: String,
@@ -14,6 +15,7 @@ pub struct BookSummary {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TocEntry {
     pub index: u32,
     pub title: String,
@@ -21,6 +23,7 @@ pub struct TocEntry {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChapterResponse {
     pub chapter_index: u32,
     pub title: String,
@@ -28,6 +31,7 @@ pub struct ChapterResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Paragraph {
     pub id: String,    // stable hex hash
     pub index: u32,
