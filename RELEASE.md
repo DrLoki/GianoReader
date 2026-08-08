@@ -1,3 +1,30 @@
+# 🚀 GianoReader Release v0.8.3
+
+This release introduces a **Resizable Library Modal**, a **Clean Library** tool to detect and remove broken book links, complete **TTS Voice Gender Indicators** across all models, the full **Gemini TTS 30-voice catalog**, and **TTS Audio Download** with native Save dialog support.
+
+---
+
+## 📝 Changelog (v0.8.2 → v0.8.3)
+
+### 📚 Library Modal Enhancements
+- **Resizable Library Modal**: The library modal window is now user-resizable (drag from bottom-right corner). Supports grow up to 90vw × 90vh with minimum constraints (320×300px) to prevent accidental collapse.
+- **Clean Library Tool**: New toolbar button (broken-link icon) that scans all books in the library and verifies file existence on disk. Displays results in a styled in-app modal listing broken entries (title + path), with a one-click "Remove" action to purge invalid entries. Fully localized across all 20 supported languages.
+
+### 🎙️ TTS Voice Improvements
+- **Gender Indicators on All Models**: Added ♀️/♂️ labels to Grok Voice TTS (Eve ♀️, Ara ♀️, Rex ♂️, Sal ♂️, Leo ♂️) and OpenAI fallback voices (Alloy ♀️, Echo ♂️, Fable ♂️, Onyx ♂️, Nova ♀️, Shimmer ♀️).
+- **Complete Gemini TTS Voice Catalog**: Expanded from 6 to all 30 official Google Gemini TTS voices, organized in Female/Male optgroups with style descriptors (e.g., "Kore ♀️ — Firm", "Puck ♂️ — Upbeat").
+
+### ⬇️ TTS Audio Download
+- **Native Save Dialog**: The TTS download button now opens a native "Save As" file dialog (via Tauri plugin-dialog) letting users choose where to save the audio file. Browser fallback remains for non-Tauri environments.
+- **Gemini WAV Support**: Gemini TTS sessions now store PCM audio for download. The assembled output is exported as a proper WAV file (24kHz 16-bit mono with RIFF header), while other models continue to export MP3.
+- **Download Button Repositioned**: Moved to the far right of the TTS toolbar, after the progress percentage indicator, for clearer visual hierarchy.
+- **Activation Fix**: The download button now correctly activates for all PRO models (including Gemini) once playback begins, resolving the issue where it remained permanently disabled.
+
+### 🌐 Localization
+- **20-Language Coverage for Clean Library**: All new UI strings (`libCheck`, `libCheckRunning`, `libCheckAllGood`, `libCheckBroken`, `libCheckConfirm`, `libCheckRemoveAction`, `libCheckRemoved`) translated across English, Italian, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Thai, Filipino, Arabic, Albanian, Swedish, Ukrainian, and Slovenian.
+
+---
+
 # 🚀 GianoReader Release v0.8.2
 
 This release introduces a **Unified Reader Toolbar** for side-by-side reading layout customization, a new **Dual-Pane Hide/Show Toggle** with automatic scroll-sync restoration, **On-Hover TOC Chapter Translations** in the sidebar, complete multi-language localized labels across all 19 supported languages, and a thorough **Dead Code Removal** of the obsolete Python sidecar pipeline.

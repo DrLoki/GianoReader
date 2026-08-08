@@ -779,6 +779,57 @@ body.theme-sepia {
   cursor: not-allowed;
 }
 
+/* ── Web Server Mode controls ── */
+.web-server-controls {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.web-server-toggle-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.web-server-toggle-row input[type="number"] {
+  width: 80px; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text);
+  font-size: 0.85rem;
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.web-server-toggle-row input[type="number"]:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+/* Toggle switch */
+.switch {
+  position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch-slider {
+  position: absolute; inset: 0;
+  background: var(--border); border-radius: 22px;
+  cursor: pointer; transition: background 0.2s;
+}
+.switch-slider::before {
+  content: ""; position: absolute;
+  width: 16px; height: 16px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%;
+  transition: transform 0.2s;
+}
+.switch input:checked + .switch-slider { background: var(--accent); }
+.switch input:checked + .switch-slider::before { transform: translateX(18px); }
+/* QR code & URL */
+.web-server-url {
+  font-size: 0.82rem; color: var(--text);
+  word-break: break-all; margin: 0;
+}
+.web-server-qr {
+  width: 150px; height: 150px;
+  border-radius: 6px; margin-top: 6px;
+}
+.settings-error {
+  font-size: 0.75rem; color: #c0392b;
+  margin: 2px 0 0; font-weight: 500;
+}
+
 #settings-about {
   display: flex; justify-content: space-between;
   margin-top: 18px; padding-top: 12px;

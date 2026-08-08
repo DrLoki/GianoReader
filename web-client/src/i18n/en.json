@@ -1,0 +1,55 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Loading…",
+  "general.close": "Close",
+  "general.cancel": "Cancel",
+  "general.confirm": "Confirm",
+
+  "library.title": "Library",
+  "library.loading": "Loading books…",
+  "library.empty": "No books available on the server. Add books through the GianoReader desktop app.",
+  "library.error": "Could not load library. Please check your connection.",
+  "library.retry": "Retry",
+  "library.progress": "{progress}% read",
+
+  "reading.tabOriginal": "Original",
+  "reading.tabTranslated": "Translated",
+  "reading.settingsTooltip": "Settings",
+  "reading.translationError": "Translation failed — tap to retry",
+
+  "card.originalLabel": "Original text",
+  "card.translatedLabel": "Translated text",
+
+  "settings.title": "Settings",
+  "settings.theme": "Theme",
+  "settings.themeLight": "Light",
+  "settings.themeDark": "Dark",
+  "settings.themeSepia": "Sepia",
+  "settings.translationLanguage": "Translation language",
+  "settings.fontSize": "Font size",
+  "settings.uiLanguage": "Interface language",
+  "settings.connectionInfo": "Connection",
+  "settings.statusConnected": "Connected",
+  "settings.statusDisconnected": "Disconnected",
+
+  "bookmarks.title": "Bookmarks",
+  "bookmarks.addTooltip": "Add bookmark",
+  "bookmarks.deleteTooltip": "Delete bookmark",
+  "bookmarks.defaultLabel": "Chapter {chapter}",
+  "bookmarks.empty": "No bookmarks saved",
+
+  "fab.bookmark": "Add bookmark",
+  "fab.library": "Back to library",
+  "fab.tts": "Text to speech",
+
+  "disconnected.title": "Disconnected",
+  "disconnected.message": "Unable to reach the server at {url}. Make sure GianoReader is running and Web Server Mode is active.",
+  "disconnected.reconnect": "Reconnect",
+  "disconnected.serverUrl": "Server URL",
+
+  "toast.bookmarkSaved": "Bookmark saved",
+  "toast.bookmarkDeleted": "Bookmark deleted",
+  "toast.settingsSaved": "Settings saved",
+  "toast.errorGeneric": "Something went wrong. Please try again.",
+  "toast.networkError": "Network error. Check your connection."
+}

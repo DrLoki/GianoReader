@@ -101,6 +101,16 @@ const toggleTranslationModeBtn = document.getElementById('toggle-translation-mod
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
 
+// Web Server Mode
+const webServerSettings = document.getElementById('web-server-settings');
+const webServerToggle = document.getElementById('web-server-toggle');
+const webServerPort = document.getElementById('web-server-port');
+const webServerError = document.getElementById('web-server-error');
+const webServerInfo = document.getElementById('web-server-info');
+const webServerUrl = document.getElementById('web-server-url');
+const webServerQr = document.getElementById('web-server-qr');
+const webServerWarning = document.getElementById('web-server-warning');
+
 // TTS Controls
 const ttsPlayBtn = document.getElementById('tts-play-btn');
 const ttsStopBtn = document.getElementById('tts-stop-btn');
@@ -1546,6 +1556,123 @@ if (toggleTranslationModeBtn) {
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.add('hidden'); });
+
+// ── Web Server Mode ────────────────────────────────────────────────────────
+(function initWebServerMode() {
+  // Show web server settings only in Tauri
+  if (!(window.__TAURI__ || window.__TAURI_INTERNALS__)) return;
+  if (webServerSettings) webServerSettings.classList.remove('hidden');
+
+  function showWebServerError(msg) {
+    if (webServerError) {
+      webServerError.textContent = msg;
+      webServerError.classList.remove('hidden');
+    }
+  }
+  function hideWebServerError() {
+    if (webServerError) webServerError.classList.add('hidden');
+  }
+
+  function updateWebServerUI(active, info) {
+    if (!webServerToggle) return;
+    webServerToggle.checked = active;
+    webServerPort.disabled = active;
+
+    if (active && info) {
+      const url = info.lan_url || `http://127.0.0.1:${info.port}`;
+      webServerUrl.textContent = url;
+
+      // Generate QR code via public API
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=150x150`;
+      webServerQr.src = qrSrc;
+      webServerQr.alt = `QR: ${url}`;
+
+      webServerInfo.classList.remove('hidden');
+
+      // Show loopback warning if URL contains 127.0.0.1
+      if (url.includes('127.0.0.1')) {
+        webServerWarning.classList.remove('hidden');
+      } else {
+        webServerWarning.classList.add('hidden');
+      }
+    } else {
+      webServerInfo.classList.add('hidden');
+      webServerWarning.classList.add('hidden');
+    }
+    hideWebServerError();
+  }
+
+  // Load persisted port from settings
+  const s = loadSettings();
+  if (s.webServerPort && webServerPort) {
+    webServerPort.value = s.webServerPort;
+  }
+
+  // Toggle event
+  if (webServerToggle) {
+    webServerToggle.addEventListener('change', async () => {
+      hideWebServerError();
+      const active = webServerToggle.checked;
+
+      if (active) {
+        // Start server
+        const port = parseInt(webServerPort.value, 10) || 8080;
+        if (port < 1024 || port > 65535) {
+          showWebServerError('Port must be between 1024 and 65535');
+          webServerToggle.checked = false;
+          return;
+        }
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const info = await invoke('start_web_server', { port });
+          updateWebServerUI(true, info);
+          // Persist port
+          const settings = loadSettings();
+          settings.webServerPort = port;
+          saveSettings(settings);
+        } catch (err) {
+          const msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to start server');
+          showWebServerError(msg);
+          webServerToggle.checked = false;
+        }
+      } else {
+        // Stop server
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('stop_web_server');
+          updateWebServerUI(false, null);
+        } catch (err) {
+          const msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to stop server');
+          showWebServerError(msg);
+          // Revert toggle to ON since stop failed
+          webServerToggle.checked = true;
+        }
+      }
+    });
+  }
+
+  // Port input: save on change
+  if (webServerPort) {
+    webServerPort.addEventListener('change', () => {
+      const settings = loadSettings();
+      settings.webServerPort = parseInt(webServerPort.value, 10) || 8080;
+      saveSettings(settings);
+    });
+  }
+
+  // Check current server status on load
+  (async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const info = await invoke('get_server_status');
+      if (info) {
+        updateWebServerUI(true, info);
+      }
+    } catch {
+      // Server status command may not exist yet - that's fine
+    }
+  })();
+})();
 
 // ── RAM Advisor ────────────────────────────────────────────────────────────
 /**

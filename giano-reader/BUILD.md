@@ -62,10 +62,35 @@ Release profile settings (defined in `Cargo.toml`):
 ## Running tests
 
 ```bash
+# Desktop app (Vitest)
 npm test
+
+# Web Client (from web-client/ directory)
+cd ../web-client
+npm test
+
+# Rust server tests (from src-tauri/)
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Runs the Vitest test suite (single-run, no watch mode). Tests live in `src/library.test.js`.
+Runs the Vitest test suite (single-run, no watch mode). Desktop tests live in `src/library.test.js`. Web Client tests use Vitest + jsdom. Rust tests use `proptest` for property-based testing.
+
+---
+
+## Web Client (web-client/)
+
+The mobile-first PWA is a separate Vite/TypeScript project at the repository root:
+
+```bash
+cd web-client
+npm install
+npm run dev       # Dev server
+npm run build     # Vite build + bundle validation → dist/
+npm test          # Vitest test suite
+npm run typecheck # tsc --noEmit
+```
+
+The `dist/` output is embedded into the Tauri binary at compile time via `rust-embed`. The `beforeBuildCommand` in `tauri.conf.json` automatically builds the web-client before `tauri build`.
 
 ---
 
@@ -84,8 +109,8 @@ Each installer format must be compiled on its native OS:
 The repository includes `.github/workflows/release.yml`. Push a version tag to trigger a full multi-platform build and draft release:
 
 ```bash
-git tag v0.8.3
-git push origin v0.8.3
+git tag v0.9.0
+git push origin v0.9.0
 ```
 
 GitHub Actions will:

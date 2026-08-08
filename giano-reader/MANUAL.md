@@ -10,8 +10,9 @@
 6. [Translation](#translation)
 7. [Library](#library)
 8. [Bookmarks](#bookmarks)
-9. [Settings](#settings)
-10. [FAQ](#faq)
+9. [Web Server Mode](#web-server-mode)
+10. [Settings](#settings)
+11. [FAQ](#faq)
 
 ---
 
@@ -20,6 +21,8 @@
 **Giano Reader** is a desktop EPUB reader with built-in side-by-side translation via Google Translate and OpenRouter. It displays the original text and the translation in two synchronized panels, translating lazily starting from your current reading position.
 
 It works as a desktop application (Windows, macOS, Linux) via Tauri, and in a limited fallback mode in the web browser.
+
+Starting with **v0.9.0**, Giano Reader includes a **Web Server Mode** that lets you read your EPUB library from any device on your local network (phone, tablet, another computer) through a mobile-first web interface — no app installation required on the client device.
 
 ---
 
@@ -265,6 +268,42 @@ Use the **import** and **export** buttons in the bookmarks modal to save or load
 
 ---
 
+## Web Server Mode
+
+**New in v0.9.0.** Web Server Mode turns your GianoReader desktop app into a local HTTP server, allowing any device on your LAN (phone, tablet, etc.) to access your EPUB library and read with lazy translation through a mobile-optimised web interface.
+
+### Enabling Web Server Mode
+
+1. Open **Settings** (gear icon in the sidebar).
+2. Find the **Web Server Mode** section (visible only in the desktop app).
+3. Optionally change the **port** (default: 8080, range 1024–65535).
+4. Toggle the switch **ON**.
+5. A QR code and URL are displayed (e.g. `http://192.168.1.42:8080`).
+6. Scan the QR code or type the URL on your mobile device's browser.
+
+### Web Client Features
+
+The mobile web interface provides:
+
+- **Library grid** — browse all your EPUB books with covers and progress.
+- **Card UI reading** — swipe or tap between Original and Translated text cards.
+- **Lazy translation** — paragraphs are translated on-the-fly as you scroll, using the same Google Translate engine.
+- **Bookmarks** — save and navigate bookmarks from your phone.
+- **Settings** — change theme (light/dark/sepia), font size, translation language, and UI language.
+- **Reading progress sync** — your position is saved automatically and restored on reconnect.
+
+### Network Requirements
+
+- Both the desktop computer (server) and the mobile device (client) must be on the same local network (Wi-Fi/LAN).
+- The web client requires an active connection to the server; it does not work offline.
+- If no LAN IP is available, the server URL shows `127.0.0.1` with a warning that other devices cannot connect.
+
+### Stopping the Server
+
+Toggle the switch **OFF** in Settings, or close GianoReader. The server stops accepting connections within 2 seconds.
+
+---
+
 ## Settings
 
 Open Settings by clicking the **gear** icon in the sidebar.
@@ -279,6 +318,7 @@ Open Settings by clicking the **gear** icon in the sidebar.
 | **OpenRouter API Key** | API Key to enable advanced PRO translation using artificial intelligence models |
 | **Fetch models** | Clicking the button fetches the list of available models from OpenRouter |
 | **OpenRouter Model (PRO)** | Dropdown selector to choose the LLM model to use for PRO translations |
+| **Web Server Mode** | Toggle to start/stop the embedded HTTP server for mobile access (default port: 8080) |
 
 All settings are saved automatically. In the desktop application (Tauri), the Library and Bookmarks databases are stored in dedicated JSON files directly in the filesystem (`giano-library.json` and `giano-bookmarks.json` in the app's standard data directory), permanently bypassing browser storage quota limitations (`localStorage`) and avoiding "storage quota exceeded" errors when importing large ebook collections.
 
@@ -303,3 +343,9 @@ Some EPUBs do not define a cover image in their manifest. In this case, GianoRea
 
 **How do I remove a book from the Library without deleting it from disk?**
 Open the book details panel (the **ⓘ** button) and click **Remove from library**. The actual EPUB file remains completely intact on your disk.
+
+**I enabled Web Server Mode but my phone can't connect.**
+Make sure both devices are on the same Wi-Fi network. Check that your firewall is not blocking the port (default 8080). If the URL shows `127.0.0.1`, your computer has no LAN IP — try connecting to a network with a router.
+
+**The web client shows "Disconnected".**
+GianoReader must be running with Web Server Mode active. If you closed the app or toggled the server off, the web client loses connectivity. Reopen GianoReader, enable Web Server Mode, and tap "Reconnect" on the phone.

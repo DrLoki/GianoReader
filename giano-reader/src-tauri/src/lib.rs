@@ -1,5 +1,14 @@
+use std::net::Ipv4Addr;
+use std::sync::{Arc, Mutex};
+
 use sysinfo::System;
 use tauri::Manager;
+
+mod web_server;
+
+use web_server::handlers::books::AppState;
+use web_server::models::{ServerInfo, ServerState};
+use web_server::persistence::PersistenceStore;
 
 #[tauri::command]
 fn get_system_ram() -> u64 {
@@ -8,13 +17,87 @@ fn get_system_ram() -> u64 {
     sys.total_memory() / 1_048_576 // byte → MB
 }
 
+#[tauri::command]
+async fn start_web_server(
+    port: u16,
+    state: tauri::State<'_, ServerState>,
+    app_state: tauri::State<'_, Arc<AppState>>,
+) -> Result<ServerInfo, String> {
+    web_server::start(port, &state, app_state.inner().clone()).await
+}
+
+#[tauri::command]
+async fn stop_web_server(
+    state: tauri::State<'_, ServerState>,
+) -> Result<(), String> {
+    web_server::stop(&state).await
+}
+
+#[tauri::command]
+fn get_server_status(
+    state: tauri::State<'_, ServerState>,
+) -> Option<ServerInfo> {
+    let guard = state.handle.lock().unwrap();
+    guard.as_ref().map(|h| {
+        let display_ip = h.lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
+        let url = format!("http://{}:{}", display_ip, h.port);
+        ServerInfo {
+            port: h.port,
+            lan_url: url.clone(),
+            qr_url: url,
+        }
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![get_system_ram])
+        .invoke_handler(tauri::generate_handler![
+            get_system_ram,
+            start_web_server,
+            stop_web_server,
+            get_server_status
+        ])
         .setup(|app| {
+            // Initialize ServerState (empty — no server running yet)
+            let server_state = ServerState {
+                handle: Arc::new(Mutex::new(None)),
+            };
+            app.manage(server_state);
+
+            // Initialize AppState with library path and persistence store
+            let app_data_dir = app.path().app_data_dir().map_err(|e| {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to resolve app data dir: {}", e),
+                )) as Box<dyn std::error::Error>
+            })?;
+
+            // Ensure the app data directory exists
+            std::fs::create_dir_all(&app_data_dir).map_err(|e| {
+                Box::new(e) as Box<dyn std::error::Error>
+            })?;
+
+            let library_path = app_data_dir.join("library");
+            std::fs::create_dir_all(&library_path).map_err(|e| {
+                Box::new(e) as Box<dyn std::error::Error>
+            })?;
+
+            let store = PersistenceStore::open(app_data_dir).map_err(|e| {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to open persistence store: {}", e),
+                )) as Box<dyn std::error::Error>
+            })?;
+
+            let app_state = Arc::new(AppState {
+                library_path,
+                store,
+            });
+            app.manage(app_state);
+
             #[cfg(debug_assertions)]
             {
                 if let Some(win) = app.get_webview_window("main") {
