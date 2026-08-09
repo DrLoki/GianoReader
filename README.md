@@ -67,11 +67,19 @@ English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese
 ## 📥 Download & Install
 You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and Linux (.AppImage) here:
 
-👉 [Download Giano Reader v0.8.3](https://github.com/DrLoki/GianoReader/releases/tag/v/v0.8.3)
+👉 [Download Giano Reader v0.9.0](https://github.com/DrLoki/GianoReader/releases/tag/v0.9.0)
 
 > [!IMPORTANT]
-> **Migration Note (from v0.7.x to v0.8.x):**  
+> **Migration Note (from v0.7.x to v0.8.x):**
 > Before installing version 0.8.x, it is highly recommended to **export your Library** (using the export feature in Settings) to prevent any potential data or metadata loss during the schema migration.
+
+> [!IMPORTANT]
+> **Migration Note (from v0.8.x to v0.9.x):**
+> The app identifier has changed from com.bolzonella.giano-reader to giano-reader. After installing v0.9.0, run the migration script once to preserve your existing data (library, bookmarks, reading state):
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File scripts/migrate-appdata.ps1
+> ```
+>This moves your data from %LOCALAPPDATA%\com.bolzonella.giano-reader\ to %LOCALAPPDATA%\giano-reader\ and removes the old directory. If you skip this step, the app will start fresh with an empty library.
 
 ---
 
