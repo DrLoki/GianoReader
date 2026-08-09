@@ -46,7 +46,6 @@ proptest = "1.11.0"
 tower = { version = "0.5", features = ["util"] }
 
 [profile.release]
-panic = "abort"
 codegen-units = 1
 lto = true
 opt-level = "s"

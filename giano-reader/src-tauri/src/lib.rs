@@ -23,7 +23,13 @@ async fn start_web_server(
     state: tauri::State<'_, ServerState>,
     app_state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<ServerInfo, String> {
-    web_server::start(port, &state, app_state.inner().clone()).await
+    println!("[start_web_server] Command invoked with port {}", port);
+    let result = web_server::start(port, &state, app_state.inner().clone()).await;
+    match &result {
+        Ok(info) => println!("[start_web_server] Server started successfully: {:?}", info.lan_url),
+        Err(e) => eprintln!("[start_web_server] Failed to start server: {}", e),
+    }
+    result
 }
 
 #[tauri::command]
