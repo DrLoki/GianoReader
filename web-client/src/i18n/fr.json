@@ -1,0 +1,57 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Chargement…",
+  "general.close": "Fermer",
+  "general.cancel": "Annuler",
+  "general.confirm": "Confirmer",
+
+  "library.title": "Bibliothèque",
+  "library.loading": "Chargement des livres…",
+  "library.empty": "Aucun livre disponible sur le serveur. Ajoutez des livres via l'application de bureau GianoReader.",
+  "library.error": "Impossible de charger la bibliothèque. Vérifiez votre connexion.",
+  "library.retry": "Réessayer",
+  "library.progress": "{progress}% lu",
+
+  "reading.tabOriginal": "Original",
+  "reading.tabTranslated": "Traduit",
+  "reading.settingsTooltip": "Paramètres",
+  "reading.translationError": "Échec de la traduction — appuyez pour réessayer",
+  "reading.prevChapter": "Chapitre précédent",
+  "reading.nextChapter": "Chapitre suivant",
+
+  "card.originalLabel": "Texte original",
+  "card.translatedLabel": "Texte traduit",
+
+  "settings.title": "Paramètres",
+  "settings.theme": "Thème",
+  "settings.themeLight": "Clair",
+  "settings.themeDark": "Sombre",
+  "settings.themeSepia": "Sépia",
+  "settings.translationLanguage": "Langue de traduction",
+  "settings.fontSize": "Taille du texte",
+  "settings.uiLanguage": "Langue de l'interface",
+  "settings.connectionInfo": "Connexion",
+  "settings.statusConnected": "Connecté",
+  "settings.statusDisconnected": "Déconnecté",
+
+  "bookmarks.title": "Signets",
+  "bookmarks.addTooltip": "Ajouter un signet",
+  "bookmarks.deleteTooltip": "Supprimer le signet",
+  "bookmarks.defaultLabel": "Chapitre {chapter}",
+  "bookmarks.empty": "Aucun signet enregistré",
+
+  "fab.bookmark": "Ajouter un signet",
+  "fab.library": "Retour à la bibliothèque",
+  "fab.tts": "Synthèse vocale",
+
+  "disconnected.title": "Déconnecté",
+  "disconnected.message": "Impossible de joindre le serveur à l'adresse {url}. Assurez-vous que GianoReader est lancé et que le mode serveur Web est actif.",
+  "disconnected.reconnect": "Reconnecter",
+  "disconnected.serverUrl": "URL du serveur",
+
+  "toast.bookmarkSaved": "Signet enregistré",
+  "toast.bookmarkDeleted": "Signet supprimé",
+  "toast.settingsSaved": "Paramètres enregistrés",
+  "toast.errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
+  "toast.networkError": "Erreur réseau. Vérifiez votre connexion."
+}

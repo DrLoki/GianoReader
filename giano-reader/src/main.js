@@ -11,6 +11,8 @@ let book = null;                    // istanza epubjs corrente
 let currentSpineItems = [];         // lista capitoli spine EPUB
 let currentSpineIndex = 0;          // indice capitolo corrente
 let currentChapterParagraphs = [];  // paragrafi del capitolo corrente
+let chapterLengths = [];            // lunghezza testo per capitolo (in caratteri)
+let chapterCumulativePct = [];      // posizione % cumulativa di ogni capitolo (0–100)
 let syncingScroll = false;          // lock per evitare loop nello scroll sincronizzato
 let translationAbortController = null;
 let lazyObserver = null;            // IntersectionObserver per traduzione lazy
@@ -1783,11 +1785,26 @@ function updateProgress() {
     nextBtn.disabled = true;
     return;
   }
-  // pct: 0% al primo capitolo, 100% all'ultimo
-  const pct = total === 1 ? 0 : (currentSpineIndex / (total - 1)) * 100;
+
+  let pct;
+  if (chapterCumulativePct.length === total && chapterLengths.length === total) {
+    // Proportional progress: chapter start + intra-chapter scroll
+    const chapterStart = chapterCumulativePct[currentSpineIndex];
+    const totalChars = chapterLengths.reduce((sum, l) => sum + l, 0);
+    const chapterWeight = totalChars > 0 ? (chapterLengths[currentSpineIndex] / totalChars) * 100 : 0;
+
+    // Calculate intra-chapter scroll ratio
+    const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+    const scrollRatio = originalViewer.scrollTop / scrollMax;
+    pct = Math.min(100, chapterStart + chapterWeight * scrollRatio);
+  } else {
+    // Fallback: uniform distribution
+    pct = total === 1 ? 0 : (currentSpineIndex / (total - 1)) * 100;
+  }
+
   progressFill.style.width = `${pct}%`;
   progressThumb.style.left = `${pct}%`;
-  pageInfo.textContent = `Ch. ${currentSpineIndex + 1} / ${total}`;
+  pageInfo.textContent = `${Math.round(pct)}%`;
   prevBtn.disabled = currentSpineIndex <= 0;
   nextBtn.disabled = currentSpineIndex >= total - 1;
 }
@@ -1811,7 +1828,21 @@ progressTrack.addEventListener('click', e => {
   if (!currentSpineItems.length) return;
   const rect = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  displayChapter(Math.round(ratio * (currentSpineItems.length - 1)));
+
+  // With proportional progress: find which chapter the click falls into
+  if (chapterCumulativePct.length === currentSpineItems.length) {
+    const clickPct = ratio * 100;
+    let targetIdx = 0;
+    for (let i = chapterCumulativePct.length - 1; i >= 0; i--) {
+      if (clickPct >= chapterCumulativePct[i]) {
+        targetIdx = i;
+        break;
+      }
+    }
+    displayChapter(targetIdx);
+  } else {
+    displayChapter(Math.round(ratio * (currentSpineItems.length - 1)));
+  }
 });
 
 // Costruisce le tacche sulla progress bar dopo il caricamento del libro
@@ -1832,7 +1863,10 @@ function buildProgressTicks(spineItems, tocItems) {
   if (tocItems) walkToc(tocItems);
 
   spineItems.forEach((item, i) => {
-    const pct = total === 1 ? 0 : (i / (total - 1)) * 100;
+    // Usa posizione proporzionale se disponibile, altrimenti uniforme
+    const pct = chapterCumulativePct.length === total
+      ? chapterCumulativePct[i]
+      : (i / (total - 1)) * 100;
     const tick = document.createElement('div');
     tick.className = 'progress-tick';
     tick.style.left = `${pct}%`;
@@ -1982,6 +2016,9 @@ function bindSyncScroll() {
 
     const r = source.scrollTop / Math.max(1, source.scrollHeight - source.clientHeight);
     target.scrollTop = r * (target.scrollHeight - target.clientHeight);
+
+    // Update progress bar in real-time as user scrolls
+    updateProgress();
 
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
@@ -2664,6 +2701,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
     try { book.destroy(); } catch (_) { }
     book = null;
     currentSpineItems = [];
+    chapterLengths = [];
+    chapterCumulativePct = [];
     currentChapterParagraphs = [];
     currentFilePath = null;
   }
@@ -2745,11 +2784,16 @@ async function loadEpub(arrayBuffer, filePath = '') {
     setViewMode('text');
     viewToggleBtn.disabled = false;
     await displayChapter(bestIndex >= 0 ? bestIndex : 0);
+
+    // Compute chapter lengths in background for proportional progress bar
+    computeChapterLengths();
   } catch (err) {
     if (book) {
       try { book.destroy(); } catch (_) { }
       book = null;
       currentSpineItems = [];
+      chapterLengths = [];
+      chapterCumulativePct = [];
       currentChapterParagraphs = [];
       currentFilePath = null;
     }
@@ -2914,6 +2958,8 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     try { book.destroy(); } catch (_) { }
     book = null;
     currentSpineItems = [];
+    chapterLengths = [];
+    chapterCumulativePct = [];
     currentChapterParagraphs = [];
   }
   // Clear previous PDF state
@@ -3151,6 +3197,50 @@ async function loadChapterDocument(spineItem) {
     console.error('[nav] loadChapterDocument error:', e);
   }
   return null;
+}
+
+/**
+ * Calcola la lunghezza testuale di ogni capitolo e costruisce la mappa
+ * delle posizioni cumulative (0–100%) per la progress bar proporzionale.
+ * Eseguita in background dopo il caricamento iniziale del libro.
+ */
+async function computeChapterLengths() {
+  chapterLengths = [];
+  chapterCumulativePct = [];
+  if (!currentSpineItems.length || !book) return;
+
+  const lengths = new Array(currentSpineItems.length).fill(0);
+
+  for (let i = 0; i < currentSpineItems.length; i++) {
+    try {
+      const body = await loadChapterDocument(currentSpineItems[i]);
+      lengths[i] = (body?.textContent?.trim() || '').length;
+    } catch {
+      lengths[i] = 0;
+    }
+  }
+
+  // Se tutti i capitoli sono vuoti, usa distribuzione uniforme
+  const totalChars = lengths.reduce((sum, l) => sum + l, 0);
+  if (totalChars === 0) {
+    const n = lengths.length;
+    chapterLengths = lengths;
+    chapterCumulativePct = lengths.map((_, i) => (i / Math.max(1, n - 1)) * 100);
+    return;
+  }
+
+  chapterLengths = lengths;
+
+  // Costruisce le posizioni cumulative: posizione di inizio di ogni capitolo
+  const cumulative = [0];
+  for (let i = 0; i < lengths.length - 1; i++) {
+    cumulative.push(cumulative[i] + lengths[i]);
+  }
+  chapterCumulativePct = cumulative.map(c => (c / totalChars) * 100);
+
+  // Ricostruisce i tick con le nuove posizioni proporzionali
+  buildProgressTicks(currentSpineItems, book.navigation?.toc);
+  updateProgress();
 }
 
 // ── Indice (TOC) ───────────────────────────────────────────────────────────

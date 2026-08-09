@@ -1,0 +1,57 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Laden…",
+  "general.close": "Schließen",
+  "general.cancel": "Abbrechen",
+  "general.confirm": "Bestätigen",
+
+  "library.title": "Bibliothek",
+  "library.loading": "Bücher werden geladen…",
+  "library.empty": "Keine Bücher auf dem Server verfügbar. Fügen Sie Bücher über die GianoReader-Desktop-App hinzu.",
+  "library.error": "Bibliothek konnte nicht geladen werden. Bitte überprüfen Sie Ihre Verbindung.",
+  "library.retry": "Erneut versuchen",
+  "library.progress": "{progress}% gelesen",
+
+  "reading.tabOriginal": "Original",
+  "reading.tabTranslated": "Übersetzt",
+  "reading.settingsTooltip": "Einstellungen",
+  "reading.translationError": "Übersetzung fehlgeschlagen — tippen zum Wiederholen",
+  "reading.prevChapter": "Vorheriges Kapitel",
+  "reading.nextChapter": "Nächstes Kapitel",
+
+  "card.originalLabel": "Originaltext",
+  "card.translatedLabel": "Übersetzter Text",
+
+  "settings.title": "Einstellungen",
+  "settings.theme": "Design",
+  "settings.themeLight": "Hell",
+  "settings.themeDark": "Dunkel",
+  "settings.themeSepia": "Sepia",
+  "settings.translationLanguage": "Übersetzungssprache",
+  "settings.fontSize": "Schriftgröße",
+  "settings.uiLanguage": "Oberflächensprache",
+  "settings.connectionInfo": "Verbindung",
+  "settings.statusConnected": "Verbunden",
+  "settings.statusDisconnected": "Getrennt",
+
+  "bookmarks.title": "Lesezeichen",
+  "bookmarks.addTooltip": "Lesezeichen hinzufügen",
+  "bookmarks.deleteTooltip": "Lesezeichen löschen",
+  "bookmarks.defaultLabel": "Kapitel {chapter}",
+  "bookmarks.empty": "Keine Lesezeichen gespeichert",
+
+  "fab.bookmark": "Lesezeichen hinzufügen",
+  "fab.library": "Zurück zur Bibliothek",
+  "fab.tts": "Sprachausgabe",
+
+  "disconnected.title": "Getrennt",
+  "disconnected.message": "Server unter {url} nicht erreichbar. Stellen Sie sicher, dass GianoReader läuft und der Webserver-Modus aktiv ist.",
+  "disconnected.reconnect": "Erneut verbinden",
+  "disconnected.serverUrl": "Server-URL",
+
+  "toast.bookmarkSaved": "Lesezeichen gespeichert",
+  "toast.bookmarkDeleted": "Lesezeichen gelöscht",
+  "toast.settingsSaved": "Einstellungen gespeichert",
+  "toast.errorGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+  "toast.networkError": "Netzwerkfehler. Überprüfen Sie Ihre Verbindung."
+}

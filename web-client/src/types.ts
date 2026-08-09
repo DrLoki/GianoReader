@@ -44,7 +44,7 @@ export interface Bookmark {
 
 export interface Preferences {
   theme: 'light' | 'dark' | 'sepia';
-  uiLanguage: 'it' | 'en';
+  uiLanguage: string;
   translationLang: string;
   fontSize: number;
 }

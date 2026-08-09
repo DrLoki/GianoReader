@@ -43,14 +43,23 @@ This moves your data from `%LOCALAPPDATA%\com.bolzonella.giano-reader\` to `%LOC
 - **rust-embed**: Web client `dist/` is embedded into the Tauri binary at compile time — no external files needed.
 - **CORS**: All origins allowed for LAN device access.
 
+### 📊 Real Progress Bar (Desktop & Mobile)
+- **Proportional Chapter Ticks (Desktop)**: Progress bar tick marks are now positioned proportionally to the actual text length of each chapter — short chapters get less space, long chapters more. Chapter lengths are computed in background after book load.
+- **Intra-Chapter Scroll Tracking (Desktop)**: The progress thumb moves smoothly as you scroll within a chapter, not just when you switch chapters. The indicator now shows a percentage (e.g. "42%") instead of "Ch. X / Y".
+- **Click-to-Navigate Respects Proportions (Desktop)**: Clicking the progress bar now navigates to the correct chapter based on its proportional position.
+- **Mobile Progress Bar (Web Client)**: New 3px accent-colored progress bar between the reading content and the bottom navigation. Shows real-time scroll percentage with a small label on the right.
+
+### 🛠️ Developer Mode
+- **`--dev` Launch Flag**: Launch the installed app with `"Giano Reader.exe" --dev` to open WebView2 DevTools (F12) in production builds. Useful for diagnosing translation errors, TTS issues, or network problems without rebuilding.
+
 ### 🔧 Bug Fixes & Improvements
 - **JSON Serialization**: Added `#[serde(rename_all = "camelCase")]` to all REST response models (`BookSummary`, `ChapterResponse`, `TocEntry`, `Paragraph`) — fixes field name mismatches between Rust backend and TypeScript client.
 - **Touch Scroll Fix**: Added `touch-action: pan-y` and passive pointer listeners to the card UI for reliable mobile scrolling.
 - **API State Validation**: `getReadingState` now checks `response.ok` before parsing, preventing malformed state from breaking navigation.
 - **UI Language Live Update**: Changing the interface language in Settings now re-renders the current view immediately without requiring a page refresh.
+- **TTS Error Diagnostics**: Enhanced OpenRouter TTS error logging with full response body, headers, and request details for easier debugging.
 - **App Identifier Changed**: From `com.bolzonella.giano-reader` to `giano-reader` (see migration warning above).
 - **Release Profile**: Removed `panic = "abort"` for better error handling in production.
-
 ---
 
 # 🚀 GianoReader Release v0.8.3

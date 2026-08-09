@@ -1,0 +1,57 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Naglo-load…",
+  "general.close": "Isara",
+  "general.cancel": "Kanselahin",
+  "general.confirm": "Kumpirmahin",
+
+  "library.title": "Aklatan",
+  "library.loading": "Naglo-load ng mga libro…",
+  "library.empty": "Walang available na libro sa server. Magdagdag ng mga libro sa pamamagitan ng GianoReader desktop app.",
+  "library.error": "Hindi ma-load ang aklatan. Pakisuri ang iyong koneksyon.",
+  "library.retry": "Subukang muli",
+  "library.progress": "{progress}% nabasa",
+
+  "reading.tabOriginal": "Orihinal",
+  "reading.tabTranslated": "Salin",
+  "reading.settingsTooltip": "Mga setting",
+  "reading.translationError": "Nabigo ang pagsasalin — i-tap para subukang muli",
+  "reading.prevChapter": "Nakaraang kabanata",
+  "reading.nextChapter": "Susunod na kabanata",
+
+  "card.originalLabel": "Orihinal na teksto",
+  "card.translatedLabel": "Isinalin na teksto",
+
+  "settings.title": "Mga Setting",
+  "settings.theme": "Tema",
+  "settings.themeLight": "Maliwanag",
+  "settings.themeDark": "Madilim",
+  "settings.themeSepia": "Sepia",
+  "settings.translationLanguage": "Wika ng pagsasalin",
+  "settings.fontSize": "Laki ng font",
+  "settings.uiLanguage": "Wika ng interface",
+  "settings.connectionInfo": "Koneksyon",
+  "settings.statusConnected": "Nakakonekta",
+  "settings.statusDisconnected": "Naka-disconnect",
+
+  "bookmarks.title": "Mga Bookmark",
+  "bookmarks.addTooltip": "Magdagdag ng bookmark",
+  "bookmarks.deleteTooltip": "Burahin ang bookmark",
+  "bookmarks.defaultLabel": "Kabanata {chapter}",
+  "bookmarks.empty": "Walang naka-save na bookmark",
+
+  "fab.bookmark": "Magdagdag ng bookmark",
+  "fab.library": "Bumalik sa aklatan",
+  "fab.tts": "Text to speech",
+
+  "disconnected.title": "Naka-disconnect",
+  "disconnected.message": "Hindi maabot ang server sa {url}. Siguraduhing tumatakbo ang GianoReader at aktibo ang Web Server Mode.",
+  "disconnected.reconnect": "Muling kumonekta",
+  "disconnected.serverUrl": "URL ng server",
+
+  "toast.bookmarkSaved": "Na-save ang bookmark",
+  "toast.bookmarkDeleted": "Nabura ang bookmark",
+  "toast.settingsSaved": "Na-save ang mga setting",
+  "toast.errorGeneric": "May nangyaring mali. Pakisubukang muli.",
+  "toast.networkError": "Error sa network. Suriin ang iyong koneksyon."
+}

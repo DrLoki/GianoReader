@@ -1,0 +1,57 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "جارٍ التحميل…",
+  "general.close": "إغلاق",
+  "general.cancel": "إلغاء",
+  "general.confirm": "تأكيد",
+
+  "library.title": "المكتبة",
+  "library.loading": "جارٍ تحميل الكتب…",
+  "library.empty": "لا توجد كتب متاحة على الخادم. أضف كتبًا من خلال تطبيق GianoReader لسطح المكتب.",
+  "library.error": "تعذّر تحميل المكتبة. يرجى التحقق من الاتصال.",
+  "library.retry": "إعادة المحاولة",
+  "library.progress": "تمت قراءة {progress}%",
+
+  "reading.tabOriginal": "الأصل",
+  "reading.tabTranslated": "الترجمة",
+  "reading.settingsTooltip": "الإعدادات",
+  "reading.translationError": "فشلت الترجمة — انقر لإعادة المحاولة",
+  "reading.prevChapter": "الفصل السابق",
+  "reading.nextChapter": "الفصل التالي",
+
+  "card.originalLabel": "النص الأصلي",
+  "card.translatedLabel": "النص المترجم",
+
+  "settings.title": "الإعدادات",
+  "settings.theme": "المظهر",
+  "settings.themeLight": "فاتح",
+  "settings.themeDark": "داكن",
+  "settings.themeSepia": "بني داكن",
+  "settings.translationLanguage": "لغة الترجمة",
+  "settings.fontSize": "حجم الخط",
+  "settings.uiLanguage": "لغة الواجهة",
+  "settings.connectionInfo": "الاتصال",
+  "settings.statusConnected": "متصل",
+  "settings.statusDisconnected": "غير متصل",
+
+  "bookmarks.title": "الإشارات المرجعية",
+  "bookmarks.addTooltip": "إضافة إشارة مرجعية",
+  "bookmarks.deleteTooltip": "حذف الإشارة المرجعية",
+  "bookmarks.defaultLabel": "الفصل {chapter}",
+  "bookmarks.empty": "لا توجد إشارات مرجعية محفوظة",
+
+  "fab.bookmark": "إضافة إشارة مرجعية",
+  "fab.library": "العودة إلى المكتبة",
+  "fab.tts": "تحويل النص إلى كلام",
+
+  "disconnected.title": "غير متصل",
+  "disconnected.message": "تعذّر الوصول إلى الخادم على العنوان {url}. تأكد من أن GianoReader قيد التشغيل ووضع خادم الويب مفعّل.",
+  "disconnected.reconnect": "إعادة الاتصال",
+  "disconnected.serverUrl": "عنوان الخادم",
+
+  "toast.bookmarkSaved": "تم حفظ الإشارة المرجعية",
+  "toast.bookmarkDeleted": "تم حذف الإشارة المرجعية",
+  "toast.settingsSaved": "تم حفظ الإعدادات",
+  "toast.errorGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+  "toast.networkError": "خطأ في الشبكة. تحقق من اتصالك."
+}

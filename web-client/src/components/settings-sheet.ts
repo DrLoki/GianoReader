@@ -236,7 +236,7 @@ class SettingsSheet extends HTMLElement {
     this.currentPrefs = {
       theme,
       fontSize,
-      uiLanguage: (document.documentElement.lang as 'it' | 'en') || 'en',
+      uiLanguage: (document.documentElement.lang) || 'en',
       translationLang: this.currentPrefs.translationLang,
     };
   }
@@ -287,6 +287,16 @@ class SettingsSheet extends HTMLElement {
           <select id="settings-ui-lang" class="settings-select">
             <option value="it" ${this.currentPrefs.uiLanguage === 'it' ? 'selected' : ''}>Italiano</option>
             <option value="en" ${this.currentPrefs.uiLanguage === 'en' ? 'selected' : ''}>English</option>
+            <option value="fr" ${this.currentPrefs.uiLanguage === 'fr' ? 'selected' : ''}>Français</option>
+            <option value="de" ${this.currentPrefs.uiLanguage === 'de' ? 'selected' : ''}>Deutsch</option>
+            <option value="es" ${this.currentPrefs.uiLanguage === 'es' ? 'selected' : ''}>Español</option>
+            <option value="pt" ${this.currentPrefs.uiLanguage === 'pt' ? 'selected' : ''}>Português</option>
+            <option value="ru" ${this.currentPrefs.uiLanguage === 'ru' ? 'selected' : ''}>Русский</option>
+            <option value="zh" ${this.currentPrefs.uiLanguage === 'zh' ? 'selected' : ''}>中文</option>
+            <option value="ja" ${this.currentPrefs.uiLanguage === 'ja' ? 'selected' : ''}>日本語</option>
+            <option value="ar" ${this.currentPrefs.uiLanguage === 'ar' ? 'selected' : ''}>العربية</option>
+            <option value="fil" ${this.currentPrefs.uiLanguage === 'fil' ? 'selected' : ''}>Filipino</option>
+            <option value="sq" ${this.currentPrefs.uiLanguage === 'sq' ? 'selected' : ''}>Shqip</option>
           </select>
         </div>
 
@@ -372,7 +382,7 @@ class SettingsSheet extends HTMLElement {
     // UI language
     const uiLangSelect = this.querySelector('#settings-ui-lang') as HTMLSelectElement;
     uiLangSelect?.addEventListener('change', () => {
-      const uiLanguage = uiLangSelect.value as 'it' | 'en';
+      const uiLanguage = uiLangSelect.value;
       this.currentPrefs.uiLanguage = uiLanguage;
       setLocale(uiLanguage);
       this.applyAndPersist({ uiLanguage });

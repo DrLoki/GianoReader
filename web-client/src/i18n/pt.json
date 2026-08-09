@@ -1,0 +1,57 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Carregando…",
+  "general.close": "Fechar",
+  "general.cancel": "Cancelar",
+  "general.confirm": "Confirmar",
+
+  "library.title": "Biblioteca",
+  "library.loading": "Carregando livros…",
+  "library.empty": "Nenhum livro disponível no servidor. Adicione livros pelo aplicativo desktop GianoReader.",
+  "library.error": "Não foi possível carregar a biblioteca. Verifique sua conexão.",
+  "library.retry": "Tentar novamente",
+  "library.progress": "{progress}% lido",
+
+  "reading.tabOriginal": "Original",
+  "reading.tabTranslated": "Traduzido",
+  "reading.settingsTooltip": "Configurações",
+  "reading.translationError": "Falha na tradução — toque para tentar novamente",
+  "reading.prevChapter": "Capítulo anterior",
+  "reading.nextChapter": "Próximo capítulo",
+
+  "card.originalLabel": "Texto original",
+  "card.translatedLabel": "Texto traduzido",
+
+  "settings.title": "Configurações",
+  "settings.theme": "Tema",
+  "settings.themeLight": "Claro",
+  "settings.themeDark": "Escuro",
+  "settings.themeSepia": "Sépia",
+  "settings.translationLanguage": "Idioma de tradução",
+  "settings.fontSize": "Tamanho da fonte",
+  "settings.uiLanguage": "Idioma da interface",
+  "settings.connectionInfo": "Conexão",
+  "settings.statusConnected": "Conectado",
+  "settings.statusDisconnected": "Desconectado",
+
+  "bookmarks.title": "Marcadores",
+  "bookmarks.addTooltip": "Adicionar marcador",
+  "bookmarks.deleteTooltip": "Excluir marcador",
+  "bookmarks.defaultLabel": "Capítulo {chapter}",
+  "bookmarks.empty": "Nenhum marcador salvo",
+
+  "fab.bookmark": "Adicionar marcador",
+  "fab.library": "Voltar à biblioteca",
+  "fab.tts": "Texto para fala",
+
+  "disconnected.title": "Desconectado",
+  "disconnected.message": "Não foi possível alcançar o servidor em {url}. Certifique-se de que o GianoReader está em execução e o modo servidor web está ativo.",
+  "disconnected.reconnect": "Reconectar",
+  "disconnected.serverUrl": "URL do servidor",
+
+  "toast.bookmarkSaved": "Marcador salvo",
+  "toast.bookmarkDeleted": "Marcador excluído",
+  "toast.settingsSaved": "Configurações salvas",
+  "toast.errorGeneric": "Algo deu errado. Tente novamente.",
+  "toast.networkError": "Erro de rede. Verifique sua conexão."
+}

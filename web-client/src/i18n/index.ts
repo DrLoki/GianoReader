@@ -1,7 +1,19 @@
 import en from './en.json';
 import it from './it.json';
+import fr from './fr.json';
+import de from './de.json';
+import es from './es.json';
+import pt from './pt.json';
+import ru from './ru.json';
+import zh from './zh.json';
+import ja from './ja.json';
+import ar from './ar.json';
+import fil from './fil.json';
+import sq from './sq.json';
 
-const locales: Record<string, Record<string, string>> = { en, it };
+const locales: Record<string, Record<string, string>> = {
+  en, it, fr, de, es, pt, ru, zh, ja, ar, fil, sq,
+};
 
 let activeLocale: string = 'en';
 

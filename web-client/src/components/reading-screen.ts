@@ -205,7 +205,7 @@ class ReadingScreen extends HTMLElement {
           top: 56px;
           left: 0;
           right: 0;
-          bottom: 52px;
+          bottom: 55px;
           overflow: hidden;
         }
 
@@ -277,6 +277,33 @@ class ReadingScreen extends HTMLElement {
           z-index: 40;
         }
 
+        reading-screen .reading-progress {
+          position: fixed;
+          bottom: 52px;
+          left: 0;
+          right: 0;
+          height: 3px;
+          background: var(--border-color, #333);
+          z-index: 40;
+          display: flex;
+          align-items: stretch;
+        }
+
+        reading-screen .reading-progress-fill {
+          height: 100%;
+          background: var(--accent, #c0392b);
+          transition: width 0.15s ease;
+        }
+
+        reading-screen .reading-progress-label {
+          position: absolute;
+          right: 6px;
+          top: -14px;
+          font-size: 0.6rem;
+          color: var(--text-muted, #999);
+          pointer-events: none;
+        }
+
         reading-screen .chapter-nav-btn {
           min-width: 44px;
           min-height: 44px;
@@ -339,6 +366,10 @@ class ReadingScreen extends HTMLElement {
       </header>
       <div class="reading-content">
         <card-ui></card-ui>
+      </div>
+      <div class="reading-progress">
+        <div class="reading-progress-fill"></div>
+        <span class="reading-progress-label">0%</span>
       </div>
       <nav class="chapter-nav">
         <button class="chapter-nav-btn nav-prev" aria-label="${t('reading.prevChapter')}">← ${t('reading.prevChapter')}</button>
@@ -555,6 +586,9 @@ class ReadingScreen extends HTMLElement {
    */
   private attachScrollListener(originalSlot: HTMLElement): void {
     originalSlot.addEventListener('scroll', () => {
+      // Update progress bar immediately (visual only, no API call)
+      this.updateProgressBar(this.calculateProgress(originalSlot));
+
       if (this.scrollDebounceTimer !== null) {
         clearTimeout(this.scrollDebounceTimer);
       }
@@ -573,6 +607,8 @@ class ReadingScreen extends HTMLElement {
     const scrollOffset = originalSlot.scrollTop;
     const progress = this.calculateProgress(originalSlot);
 
+    this.updateProgressBar(progress);
+
     const state: ReadingState = {
       currentChapter: this.currentChapter,
       paragraphId,
@@ -581,6 +617,14 @@ class ReadingScreen extends HTMLElement {
     };
 
     putReadingState(this.bookId, state);
+  }
+
+  /** Updates the visual progress bar at the bottom of the reading screen. */
+  private updateProgressBar(progress: number): void {
+    const fill = this.querySelector('.reading-progress-fill') as HTMLElement | null;
+    const label = this.querySelector('.reading-progress-label') as HTMLElement | null;
+    if (fill) fill.style.width = `${progress}%`;
+    if (label) label.textContent = `${progress}%`;
   }
 
   /**
