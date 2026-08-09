@@ -3,5 +3,6 @@
 .vscode/
 .antigravity/
 package-lock.json
+!web-client/package-lock.json
 web-client/node_modules/
 web-client/dist/assets/
