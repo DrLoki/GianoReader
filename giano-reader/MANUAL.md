@@ -354,3 +354,6 @@ Make sure both devices are on the same Wi-Fi network. Check that your firewall i
 
 **The web client shows "Disconnected".**
 GianoReader must be running with Web Server Mode active. If you closed the app or toggled the server off, the web client loses connectivity. Reopen GianoReader, enable Web Server Mode, and tap "Reconnect" on the phone.
+
+**How do I open the browser DevTools for debugging?**
+Launch the application with the `--dev` flag to enable DevTools (F12). For example on Windows: `"C:\Program Files\Giano Reader\Giano Reader.exe" --dev`. This opens the WebView2 developer console on startup, useful for diagnosing translation errors, network issues, or TTS failures. Without the flag, DevTools are disabled in production builds.

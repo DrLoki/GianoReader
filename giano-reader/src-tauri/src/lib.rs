@@ -110,6 +110,15 @@ pub fn run() {
                     win.open_devtools();
                 }
             }
+            // In release builds, open DevTools if launched with --dev flag
+            #[cfg(not(debug_assertions))]
+            {
+                if std::env::args().any(|a| a == "--dev") {
+                    if let Some(win) = app.get_webview_window("main") {
+                        win.open_devtools();
+                    }
+                }
+            }
             // Custom window icon
             {
                 use image::ImageReader;
