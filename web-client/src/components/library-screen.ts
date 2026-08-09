@@ -9,16 +9,21 @@ interface BookmarkWithBook extends Bookmark {
   bookTitle: string;
 }
 
+type StatusFilter = '' | 'to-read' | 'reading' | 'read';
+
 /**
  * Library screen component — displays a responsive grid of book cards
  * with tabs to switch between Library and Bookmarks views.
  *
  * Header: Settings gear (left) + Library/Bookmarks tabs (right).
+ * Filter bar: sticky at the bottom — search input + status chip pills.
  * Dispatches 'navigate' on card tap and 'open-settings' on gear tap.
  */
 class LibraryScreen extends HTMLElement {
   private books: BookSummary[] = [];
   private activeTab: 'library' | 'bookmarks' = 'library';
+  private searchQuery: string = '';
+  private statusFilter: StatusFilter = '';
 
   connectedCallback(): void {
     this.render();
@@ -30,17 +35,41 @@ class LibraryScreen extends HTMLElement {
       <style>${LibraryScreen.styles}</style>
       <div class="library-container">
         <header class="library-header">
-          <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">⚙</button>
+          <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">
+            <img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true">
+          </button>
           <div class="tab-group" role="tablist">
             <button class="tab-btn tab-library active" role="tab" aria-selected="true">${t('library.title')}</button>
-            <button class="tab-btn tab-bookmarks" role="tab" aria-selected="false">${t('bookmarks.title')}</button>
+            <button class="tab-btn tab-bookmarks" role="tab" aria-selected="false">
+              <img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"> ${t('bookmarks.title')}
+            </button>
           </div>
         </header>
         <div class="library-content"></div>
+        <div class="filter-bar" role="search" aria-label="${t('library.title')}">
+          <div class="filter-search-row">
+            <input
+              class="filter-search-input"
+              type="search"
+              placeholder="${t('library.searchPlaceholder')}"
+              aria-label="${t('library.searchPlaceholder')}"
+              value=""
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </div>
+          <div class="filter-chips" role="group" aria-label="${t('library.filterAll')}">
+            <button class="chip chip-active" data-status="" aria-pressed="true">${t('library.filterAll')}</button>
+            <button class="chip" data-status="to-read" aria-pressed="false">${t('library.filterToRead')}</button>
+            <button class="chip" data-status="reading" aria-pressed="false">${t('library.filterReading')}</button>
+            <button class="chip" data-status="read" aria-pressed="false">${t('library.filterRead')}</button>
+          </div>
+        </div>
       </div>
     `;
 
     this.attachHeaderListeners();
+    this.attachFilterListeners();
   }
 
   private attachHeaderListeners(): void {
@@ -59,7 +88,8 @@ class LibraryScreen extends HTMLElement {
       tabLibrary.setAttribute('aria-selected', 'true');
       tabBookmarks.classList.remove('active');
       tabBookmarks.setAttribute('aria-selected', 'false');
-      this.showLibrary();
+      this.showFilterBar(true);
+      this.applyFilters();
     });
 
     tabBookmarks?.addEventListener('click', () => {
@@ -69,8 +99,38 @@ class LibraryScreen extends HTMLElement {
       tabBookmarks.setAttribute('aria-selected', 'true');
       tabLibrary.classList.remove('active');
       tabLibrary.setAttribute('aria-selected', 'false');
+      this.showFilterBar(false);
       this.showBookmarks();
     });
+  }
+
+  private attachFilterListeners(): void {
+    const searchInput = this.querySelector('.filter-search-input') as HTMLInputElement;
+    searchInput?.addEventListener('input', () => {
+      this.searchQuery = searchInput.value;
+      if (this.activeTab === 'library') this.applyFilters();
+    });
+
+    this.querySelectorAll<HTMLButtonElement>('.chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        this.statusFilter = (chip.dataset.status ?? '') as StatusFilter;
+        // Update chip visual state
+        this.querySelectorAll('.chip').forEach((c) => {
+          const active = c === chip;
+          c.classList.toggle('chip-active', active);
+          c.setAttribute('aria-pressed', String(active));
+        });
+        if (this.activeTab === 'library') this.applyFilters();
+      });
+    });
+  }
+
+  /** Show or hide the filter bar (only relevant for library tab). */
+  private showFilterBar(visible: boolean): void {
+    const bar = this.querySelector('.filter-bar') as HTMLElement;
+    const content = this.querySelector('.library-content') as HTMLElement;
+    if (bar) bar.style.display = visible ? '' : 'none';
+    if (content) content.style.paddingBottom = visible ? '' : '1rem';
   }
 
   private async loadBooks(): Promise<void> {
@@ -86,7 +146,7 @@ class LibraryScreen extends HTMLElement {
 
     try {
       this.books = await getBooks();
-      this.showLibrary();
+      this.applyFilters();
     } catch {
       content.innerHTML = `
         <div class="library-error" role="alert" aria-live="assertive">
@@ -99,7 +159,28 @@ class LibraryScreen extends HTMLElement {
     }
   }
 
-  private showLibrary(): void {
+  /**
+   * Filters `this.books` by current search query and status chip,
+   * then renders the result.
+   */
+  private applyFilters(): void {
+    const q = this.searchQuery.trim().toLowerCase();
+    let filtered = q
+      ? this.books.filter(
+          (b) =>
+            b.title.toLowerCase().includes(q) ||
+            b.author.toLowerCase().includes(q),
+        )
+      : this.books.slice();
+
+    if (this.statusFilter) {
+      filtered = filtered.filter((b) => b.status === this.statusFilter);
+    }
+
+    this.showLibrary(filtered, q);
+  }
+
+  private showLibrary(books: BookSummary[], query: string = ''): void {
     const content = this.querySelector('.library-content') as HTMLElement;
     if (!content) return;
 
@@ -112,10 +193,21 @@ class LibraryScreen extends HTMLElement {
       return;
     }
 
-    const cards = this.books.map((book) => this.renderCard(book)).join('');
+    if (books.length === 0) {
+      const msg = query
+        ? t('library.noResults', { query: escapeHtml(query) })
+        : t('library.empty');
+      content.innerHTML = `
+        <div class="library-empty" role="status" aria-live="polite">
+          <p>${msg}</p>
+        </div>
+      `;
+      return;
+    }
+
+    const cards = books.map((book) => this.renderCard(book)).join('');
     content.innerHTML = `<div class="book-grid" role="list">${cards}</div>`;
 
-    // Attach click listeners to each card
     content.querySelectorAll<HTMLElement>('.book-card').forEach((card) => {
       card.addEventListener('click', async () => {
         const bookId = card.dataset.bookId;
@@ -138,7 +230,6 @@ class LibraryScreen extends HTMLElement {
       });
     });
 
-    // Attach fallback handlers for cover images
     content.querySelectorAll<HTMLImageElement>('.book-cover').forEach((img) => {
       img.addEventListener('error', () => {
         img.src = LibraryScreen.placeholderSvg;
@@ -157,7 +248,6 @@ class LibraryScreen extends HTMLElement {
       </div>
     `;
 
-    // If books haven't been loaded yet, load them first
     if (this.books.length === 0) {
       try {
         this.books = await getBooks();
@@ -171,7 +261,6 @@ class LibraryScreen extends HTMLElement {
       }
     }
 
-    // Fetch bookmarks for all books
     const allBookmarks: BookmarkWithBook[] = [];
     await Promise.all(
       this.books.map(async (book) => {
@@ -186,7 +275,6 @@ class LibraryScreen extends HTMLElement {
       }),
     );
 
-    // Sort by creation date descending (most recent first)
     allBookmarks.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
     if (allBookmarks.length === 0) {
@@ -204,15 +292,12 @@ class LibraryScreen extends HTMLElement {
       </div>
     `;
 
-    // Attach click listeners
     content.querySelectorAll<HTMLElement>('.bookmark-item').forEach((item) => {
       item.addEventListener('click', () => {
         const bookId = item.dataset.bookId;
         const chapter = parseInt(item.dataset.chapter || '0', 10);
         const paragraphId = item.dataset.paragraphId || null;
-
         if (!bookId) return;
-
         this.dispatchEvent(
           new CustomEvent('navigate', {
             detail: {
@@ -231,7 +316,6 @@ class LibraryScreen extends HTMLElement {
   private renderBookmarkItem(bm: BookmarkWithBook): string {
     const label = bm.label || t('bookmarks.defaultLabel', { chapter: String(bm.chapterIndex + 1) });
     const date = new Date(bm.createdAt).toLocaleDateString();
-
     return `
       <div class="bookmark-item" role="listitem" tabindex="0"
            data-book-id="${bm.bookId}" data-chapter="${bm.chapterIndex}" data-paragraph-id="${bm.paragraphId}">
@@ -245,11 +329,17 @@ class LibraryScreen extends HTMLElement {
   private renderCard(book: BookSummary): string {
     const coverSrc = getCoverUrl(book.id);
     const progressText = t('library.progress', { progress: String(book.progress) });
+    const status = book.status;
+    const statusBadge = status
+      ? `<span class="status-badge status-badge--${escapeAttr(status)}">${escapeHtml(LibraryScreen.statusLabel(status))}</span>`
+      : '';
 
     return `
-      <div class="book-card" role="listitem" tabindex="0" data-book-id="${book.id}" aria-label="${escapeAttr(book.title)} — ${escapeAttr(book.author)}">
+      <div class="book-card" role="listitem" tabindex="0" data-book-id="${book.id}"
+           aria-label="${escapeAttr(book.title)} — ${escapeAttr(book.author)}">
         <div class="book-cover-wrapper">
           <img class="book-cover" src="${coverSrc}" alt="${escapeAttr(book.title)}" loading="lazy">
+          ${statusBadge ? `<div class="book-status-overlay">${statusBadge}</div>` : ''}
         </div>
         <div class="book-info">
           <p class="book-title">${escapeHtml(book.title)}</p>
@@ -260,7 +350,15 @@ class LibraryScreen extends HTMLElement {
     `;
   }
 
-  /** Inline SVG data URI used as a placeholder when cover fails to load. */
+  private static statusLabel(status: string): string {
+    switch (status) {
+      case 'to-read':  return t('library.filterToRead');
+      case 'reading':  return t('library.filterReading');
+      case 'read':     return t('library.filterRead');
+      default:         return status;
+    }
+  }
+
   private static readonly placeholderSvg = `data:image/svg+xml,${encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 187" fill="none">' +
       '<rect width="140" height="187" rx="4" fill="#2a2a2a"/>' +
@@ -277,11 +375,22 @@ class LibraryScreen extends HTMLElement {
       box-sizing: border-box;
     }
 
+    .icon {
+      width: 1em;
+      height: 1em;
+      display: inline-block;
+      vertical-align: middle;
+      filter: brightness(0) invert(1);
+    }
+
     .library-container {
       max-width: 960px;
       margin: 0 auto;
+      /* Space for sticky filter bar */
+      padding-bottom: 110px;
     }
 
+    /* ── Header ─────────────────────────────────── */
     .library-header {
       position: sticky;
       top: 0;
@@ -345,11 +454,103 @@ class LibraryScreen extends HTMLElement {
       font-weight: 600;
     }
 
+    /* ── Content area ───────────────────────────── */
     .library-content {
       padding: 1rem;
     }
 
-    /* Loading state */
+    /* ── Filter bar ─────────────────────────────── */
+    .filter-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      background: var(--header-bg, #1a1a1a);
+      border-top: 1px solid var(--border-color, #333);
+      padding: 8px 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      /* Respect safe-area on notched phones */
+      padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .filter-search-row {
+      display: flex;
+      align-items: center;
+    }
+
+    .filter-search-input {
+      flex: 1;
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--border-color, #444);
+      border-radius: 20px;
+      background: var(--surface, #2a2a2a);
+      color: var(--text-color, #e0e0e0);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+
+    .filter-search-input::placeholder {
+      color: var(--text-muted, #666);
+    }
+
+    .filter-search-input:focus {
+      border-color: var(--accent, #c0392b);
+    }
+
+    /* Clear button that browsers render inside search inputs */
+    .filter-search-input::-webkit-search-cancel-button {
+      -webkit-appearance: auto;
+      cursor: pointer;
+    }
+
+    /* ── Status chips ────────────────────────────── */
+    .filter-chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding-bottom: 2px;
+    }
+
+    .filter-chips::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chip {
+      flex-shrink: 0;
+      height: 32px;
+      padding: 0 14px;
+      border: 1px solid var(--border-color, #444);
+      border-radius: 16px;
+      background: transparent;
+      color: var(--text-muted, #999);
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .chip:hover,
+    .chip:focus-visible {
+      border-color: var(--accent, #c0392b);
+      color: var(--text-color, #e0e0e0);
+    }
+
+    .chip.chip-active {
+      background: var(--accent, #c0392b);
+      border-color: var(--accent, #c0392b);
+      color: #fff;
+    }
+
+    /* ── Loading / empty / error ────────────────── */
     .library-loading {
       display: flex;
       flex-direction: column;
@@ -373,7 +574,6 @@ class LibraryScreen extends HTMLElement {
       to { transform: rotate(360deg); }
     }
 
-    /* Empty state */
     .library-empty {
       text-align: center;
       padding: 3rem 1rem;
@@ -382,7 +582,6 @@ class LibraryScreen extends HTMLElement {
       line-height: 1.5;
     }
 
-    /* Error state */
     .library-error {
       text-align: center;
       padding: 3rem 1rem;
@@ -414,14 +613,13 @@ class LibraryScreen extends HTMLElement {
       opacity: 0.85;
     }
 
-    /* Book grid */
+    /* ── Book grid ──────────────────────────────── */
     .book-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 16px;
     }
 
-    /* Book card */
     .book-card {
       display: flex;
       flex-direction: column;
@@ -456,6 +654,28 @@ class LibraryScreen extends HTMLElement {
       object-fit: cover;
       display: block;
     }
+
+    .book-status-overlay {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #fff;
+      background: rgba(0,0,0,0.6);
+    }
+
+    .status-badge--to-read  { background: #1565c0; }
+    .status-badge--reading  { background: #e65100; }
+    .status-badge--read     { background: #2e7d32; }
 
     .book-info {
       padding: 0.5rem 0.625rem;
@@ -492,7 +712,7 @@ class LibraryScreen extends HTMLElement {
       font-weight: 500;
     }
 
-    /* Bookmarks list */
+    /* ── Bookmarks list ─────────────────────────── */
     .bookmarks-list {
       display: flex;
       flex-direction: column;

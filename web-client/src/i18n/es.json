@@ -11,6 +11,12 @@
   "library.error": "No se pudo cargar la biblioteca. Compruebe su conexión.",
   "library.retry": "Reintentar",
   "library.progress": "{progress}% leído",
+  "library.searchPlaceholder": "Buscar por título o autor…",
+  "library.filterAll": "Todos",
+  "library.filterToRead": "Por leer",
+  "library.filterReading": "Leyendo",
+  "library.filterRead": "Leído",
+  "library.noResults": "Sin resultados para \"{query}\"",
 
   "reading.tabOriginal": "Original",
   "reading.tabTranslated": "Traducido",

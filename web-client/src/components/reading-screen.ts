@@ -112,6 +112,14 @@ class ReadingScreen extends HTMLElement {
           position: relative;
         }
 
+        reading-screen .icon {
+          width: 1em;
+          height: 1em;
+          display: inline-block;
+          vertical-align: middle;
+          filter: brightness(0) invert(1);
+        }
+
         reading-screen .reading-header {
           position: fixed;
           top: 0;
@@ -358,7 +366,7 @@ class ReadingScreen extends HTMLElement {
         }
       </style>
       <header class="reading-header">
-        <button class="fab-library-btn" aria-label="${t('fab.library')}">📚</button>
+        <button class="fab-library-btn" aria-label="${t('fab.library')}"><img class="icon" src="/icons/book-bookmark.svg" alt="" aria-hidden="true"></button>
         <div class="tab-group" role="tablist">
           <button class="tab-btn tab-original active" role="tab" aria-selected="true" aria-label="${t('reading.tabOriginal')}">${t('reading.tabOriginal')}</button>
           <button class="tab-btn tab-translated" role="tab" aria-selected="false" aria-label="${t('reading.tabTranslated')}">${t('reading.tabTranslated')}</button>
@@ -373,11 +381,11 @@ class ReadingScreen extends HTMLElement {
       </div>
       <nav class="chapter-nav">
         <button class="chapter-nav-btn nav-prev" aria-label="${t('reading.prevChapter')}">← ${t('reading.prevChapter')}</button>
-        <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">⚙</button>
+        <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}"><img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true"></button>
         <button class="chapter-nav-btn nav-next" aria-label="${t('reading.nextChapter')}">${t('reading.nextChapter')} →</button>
       </nav>
       <div class="fab-group">
-        <button class="fab fab-bookmark" aria-label="${t('fab.bookmark')}">🔖</button>
+        <button class="fab fab-bookmark" aria-label="${t('fab.bookmark')}"><img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"></button>
       </div>
     `;
   }

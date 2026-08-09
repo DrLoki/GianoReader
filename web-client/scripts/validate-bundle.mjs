@@ -125,6 +125,24 @@ if (!existsSync(viteConfigPath)) {
   }
 }
 
+// ─── (d) Check PWA required files are present in dist/ ───────────────────────
+
+const pwaRequired = [
+  { path: 'manifest.json', label: 'PWA manifest' },
+  { path: 'sw.js', label: 'Service worker' },
+  { path: 'icons/icon-192.png', label: 'PWA icon 192x192' },
+  { path: 'icons/icon-512.png', label: 'PWA icon 512x512' },
+];
+
+for (const { path: relPath, label } of pwaRequired) {
+  const fullPath = join(distDir, relPath);
+  if (!existsSync(fullPath)) {
+    fail(`${label} not found in dist/ (expected at ${relPath})`);
+  } else {
+    pass(`${label} present in dist/`);
+  }
+}
+
 // ─── Exit ─────────────────────────────────────────────────────────────────────
 
 if (failed) {

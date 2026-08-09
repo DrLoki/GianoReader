@@ -11,6 +11,12 @@
   "library.error": "Impossible de charger la bibliothèque. Vérifiez votre connexion.",
   "library.retry": "Réessayer",
   "library.progress": "{progress}% lu",
+  "library.searchPlaceholder": "Rechercher par titre ou auteur…",
+  "library.filterAll": "Tous",
+  "library.filterToRead": "À lire",
+  "library.filterReading": "En cours",
+  "library.filterRead": "Lu",
+  "library.noResults": "Aucun résultat pour \"{query}\"",
 
   "reading.tabOriginal": "Original",
   "reading.tabTranslated": "Traduit",

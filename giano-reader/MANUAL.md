@@ -11,8 +11,9 @@
 7. [Library](#library)
 8. [Bookmarks](#bookmarks)
 9. [Web Server Mode](#web-server-mode)
-10. [Settings](#settings)
-11. [FAQ](#faq)
+10. [How to Access Remotely via Tailscale](#web-access-with-tailscale)
+11. [Settings](#settings)
+12. [FAQ](#faq)
 
 ---
 
@@ -306,6 +307,61 @@ The mobile web interface provides:
 ### Stopping the Server
 
 Toggle the switch **OFF** in Settings, or close GianoReader. The server stops accepting connections within 2 seconds.
+
+---
+
+## Web Access With Tailscale
+
+
+Using **Tailscale** is the safest and easiest way to access your locally hosted instance of the [Giano Reader](https://github.com/DrLoki/GianoReader/blob/main/RELEASE.md) web app from your smartphone or tablet, without exposing your home network to the public internet.
+
+This guide will walk you through the setup process step by step.
+
+## Prerequisites
+* **The Host Machine (Server):** The computer (Windows, macOS, or Linux) currently running the Giano Reader web app.
+* **A Mobile Device:** Your Android or iOS smartphone/tablet.
+* **A Tailscale Account:** It's completely free for personal use.
+
+---
+
+### Step 1: Install Tailscale on the Host Machine
+
+1. Go to [Tailscale.com](https://tailscale.com/) and create a free account.
+2. Download and install the Tailscale client for your host machine's operating system.
+3. Open the Tailscale app and **log in** with your account.
+4. Once connected, Tailscale will assign a private IP address to your machine (it usually starts with `100.x.x.x`). 
+5. Find this IP address by clicking the Tailscale icon in your system tray/menu bar. **Copy this IP**—you will need it later.
+
+### Step 2: Configure Giano Reader for Network Access
+
+Enable the Web Server mode from the Giano Reader settings and note the port on which the app is exposed (by default 8888).
+
+### Step 3: Install Tailscale on Your Mobile Device
+
+1. Open the **App Store** (iOS) or **Google Play Store** (Android).
+2. Search for and install the **Tailscale** app.
+3. Open the app, agree to the VPN configuration prompts, and **log in using the exact same account** you used on your host machine.
+4. Make sure the toggle switch in the app is set to **Active / Connected**. 
+
+*(Your phone is now securely connected to the same virtual local network as your computer).*
+
+### Step 4: Access Giano Reader from Your Smartphone
+
+1. Open your preferred mobile browser (Safari, Chrome, etc.).
+2. In the address bar, type your host machine's Tailscale IP address followed by the Giano Reader port (the default development port is `1420`). 
+   
+   **Format:** `http://<Tailscale-IP>:<Port>`
+   **Example:** `http://100.115.92.4:8888`
+
+3. Press Enter. The Giano Reader web interface should now load perfectly on your mobile device!
+
+> [!TIP]
+> Since you will be using Giano Reader frequently, you can remove the browser's address bar to make it look and feel like a native mobile app:
+>
+> * **On iOS (Safari):** Tap the **Share** icon at the bottom of the screen, scroll down, and tap **"Add to Home Screen"**.
+> * **On Android (Chrome):** Tap the **3-dot menu** in the top right corner and select **"Add to Home screen"**.
+>
+> A Giano Reader icon will be added to your home screen. Whenever you want to read, just make sure Tailscale is active in the background and tap the icon!
 
 ---
 

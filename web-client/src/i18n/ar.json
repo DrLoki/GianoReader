@@ -11,6 +11,12 @@
   "library.error": "تعذّر تحميل المكتبة. يرجى التحقق من الاتصال.",
   "library.retry": "إعادة المحاولة",
   "library.progress": "تمت قراءة {progress}%",
+  "library.searchPlaceholder": "ابحث بالعنوان أو المؤلف…",
+  "library.filterAll": "الكل",
+  "library.filterToRead": "للقراءة",
+  "library.filterReading": "أقرأ الآن",
+  "library.filterRead": "مقروء",
+  "library.noResults": "لا نتائج لـ\"{query}\"",
 
   "reading.tabOriginal": "الأصل",
   "reading.tabTranslated": "الترجمة",

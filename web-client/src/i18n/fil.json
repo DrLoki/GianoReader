@@ -11,6 +11,12 @@
   "library.error": "Hindi ma-load ang aklatan. Pakisuri ang iyong koneksyon.",
   "library.retry": "Subukang muli",
   "library.progress": "{progress}% nabasa",
+  "library.searchPlaceholder": "Maghanap sa pamagat o may-akda…",
+  "library.filterAll": "Lahat",
+  "library.filterToRead": "Babasahin",
+  "library.filterReading": "Binabasa",
+  "library.filterRead": "Nabasa na",
+  "library.noResults": "Walang resulta para sa \"{query}\"",
 
   "reading.tabOriginal": "Orihinal",
   "reading.tabTranslated": "Salin",

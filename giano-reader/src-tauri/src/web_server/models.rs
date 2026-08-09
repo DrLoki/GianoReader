@@ -12,6 +12,7 @@ pub struct BookSummary {
     pub author: String,
     pub cover_url: Option<String>, // "/api/books/{id}/cover" or null
     pub progress: u8,              // 0–100
+    pub status: Option<String>,    // "to-read" | "reading" | "read" | null
 }
 
 #[derive(Debug, Clone, Serialize)]

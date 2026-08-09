@@ -11,6 +11,12 @@
   "library.error": "Не удалось загрузить библиотеку. Проверьте подключение.",
   "library.retry": "Повторить",
   "library.progress": "{progress}% прочитано",
+  "library.searchPlaceholder": "Поиск по названию или автору…",
+  "library.filterAll": "Все",
+  "library.filterToRead": "Хочу прочитать",
+  "library.filterReading": "Читаю",
+  "library.filterRead": "Прочитано",
+  "library.noResults": "Нет результатов для \"{query}\"",
 
   "reading.tabOriginal": "Оригинал",
   "reading.tabTranslated": "Перевод",

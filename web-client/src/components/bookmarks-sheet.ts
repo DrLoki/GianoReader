@@ -124,6 +124,17 @@ bookmarks-sheet {
   flex-shrink: 0;
 }
 
+.bookmarks-delete-btn .bm-icon {
+  width: 1em;
+  height: 1em;
+  display: block;
+  filter: brightness(0) invert(0.6);
+}
+
+.bookmarks-delete-btn:hover .bm-icon {
+  filter: brightness(0) saturate(100%) invert(27%) sepia(90%) saturate(800%) hue-rotate(330deg);
+}
+
 .bookmarks-delete-btn:hover {
   color: #e53935;
   background: rgba(229, 57, 53, 0.1);
@@ -256,7 +267,7 @@ class BookmarksSheet extends HTMLElement {
           <div class="bookmarks-item-content">
             <div class="bookmarks-item-label">${escapeHtml(bm.label || t('bookmarks.defaultLabel', { chapter: String(bm.chapterIndex + 1) }))}</div>
           </div>
-          <button class="bookmarks-delete-btn" aria-label="${escapeHtml(t('bookmarks.deleteTooltip'))}" data-bookmark-id="${escapeHtml(bm.id)}">✕</button>
+          <button class="bookmarks-delete-btn" aria-label="${escapeHtml(t('bookmarks.deleteTooltip'))}" data-bookmark-id="${escapeHtml(bm.id)}"><img class="bm-icon" src="/icons/xmark.svg" alt="" aria-hidden="true"></button>
         </li>`,
       )
       .join('');

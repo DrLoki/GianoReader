@@ -4,13 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#1a1a1a" />
-  <link rel="manifest" href="/assets/manifest-D1ptaYO2.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Giano Reader" />
+  <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <title>Giano Reader</title>
-  <script type="module" crossorigin src="/assets/index-GdgHHjyZ.js"></script>
+  <script type="module" crossorigin src="/assets/index-5EvVXiAE.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-xRpeU4Wy.css">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"></div>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.warn('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

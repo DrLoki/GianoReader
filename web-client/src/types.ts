@@ -6,6 +6,7 @@ export interface BookSummary {
   author: string;
   coverUrl: string | null;
   progress: number; // 0–100
+  status?: 'to-read' | 'reading' | 'read' | null;
 }
 
 export interface TocEntry {

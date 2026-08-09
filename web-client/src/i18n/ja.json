@@ -11,6 +11,12 @@
   "library.error": "ライブラリを読み込めませんでした。接続を確認してください。",
   "library.retry": "再試行",
   "library.progress": "{progress}% 既読",
+  "library.searchPlaceholder": "タイトルまたは著者で検索…",
+  "library.filterAll": "すべて",
+  "library.filterToRead": "未読",
+  "library.filterReading": "読書中",
+  "library.filterRead": "読了",
+  "library.noResults": "「{query}」の結果はありません",
 
   "reading.tabOriginal": "原文",
   "reading.tabTranslated": "翻訳",

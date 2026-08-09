@@ -42,7 +42,7 @@ pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSumm
                         if !path.exists() {
                             continue;
                         }
-                        if let Some(book) = book_summary_from_path(&path, store) {
+                        if let Some(book) = book_summary_from_path(&path, store, entry.status.clone()) {
                             books.push(book);
                         }
                     }
@@ -76,10 +76,12 @@ struct LibraryEntry {
     #[allow(dead_code)]
     #[serde(default)]
     author: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
 }
 
 /// Creates a BookSummary from an epub file path.
-fn book_summary_from_path(path: &Path, store: &PersistenceStore) -> Option<BookSummary> {
+fn book_summary_from_path(path: &Path, store: &PersistenceStore, status: Option<String>) -> Option<BookSummary> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let id = generate_book_id(&canonical);
 
@@ -116,6 +118,7 @@ fn book_summary_from_path(path: &Path, store: &PersistenceStore) -> Option<BookS
         author,
         cover_url,
         progress,
+        status,
     })
 }
 
@@ -148,7 +151,7 @@ fn list_books_from_directory(library_path: &Path, store: &PersistenceStore) -> V
             _ => continue,
         }
 
-        if let Some(book) = book_summary_from_path(&path, store) {
+        if let Some(book) = book_summary_from_path(&path, store, None) {
             books.push(book);
         }
     }
