@@ -1616,7 +1616,7 @@ settingsModal.addEventListener('click', e => { if (e.target === settingsModal) s
 
       if (active) {
         // Start server
-        const port = parseInt(webServerPort.value, 10) || 8080;
+        const port = parseInt(webServerPort.value, 10) || 8888;
         if (port < 1024 || port > 65535) {
           showWebServerError('Port must be between 1024 and 65535');
           webServerToggle.checked = false;
@@ -1655,7 +1655,7 @@ settingsModal.addEventListener('click', e => { if (e.target === settingsModal) s
   if (webServerPort) {
     webServerPort.addEventListener('change', () => {
       const settings = loadSettings();
-      settings.webServerPort = parseInt(webServerPort.value, 10) || 8080;
+      settings.webServerPort = parseInt(webServerPort.value, 10) || 8888;
       saveSettings(settings);
     });
   }

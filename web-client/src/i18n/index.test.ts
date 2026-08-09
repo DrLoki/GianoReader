@@ -65,8 +65,8 @@ describe('i18n', () => {
       // Manually test by using a key that could have multiple placeholders
       // Since our locale files don't have one, test fallback to key with vars
       setLocale('en');
-      expect(t('disconnected.message', { url: 'http://192.168.1.5:8080' }))
-        .toBe('Unable to reach the server at http://192.168.1.5:8080. Make sure GianoReader is running and Web Server Mode is active.');
+      expect(t('disconnected.message', { url: 'http://192.168.1.5:8888' }))
+        .toBe('Unable to reach the server at http://192.168.1.5:8888. Make sure GianoReader is running and Web Server Mode is active.');
     });
 
     it('leaves placeholders intact when vars does not contain the variable name', () => {

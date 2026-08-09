@@ -281,9 +281,9 @@ Use the **import** and **export** buttons in the bookmarks modal to save or load
 
 1. Open **Settings** (gear icon in the sidebar).
 2. Find the **Web Server Mode** section (visible only in the desktop app).
-3. Optionally change the **port** (default: 8080, range 1024–65535).
+3. Optionally change the **port** (default: 8888, range 1024–65535).
 4. Toggle the switch **ON**.
-5. A QR code and URL are displayed (e.g. `http://192.168.1.42:8080`).
+5. A QR code and URL are displayed (e.g. `http://192.168.1.42:8888`).
 6. Scan the QR code or type the URL on your mobile device's browser.
 
 ### Web Client Features
@@ -323,7 +323,7 @@ Open Settings by clicking the **gear** icon in the sidebar.
 | **OpenRouter API Key** | API Key to enable advanced PRO translation using artificial intelligence models |
 | **Fetch models** | Clicking the button fetches the list of available models from OpenRouter |
 | **OpenRouter Model (PRO)** | Dropdown selector to choose the LLM model to use for PRO translations |
-| **Web Server Mode** | Toggle to start/stop the embedded HTTP server for mobile access (default port: 8080) |
+| **Web Server Mode** | Toggle to start/stop the embedded HTTP server for mobile access (default port: 8888) |
 
 All settings are saved automatically. In the desktop application (Tauri), the Library and Bookmarks databases are stored in dedicated JSON files directly in the filesystem (`giano-library.json` and `giano-bookmarks.json` in the app's standard data directory), permanently bypassing browser storage quota limitations (`localStorage`) and avoiding "storage quota exceeded" errors when importing large ebook collections.
 
@@ -350,7 +350,7 @@ Some EPUBs do not define a cover image in their manifest. In this case, GianoRea
 Open the book details panel (the **ⓘ** button) and click **Remove from library**. The actual EPUB file remains completely intact on your disk.
 
 **I enabled Web Server Mode but my phone can't connect.**
-Make sure both devices are on the same Wi-Fi network. Check that your firewall is not blocking the port (default 8080). If the URL shows `127.0.0.1`, your computer has no LAN IP — try connecting to a network with a router.
+Make sure both devices are on the same Wi-Fi network. Check that your firewall is not blocking the port (default 8888). If the URL shows `127.0.0.1`, your computer has no LAN IP — try connecting to a network with a router.
 
 **The web client shows "Disconnected".**
 GianoReader must be running with Web Server Mode active. If you closed the app or toggled the server off, the web client loses connectivity. Reopen GianoReader, enable Web Server Mode, and tap "Reconnect" on the phone.
