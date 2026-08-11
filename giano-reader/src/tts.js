@@ -309,15 +309,25 @@ export class ProTTSEngine {
 
     if (!res.ok) {
       let message = `OpenRouter TTS error (${res.status})`;
+      let detail = '';
       try {
         const errData = await res.json();
         if (errData.error?.message) {
           message += `: ${errData.error.message}`;
         }
+        detail = JSON.stringify(errData, null, 2);
       } catch {
-        const errText = await res.text();
-        if (errText) message += `: ${errText.substring(0, 200)}`;
+        detail = await res.text().catch(() => '');
+        if (detail) message += `: ${detail.substring(0, 200)}`;
       }
+      // Log full error detail to console for debugging
+      console.error('[TTS] OpenRouter error response:', {
+        status: res.status,
+        statusText: res.statusText,
+        headers: Object.fromEntries(res.headers.entries()),
+        body: detail,
+        request: { model, voice, speed, responseFormat, textLength: text.length }
+      });
       throw new Error(message);
     }
 

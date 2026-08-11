@@ -1,0 +1,63 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Загрузка…",
+  "general.close": "Закрыть",
+  "general.cancel": "Отмена",
+  "general.confirm": "Подтвердить",
+
+  "library.title": "Библиотека",
+  "library.loading": "Загрузка книг…",
+  "library.empty": "На сервере нет доступных книг. Добавьте книги через настольное приложение GianoReader.",
+  "library.error": "Не удалось загрузить библиотеку. Проверьте подключение.",
+  "library.retry": "Повторить",
+  "library.progress": "{progress}% прочитано",
+  "library.searchPlaceholder": "Поиск по названию или автору…",
+  "library.filterAll": "Все",
+  "library.filterToRead": "Хочу прочитать",
+  "library.filterReading": "Читаю",
+  "library.filterRead": "Прочитано",
+  "library.noResults": "Нет результатов для \"{query}\"",
+
+  "reading.tabOriginal": "Оригинал",
+  "reading.tabTranslated": "Перевод",
+  "reading.settingsTooltip": "Настройки",
+  "reading.translationError": "Ошибка перевода — нажмите, чтобы повторить",
+  "reading.prevChapter": "Предыдущая глава",
+  "reading.nextChapter": "Следующая глава",
+
+  "card.originalLabel": "Оригинальный текст",
+  "card.translatedLabel": "Переведённый текст",
+
+  "settings.title": "Настройки",
+  "settings.theme": "Тема",
+  "settings.themeLight": "Светлая",
+  "settings.themeDark": "Тёмная",
+  "settings.themeSepia": "Сепия",
+  "settings.translationLanguage": "Язык перевода",
+  "settings.fontSize": "Размер шрифта",
+  "settings.uiLanguage": "Язык интерфейса",
+  "settings.connectionInfo": "Подключение",
+  "settings.statusConnected": "Подключено",
+  "settings.statusDisconnected": "Отключено",
+
+  "bookmarks.title": "Закладки",
+  "bookmarks.addTooltip": "Добавить закладку",
+  "bookmarks.deleteTooltip": "Удалить закладку",
+  "bookmarks.defaultLabel": "Глава {chapter}",
+  "bookmarks.empty": "Нет сохранённых закладок",
+
+  "fab.bookmark": "Добавить закладку",
+  "fab.library": "Вернуться в библиотеку",
+  "fab.tts": "Озвучивание",
+
+  "disconnected.title": "Отключено",
+  "disconnected.message": "Не удаётся подключиться к серверу по адресу {url}. Убедитесь, что GianoReader запущен и режим веб-сервера активен.",
+  "disconnected.reconnect": "Переподключиться",
+  "disconnected.serverUrl": "URL сервера",
+
+  "toast.bookmarkSaved": "Закладка сохранена",
+  "toast.bookmarkDeleted": "Закладка удалена",
+  "toast.settingsSaved": "Настройки сохранены",
+  "toast.errorGeneric": "Что-то пошло не так. Попробуйте снова.",
+  "toast.networkError": "Ошибка сети. Проверьте подключение."
+}

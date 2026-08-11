@@ -16,8 +16,6 @@ src-tauri/gen/
 # Python
 __pycache__/
 *.pyc
-.hypothesis/
-.pytest_cache/
 
 # OS
 .DS_Store

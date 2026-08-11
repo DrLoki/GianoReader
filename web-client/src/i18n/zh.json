@@ -1,0 +1,63 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "加载中…",
+  "general.close": "关闭",
+  "general.cancel": "取消",
+  "general.confirm": "确认",
+
+  "library.title": "书库",
+  "library.loading": "正在加载书籍…",
+  "library.empty": "服务器上没有可用的书籍。请通过 GianoReader 桌面应用添加书籍。",
+  "library.error": "无法加载书库。请检查您的连接。",
+  "library.retry": "重试",
+  "library.progress": "已读 {progress}%",
+  "library.searchPlaceholder": "按标题或作者搜索…",
+  "library.filterAll": "全部",
+  "library.filterToRead": "待读",
+  "library.filterReading": "在读",
+  "library.filterRead": "已读",
+  "library.noResults": "未找到\"{query}\"的结果",
+
+  "reading.tabOriginal": "原文",
+  "reading.tabTranslated": "译文",
+  "reading.settingsTooltip": "设置",
+  "reading.translationError": "翻译失败 — 点击重试",
+  "reading.prevChapter": "上一章",
+  "reading.nextChapter": "下一章",
+
+  "card.originalLabel": "原文",
+  "card.translatedLabel": "译文",
+
+  "settings.title": "设置",
+  "settings.theme": "主题",
+  "settings.themeLight": "浅色",
+  "settings.themeDark": "深色",
+  "settings.themeSepia": "复古",
+  "settings.translationLanguage": "翻译语言",
+  "settings.fontSize": "字体大小",
+  "settings.uiLanguage": "界面语言",
+  "settings.connectionInfo": "连接",
+  "settings.statusConnected": "已连接",
+  "settings.statusDisconnected": "已断开",
+
+  "bookmarks.title": "书签",
+  "bookmarks.addTooltip": "添加书签",
+  "bookmarks.deleteTooltip": "删除书签",
+  "bookmarks.defaultLabel": "第 {chapter} 章",
+  "bookmarks.empty": "暂无书签",
+
+  "fab.bookmark": "添加书签",
+  "fab.library": "返回书库",
+  "fab.tts": "语音朗读",
+
+  "disconnected.title": "已断开连接",
+  "disconnected.message": "无法连接到服务器 {url}。请确保 GianoReader 正在运行且 Web 服务器模式已启用。",
+  "disconnected.reconnect": "重新连接",
+  "disconnected.serverUrl": "服务器地址",
+
+  "toast.bookmarkSaved": "书签已保存",
+  "toast.bookmarkDeleted": "书签已删除",
+  "toast.settingsSaved": "设置已保存",
+  "toast.errorGeneric": "出现错误，请重试。",
+  "toast.networkError": "网络错误，请检查连接。"
+}

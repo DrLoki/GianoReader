@@ -1,0 +1,10 @@
+/* Shared component styles */
+
+.pending {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.hidden {
+  display: none !important;
+}

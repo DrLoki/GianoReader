@@ -1,0 +1,63 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Cargando…",
+  "general.close": "Cerrar",
+  "general.cancel": "Cancelar",
+  "general.confirm": "Confirmar",
+
+  "library.title": "Biblioteca",
+  "library.loading": "Cargando libros…",
+  "library.empty": "No hay libros disponibles en el servidor. Añada libros a través de la aplicación de escritorio GianoReader.",
+  "library.error": "No se pudo cargar la biblioteca. Compruebe su conexión.",
+  "library.retry": "Reintentar",
+  "library.progress": "{progress}% leído",
+  "library.searchPlaceholder": "Buscar por título o autor…",
+  "library.filterAll": "Todos",
+  "library.filterToRead": "Por leer",
+  "library.filterReading": "Leyendo",
+  "library.filterRead": "Leído",
+  "library.noResults": "Sin resultados para \"{query}\"",
+
+  "reading.tabOriginal": "Original",
+  "reading.tabTranslated": "Traducido",
+  "reading.settingsTooltip": "Ajustes",
+  "reading.translationError": "Error de traducción — toque para reintentar",
+  "reading.prevChapter": "Capítulo anterior",
+  "reading.nextChapter": "Capítulo siguiente",
+
+  "card.originalLabel": "Texto original",
+  "card.translatedLabel": "Texto traducido",
+
+  "settings.title": "Ajustes",
+  "settings.theme": "Tema",
+  "settings.themeLight": "Claro",
+  "settings.themeDark": "Oscuro",
+  "settings.themeSepia": "Sepia",
+  "settings.translationLanguage": "Idioma de traducción",
+  "settings.fontSize": "Tamaño de fuente",
+  "settings.uiLanguage": "Idioma de la interfaz",
+  "settings.connectionInfo": "Conexión",
+  "settings.statusConnected": "Conectado",
+  "settings.statusDisconnected": "Desconectado",
+
+  "bookmarks.title": "Marcadores",
+  "bookmarks.addTooltip": "Añadir marcador",
+  "bookmarks.deleteTooltip": "Eliminar marcador",
+  "bookmarks.defaultLabel": "Capítulo {chapter}",
+  "bookmarks.empty": "No hay marcadores guardados",
+
+  "fab.bookmark": "Añadir marcador",
+  "fab.library": "Volver a la biblioteca",
+  "fab.tts": "Texto a voz",
+
+  "disconnected.title": "Desconectado",
+  "disconnected.message": "No se puede conectar con el servidor en {url}. Asegúrese de que GianoReader está en ejecución y el modo servidor web está activo.",
+  "disconnected.reconnect": "Reconectar",
+  "disconnected.serverUrl": "URL del servidor",
+
+  "toast.bookmarkSaved": "Marcador guardado",
+  "toast.bookmarkDeleted": "Marcador eliminado",
+  "toast.settingsSaved": "Ajustes guardados",
+  "toast.errorGeneric": "Algo salió mal. Inténtelo de nuevo.",
+  "toast.networkError": "Error de red. Compruebe su conexión."
+}

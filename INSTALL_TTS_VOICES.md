@@ -94,7 +94,7 @@ piper --model it_IT-riccardo-x_low --download-dir ~/.local/share/piper
 ## Troubleshooting
 
 | Problem | Solution |
-|---------|----------|
+| --- | --- |
 | No voices appear after installation | Restart Giano Reader (or your browser). Some systems require a reboot. |
 | Voice sounds wrong for the language | Check that the correct voice is selected in the Voice dropdown. |
 | Only English voices available | Install the language pack for your target language (see OS-specific instructions above). |
@@ -107,7 +107,7 @@ piper --model it_IT-riccardo-x_low --download-dir ~/.local/share/piper
 Giano Reader supports TTS for all languages with available system voices:
 
 | Language | BCP-47 Code | Windows | macOS | Linux (espeak) |
-|----------|-------------|---------|-------|----------------|
+| --- | --- | --- | --- | --- |
 | Italian | it-IT | ✅ | ✅ | ✅ |
 | English | en-US | ✅ | ✅ | ✅ |
 | French | fr-FR | ✅ | ✅ | ✅ |

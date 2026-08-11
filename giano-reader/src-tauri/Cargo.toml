@@ -1,6 +1,6 @@
 [package]
 name = "giano-reader"
-version = "0.8.3"
+version = "0.9.0"
 description = "Giano Reader con traduzione"
 authors = ["Giampaolo Bolzonella <giampaolo.bolzonella@gmail.com>"]
 edition = "2021"
@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
@@ -28,8 +28,26 @@ sysinfo = { version = "0.30", default-features = false }
 tauri-plugin-safe-area-insets-css = "0.2.0"
 tauri-plugin-safe-area-insets = "0.1.0"
 
+# Web server
+axum = { version = "0.8.9", features = ["json", "matched-path", "tower-log", "macros"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "net", "full"] }
+rust-embed = { version = "8.11.0", features = ["axum"] }
+axum-embed = "0.1.0"
+sled = "0.34.7"
+epub = "2.1.5"
+uuid = { version = "1.23.4", features = ["v4"] }
+sha2 = "0.11.0"
+tokio-util = { version = "0.7.18", features = ["rt"] }
+reqwest = { version = "0.13.4", features = ["json"] }
+tower-http = { version = "0.7.0", features = ["cors"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+local-ip-address = "0.6.3"
+
+[dev-dependencies]
+proptest = "1.11.0"
+tower = { version = "0.5", features = ["util"] }
+
 [profile.release]
-panic = "abort"
 codegen-units = 1
 lto = true
 opt-level = "s"

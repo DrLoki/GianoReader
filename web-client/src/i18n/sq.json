@@ -1,0 +1,63 @@
+{
+  "app.name": "Giano Reader",
+  "general.loading": "Duke u ngarkuar…",
+  "general.close": "Mbyll",
+  "general.cancel": "Anulo",
+  "general.confirm": "Konfirmo",
+
+  "library.title": "Biblioteka",
+  "library.loading": "Duke ngarkuar librat…",
+  "library.empty": "Nuk ka libra të disponueshme në server. Shtoni libra përmes aplikacionit desktop GianoReader.",
+  "library.error": "Nuk u ngarkua biblioteka. Kontrolloni lidhjen tuaj.",
+  "library.retry": "Riprovo",
+  "library.progress": "{progress}% lexuar",
+  "library.searchPlaceholder": "Kërko sipas titullit ose autorit…",
+  "library.filterAll": "Të gjitha",
+  "library.filterToRead": "Për të lexuar",
+  "library.filterReading": "Duke lexuar",
+  "library.filterRead": "Lexuar",
+  "library.noResults": "Nuk ka rezultate për \"{query}\"",
+
+  "reading.tabOriginal": "Origjinali",
+  "reading.tabTranslated": "Përkthimi",
+  "reading.settingsTooltip": "Cilësimet",
+  "reading.translationError": "Përkthimi dështoi — prek për të riprovuar",
+  "reading.prevChapter": "Kapitulli i mëparshëm",
+  "reading.nextChapter": "Kapitulli tjetër",
+
+  "card.originalLabel": "Teksti origjinal",
+  "card.translatedLabel": "Teksti i përkthyer",
+
+  "settings.title": "Cilësimet",
+  "settings.theme": "Tema",
+  "settings.themeLight": "E ndritshme",
+  "settings.themeDark": "E errët",
+  "settings.themeSepia": "Sepia",
+  "settings.translationLanguage": "Gjuha e përkthimit",
+  "settings.fontSize": "Madhësia e fontit",
+  "settings.uiLanguage": "Gjuha e ndërfaqes",
+  "settings.connectionInfo": "Lidhja",
+  "settings.statusConnected": "I lidhur",
+  "settings.statusDisconnected": "I shkëputur",
+
+  "bookmarks.title": "Faqeshënuesit",
+  "bookmarks.addTooltip": "Shto faqeshënues",
+  "bookmarks.deleteTooltip": "Fshi faqeshënuesin",
+  "bookmarks.defaultLabel": "Kapitulli {chapter}",
+  "bookmarks.empty": "Nuk ka faqeshënues të ruajtur",
+
+  "fab.bookmark": "Shto faqeshënues",
+  "fab.library": "Kthehu te biblioteka",
+  "fab.tts": "Tekst në fjalë",
+
+  "disconnected.title": "I shkëputur",
+  "disconnected.message": "Nuk arrihet serveri në {url}. Sigurohuni që GianoReader po funksionon dhe modaliteti i serverit web është aktiv.",
+  "disconnected.reconnect": "Rilidhu",
+  "disconnected.serverUrl": "URL e serverit",
+
+  "toast.bookmarkSaved": "Faqeshënuesi u ruajt",
+  "toast.bookmarkDeleted": "Faqeshënuesi u fshi",
+  "toast.settingsSaved": "Cilësimet u ruajtën",
+  "toast.errorGeneric": "Diçka shkoi keq. Ju lutem provoni përsëri.",
+  "toast.networkError": "Gabim rrjeti. Kontrolloni lidhjen tuaj."
+}

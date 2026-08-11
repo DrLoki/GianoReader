@@ -1,12 +1,12 @@
 {
   "productName": "Giano Reader",
-  "version": "0.8.3",
-  "identifier": "com.bolzonella.giano-reader",
+  "version": "0.9.0",
+  "identifier": "giano-reader",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "cd ../web-client && npm run build && cd ../giano-reader && npm run build"
   },
   "app": {
     "windows": [
@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://translate.googleapis.com https://openrouter.ai; img-src 'self' data: blob: giano-assets:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' blob:; worker-src blob:"
+      "csp": "default-src 'self'; connect-src 'self' https://translate.googleapis.com https://openrouter.ai; img-src 'self' data: blob: giano-assets: https://api.qrserver.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' blob:; worker-src blob:"
     }
   },
   "bundle": {

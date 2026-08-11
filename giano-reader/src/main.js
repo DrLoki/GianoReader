@@ -13,6 +13,8 @@ let book = null;                    // istanza epubjs corrente
 let currentSpineItems = [];         // lista capitoli spine EPUB
 let currentSpineIndex = 0;          // indice capitolo corrente
 let currentChapterParagraphs = [];  // paragrafi del capitolo corrente
+let chapterLengths = [];            // lunghezza testo per capitolo (in caratteri)
+let chapterCumulativePct = [];      // posizione % cumulativa di ogni capitolo (0–100)
 let syncingScroll = false;          // lock per evitare loop nello scroll sincronizzato
 let translationAbortController = null;
 let lazyObserver = null;            // IntersectionObserver per traduzione lazy
@@ -109,6 +111,16 @@ const viewerWrapper = document.getElementById('viewer-wrapper');
 const toggleTranslationModeBtn = document.getElementById('toggle-translation-mode-btn');
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
+
+// Web Server Mode
+const webServerSettings = document.getElementById('web-server-settings');
+const webServerToggle = document.getElementById('web-server-toggle');
+const webServerPort = document.getElementById('web-server-port');
+const webServerError = document.getElementById('web-server-error');
+const webServerInfo = document.getElementById('web-server-info');
+const webServerUrl = document.getElementById('web-server-url');
+const webServerQr = document.getElementById('web-server-qr');
+const webServerWarning = document.getElementById('web-server-warning');
 
 // TTS Controls
 const ttsPlayBtn = document.getElementById('tts-play-btn');
@@ -610,7 +622,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.8.4' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.0' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -1596,6 +1608,123 @@ settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidd
 settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.add('hidden'); });
 
+// ── Web Server Mode ────────────────────────────────────────────────────────
+(function initWebServerMode() {
+  // Show web server settings only in Tauri
+  if (!(window.__TAURI__ || window.__TAURI_INTERNALS__)) return;
+  if (webServerSettings) webServerSettings.classList.remove('hidden');
+
+  function showWebServerError(msg) {
+    if (webServerError) {
+      webServerError.textContent = msg;
+      webServerError.classList.remove('hidden');
+    }
+  }
+  function hideWebServerError() {
+    if (webServerError) webServerError.classList.add('hidden');
+  }
+
+  function updateWebServerUI(active, info) {
+    if (!webServerToggle) return;
+    webServerToggle.checked = active;
+    webServerPort.disabled = active;
+
+    if (active && info) {
+      const url = info.lan_url || `http://127.0.0.1:${info.port}`;
+      webServerUrl.textContent = url;
+
+      // Generate QR code via public API
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=150x150`;
+      webServerQr.src = qrSrc;
+      webServerQr.alt = `QR: ${url}`;
+
+      webServerInfo.classList.remove('hidden');
+
+      // Show loopback warning if URL contains 127.0.0.1
+      if (url.includes('127.0.0.1')) {
+        webServerWarning.classList.remove('hidden');
+      } else {
+        webServerWarning.classList.add('hidden');
+      }
+    } else {
+      webServerInfo.classList.add('hidden');
+      webServerWarning.classList.add('hidden');
+    }
+    hideWebServerError();
+  }
+
+  // Load persisted port from settings
+  const s = loadSettings();
+  if (s.webServerPort && webServerPort) {
+    webServerPort.value = s.webServerPort;
+  }
+
+  // Toggle event
+  if (webServerToggle) {
+    webServerToggle.addEventListener('change', async () => {
+      hideWebServerError();
+      const active = webServerToggle.checked;
+
+      if (active) {
+        // Start server
+        const port = parseInt(webServerPort.value, 10) || 8888;
+        if (port < 1024 || port > 65535) {
+          showWebServerError('Port must be between 1024 and 65535');
+          webServerToggle.checked = false;
+          return;
+        }
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const info = await invoke('start_web_server', { port });
+          updateWebServerUI(true, info);
+          // Persist port
+          const settings = loadSettings();
+          settings.webServerPort = port;
+          saveSettings(settings);
+        } catch (err) {
+          const msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to start server');
+          showWebServerError(msg);
+          webServerToggle.checked = false;
+        }
+      } else {
+        // Stop server
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('stop_web_server');
+          updateWebServerUI(false, null);
+        } catch (err) {
+          const msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to stop server');
+          showWebServerError(msg);
+          // Revert toggle to ON since stop failed
+          webServerToggle.checked = true;
+        }
+      }
+    });
+  }
+
+  // Port input: save on change
+  if (webServerPort) {
+    webServerPort.addEventListener('change', () => {
+      const settings = loadSettings();
+      settings.webServerPort = parseInt(webServerPort.value, 10) || 8888;
+      saveSettings(settings);
+    });
+  }
+
+  // Check current server status on load
+  (async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const info = await invoke('get_server_status');
+      if (info) {
+        updateWebServerUI(true, info);
+      }
+    } catch {
+      // Server status command may not exist yet - that's fine
+    }
+  })();
+})();
+
 // ── RAM Advisor ────────────────────────────────────────────────────────────
 /**
  * Calcola il limite ottimale dalla RAM totale.
@@ -1705,11 +1834,26 @@ function updateProgress() {
     nextBtn.disabled = true;
     return;
   }
-  // pct: 0% al primo capitolo, 100% all'ultimo
-  const pct = total === 1 ? 0 : (currentSpineIndex / (total - 1)) * 100;
+
+  let pct;
+  if (chapterCumulativePct.length === total && chapterLengths.length === total) {
+    // Proportional progress: chapter start + intra-chapter scroll
+    const chapterStart = chapterCumulativePct[currentSpineIndex];
+    const totalChars = chapterLengths.reduce((sum, l) => sum + l, 0);
+    const chapterWeight = totalChars > 0 ? (chapterLengths[currentSpineIndex] / totalChars) * 100 : 0;
+
+    // Calculate intra-chapter scroll ratio
+    const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+    const scrollRatio = originalViewer.scrollTop / scrollMax;
+    pct = Math.min(100, chapterStart + chapterWeight * scrollRatio);
+  } else {
+    // Fallback: uniform distribution
+    pct = total === 1 ? 0 : (currentSpineIndex / (total - 1)) * 100;
+  }
+
   progressFill.style.width = `${pct}%`;
   progressThumb.style.left = `${pct}%`;
-  pageInfo.textContent = `Ch. ${currentSpineIndex + 1} / ${total}`;
+  pageInfo.textContent = `${Math.round(pct)}%`;
   prevBtn.disabled = currentSpineIndex <= 0;
   nextBtn.disabled = currentSpineIndex >= total - 1;
 }
@@ -1733,7 +1877,21 @@ progressTrack.addEventListener('click', e => {
   if (!currentSpineItems.length) return;
   const rect = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  displayChapter(Math.round(ratio * (currentSpineItems.length - 1)));
+
+  // With proportional progress: find which chapter the click falls into
+  if (chapterCumulativePct.length === currentSpineItems.length) {
+    const clickPct = ratio * 100;
+    let targetIdx = 0;
+    for (let i = chapterCumulativePct.length - 1; i >= 0; i--) {
+      if (clickPct >= chapterCumulativePct[i]) {
+        targetIdx = i;
+        break;
+      }
+    }
+    displayChapter(targetIdx);
+  } else {
+    displayChapter(Math.round(ratio * (currentSpineItems.length - 1)));
+  }
 });
 
 // Costruisce le tacche sulla progress bar dopo il caricamento del libro
@@ -1754,7 +1912,10 @@ function buildProgressTicks(spineItems, tocItems) {
   if (tocItems) walkToc(tocItems);
 
   spineItems.forEach((item, i) => {
-    const pct = total === 1 ? 0 : (i / (total - 1)) * 100;
+    // Usa posizione proporzionale se disponibile, altrimenti uniforme
+    const pct = chapterCumulativePct.length === total
+      ? chapterCumulativePct[i]
+      : (i / (total - 1)) * 100;
     const tick = document.createElement('div');
     tick.className = 'progress-tick';
     tick.style.left = `${pct}%`;
@@ -1904,6 +2065,9 @@ function bindSyncScroll() {
 
     const r = source.scrollTop / Math.max(1, source.scrollHeight - source.clientHeight);
     target.scrollTop = r * (target.scrollHeight - target.clientHeight);
+
+    // Update progress bar in real-time as user scrolls
+    updateProgress();
 
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
@@ -2597,6 +2761,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
     try { book.destroy(); } catch (_) { }
     book = null;
     currentSpineItems = [];
+    chapterLengths = [];
+    chapterCumulativePct = [];
     currentChapterParagraphs = [];
     currentFilePath = null;
   }
@@ -2678,11 +2844,16 @@ async function loadEpub(arrayBuffer, filePath = '') {
     setViewMode('text');
     viewToggleBtn.disabled = false;
     await displayChapter(bestIndex >= 0 ? bestIndex : 0);
+
+    // Compute chapter lengths in background for proportional progress bar
+    computeChapterLengths();
   } catch (err) {
     if (book) {
       try { book.destroy(); } catch (_) { }
       book = null;
       currentSpineItems = [];
+      chapterLengths = [];
+      chapterCumulativePct = [];
       currentChapterParagraphs = [];
       currentFilePath = null;
     }
@@ -2847,6 +3018,8 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     try { book.destroy(); } catch (_) { }
     book = null;
     currentSpineItems = [];
+    chapterLengths = [];
+    chapterCumulativePct = [];
     currentChapterParagraphs = [];
   }
   // Clear previous PDF state
@@ -3084,6 +3257,50 @@ async function loadChapterDocument(spineItem) {
     console.error('[nav] loadChapterDocument error:', e);
   }
   return null;
+}
+
+/**
+ * Calcola la lunghezza testuale di ogni capitolo e costruisce la mappa
+ * delle posizioni cumulative (0–100%) per la progress bar proporzionale.
+ * Eseguita in background dopo il caricamento iniziale del libro.
+ */
+async function computeChapterLengths() {
+  chapterLengths = [];
+  chapterCumulativePct = [];
+  if (!currentSpineItems.length || !book) return;
+
+  const lengths = new Array(currentSpineItems.length).fill(0);
+
+  for (let i = 0; i < currentSpineItems.length; i++) {
+    try {
+      const body = await loadChapterDocument(currentSpineItems[i]);
+      lengths[i] = (body?.textContent?.trim() || '').length;
+    } catch {
+      lengths[i] = 0;
+    }
+  }
+
+  // Se tutti i capitoli sono vuoti, usa distribuzione uniforme
+  const totalChars = lengths.reduce((sum, l) => sum + l, 0);
+  if (totalChars === 0) {
+    const n = lengths.length;
+    chapterLengths = lengths;
+    chapterCumulativePct = lengths.map((_, i) => (i / Math.max(1, n - 1)) * 100);
+    return;
+  }
+
+  chapterLengths = lengths;
+
+  // Costruisce le posizioni cumulative: posizione di inizio di ogni capitolo
+  const cumulative = [0];
+  for (let i = 0; i < lengths.length - 1; i++) {
+    cumulative.push(cumulative[i] + lengths[i]);
+  }
+  chapterCumulativePct = cumulative.map(c => (c / totalChars) * 100);
+
+  // Ricostruisce i tick con le nuove posizioni proporzionali
+  buildProgressTicks(currentSpineItems, book.navigation?.toc);
+  updateProgress();
 }
 
 // ── Indice (TOC) ───────────────────────────────────────────────────────────

@@ -355,6 +355,26 @@
           <option value="" id="openrouter-model-placeholder">Select a model...</option>
         </select>
       </div>
+      <!-- Web Server Mode (Tauri only) -->
+      <div id="web-server-settings" class="settings-row hidden">
+        <label>Web Server Mode</label>
+        <div class="web-server-controls">
+          <div class="web-server-toggle-row">
+            <label class="switch" for="web-server-toggle">
+              <input type="checkbox" id="web-server-toggle" />
+              <span class="switch-slider"></span>
+            </label>
+            <input type="number" id="web-server-port" value="8888" min="1024" max="65535" placeholder="Port" title="Server port" />
+          </div>
+          <p id="web-server-error" class="settings-error hidden"></p>
+          <div id="web-server-info" class="hidden">
+            <p id="web-server-url" class="web-server-url"></p>
+            <img id="web-server-qr" class="web-server-qr" alt="QR Code" />
+          </div>
+          <p id="web-server-warning" class="settings-error hidden">⚠ Server only reachable from this device (no LAN IP found)</p>
+        </div>
+      </div>
+
       <div id="settings-about">
         <span id="settings-developed-by"></span>
         <span id="settings-version"></span>

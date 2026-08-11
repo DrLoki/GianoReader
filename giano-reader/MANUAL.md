@@ -10,8 +10,10 @@
 6. [Translation](#translation)
 7. [Library](#library)
 8. [Bookmarks](#bookmarks)
-9. [Settings](#settings)
-10. [FAQ](#faq)
+9. [Web Server Mode](#web-server-mode)
+10. [How to Access Remotely via Tailscale](#web-access-with-tailscale)
+11. [Settings](#settings)
+12. [FAQ](#faq)
 
 ---
 
@@ -20,6 +22,8 @@
 **Giano Reader** is a desktop EPUB reader with built-in side-by-side translation via Google Translate and OpenRouter. It displays the original text and the translation in two synchronized panels, translating lazily starting from your current reading position.
 
 It works as a desktop application (Windows, macOS, Linux) via Tauri, and in a limited fallback mode in the web browser.
+
+Starting with **v0.9.0**, Giano Reader includes a **Web Server Mode** that lets you read your EPUB library from any device on your local network (phone, tablet, another computer) through a mobile-first web interface — no app installation required on the client device.
 
 ---
 
@@ -52,6 +56,7 @@ It works as a desktop application (Windows, macOS, Linux) via Tauri, and in a li
 Click the **+ Open book** button in the left sidebar. A native file dialog will open to let you select an `.epub` file.
 
 Once the book is loaded:
+
 - The title and author will appear at the top of the sidebar.
 - The table of contents (TOC) is populated automatically.
 - The first chapter containing actual text will be displayed.
@@ -63,7 +68,7 @@ Once the book is loaded:
 
 ## Main Interface
 
-```
+```text
 ┌──────────────────┬───────────────────────┬──────────────────────┐
 │          Sidebar │        Original Panel │    Translation Panel │
 │                  │                       │                      │
@@ -85,7 +90,7 @@ The bar at the bottom shows your reading position. Each tick mark corresponds to
 ### Sidebar Buttons
 
 | Button | Function |
-|---|---|
+| --- | --- |
 | **+ Open book** | Opens an EPUB file |
 | Bookmark icon | Opens the bookmarks modal |
 | Star icon | Adds a bookmark at the current position |
@@ -111,7 +116,7 @@ The two panels (original and translation) scroll in a synchronized manner: movin
 **Keyboard Shortcuts:**
 
 | Key | Action |
-|---|---|
+| --- | --- |
 | `↓` / `↑` | Scrolls by 3 lines |
 | `Space` | Scrolls down by one page |
 | `Shift + Space` | Scrolls up by one page |
@@ -124,9 +129,9 @@ Click the **image** icon (file-image) to toggle the original EPUB view: the chap
 
 To make comparative reading natural and highly efficient, Giano Reader features three interactive paragraph-level helpers:
 
-* **Synchronized Hover Highlight:** By default, hovering over any paragraph in either the original or the translation panel will instantly highlight it with a subtle background tint and a colored border at the side. In perfect synchronization, the corresponding paragraph in the opposite panel is highlighted as well, letting you easily track complex narratives. This is fully compatible with RTL (Right-to-Left) layouts like Arabic.
-* **Chromatic Paragraph Pairing:** Click the **Palette** icon in the translation header to toggle chromatic pairing. When active, adjacent paragraphs in the original and translated panels are color-coded in alternating HSL colors. Giano Reader dynamically uses customized palettes optimized separately for light and dark/nord/solarized backgrounds to maintain high text contrast and readability.
-* **Paragraph Numbers Toggle:** Click the **#** (hash) icon in the translation header to toggle inline paragraph numbers. This displays small, unobtrusive numbers at the start of each text block, aiding in precise academic comparison and line-by-line verification across both languages.
+- **Synchronized Hover Highlight:** By default, hovering over any paragraph in either the original or the translation panel will instantly highlight it with a subtle background tint and a colored border at the side. In perfect synchronization, the corresponding paragraph in the opposite panel is highlighted as well, letting you easily track complex narratives. This is fully compatible with RTL (Right-to-Left) layouts like Arabic.
+- **Chromatic Paragraph Pairing:** Click the **Palette** icon in the translation header to toggle chromatic pairing. When active, adjacent paragraphs in the original and translated panels are color-coded in alternating HSL colors. Giano Reader dynamically uses customized palettes optimized separately for light and dark/nord/solarized backgrounds to maintain high text contrast and readability.
+- **Paragraph Numbers Toggle:** Click the **#** (hash) icon in the translation header to toggle inline paragraph numbers. This displays small, unobtrusive numbers at the start of each text block, aiding in precise academic comparison and line-by-line verification across both languages.
 
 ---
 
@@ -137,16 +142,20 @@ To make comparative reading natural and highly efficient, Giano Reader features 
 Giano Reader supports a dual translation architecture to meet both simplicity and literary excellence:
 
 #### 1. FREE Mode (Google Translate)
+
 The basic translation uses the unofficial public endpoint of Google Translate (`translate.googleapis.com`) — **no API key required**. Text is split into ~4500-character chunks and translated **lazily**:
-* Upon loading a chapter, the visible block is translated immediately.
-* As you scroll down, subsequent blocks are automatically translated.
-* Previous blocks (above the initial position) are translated in the background.
+
+- Upon loading a chapter, the visible block is translated immediately.
+- As you scroll down, subsequent blocks are automatically translated.
+- Previous blocks (above the initial position) are translated in the background.
 
 #### 2. PRO Mode (OpenRouter API)
+
 For a premium, context-aware translation that preserves literary style, nuances, and vocabulary consistency, you can activate the **PRO** mode based on the **OpenRouter** API:
-* **Activation:** Paste a valid API Key in **Settings**. As soon as it is entered, the **FREE / PRO** switch will appear in the sidebar.
-* **Model Selection:** You can load the list of available models directly from OpenRouter servers and select your preferred one. Fast and efficient models are highly recommended (such as `google/gemini-2.5-flash` or `meta-llama/llama-3-8b-instruct`) to reduce response times to just a few seconds.
-* **Timing & Network:** When using PRO mode, OpenRouter uses *Chunked Transfer Encoding*. Consequently, the translation is generated in the background and rendered as soon as it is finished; paragraphs currently being translated remain grayed out until the process completes.
+
+- **Activation:** Paste a valid API Key in **Settings**. As soon as it is entered, the **FREE / PRO** switch will appear in the sidebar.
+- **Model Selection:** You can load the list of available models directly from OpenRouter servers and select your preferred one. Fast and efficient models are highly recommended (such as `google/gemini-2.5-flash` or `meta-llama/llama-3-8b-instruct`) to reduce response times to just a few seconds.
+- **Timing & Network:** When using PRO mode, OpenRouter uses *Chunked Transfer Encoding*. Consequently, the translation is generated in the background and rendered as soon as it is finished; paragraphs currently being translated remain grayed out until the process completes.
 
 ### Changing Translation Language
 
@@ -265,12 +274,103 @@ Use the **import** and **export** buttons in the bookmarks modal to save or load
 
 ---
 
+## Web Server Mode
+
+**New in v0.9.0.** Web Server Mode turns your GianoReader desktop app into a local HTTP server, allowing any device on your LAN (phone, tablet, etc.) to access your EPUB library and read with lazy translation through a mobile-optimised web interface.
+
+### Enabling Web Server Mode
+
+1. Open **Settings** (gear icon in the sidebar).
+2. Find the **Web Server Mode** section (visible only in the desktop app).
+3. Optionally change the **port** (default: 8888, range 1024–65535).
+4. Toggle the switch **ON**.
+5. A QR code and URL are displayed (e.g. `http://192.168.1.42:8888`).
+6. Scan the QR code or type the URL on your mobile device's browser.
+
+### Web Client Features
+
+The mobile web interface provides:
+
+- **Library grid** — browse all your EPUB books with covers and progress.
+- **Card UI reading** — swipe or tap between Original and Translated text cards.
+- **Lazy translation** — paragraphs are translated on-the-fly as you scroll, using the same Google Translate engine.
+- **Bookmarks** — save and navigate bookmarks from your phone.
+- **Settings** — change theme (light/dark/sepia), font size, translation language, and UI language.
+- **Reading progress sync** — your position is saved automatically and restored on reconnect.
+
+### Network Requirements
+
+- Both the desktop computer (server) and the mobile device (client) must be on the same local network (Wi-Fi/LAN).
+- The web client requires an active connection to the server; it does not work offline.
+- If no LAN IP is available, the server URL shows `127.0.0.1` with a warning that other devices cannot connect.
+
+### Stopping the Server
+
+Toggle the switch **OFF** in Settings, or close GianoReader. The server stops accepting connections within 2 seconds.
+
+---
+
+## Web Access With Tailscale
+
+
+Using **Tailscale** is the safest and easiest way to access your locally hosted instance of the [Giano Reader](https://github.com/DrLoki/GianoReader/blob/main/RELEASE.md) web app from your smartphone or tablet, without exposing your home network to the public internet.
+
+This guide will walk you through the setup process step by step.
+
+## Prerequisites
+* **The Host Machine (Server):** The computer (Windows, macOS, or Linux) currently running the Giano Reader web app.
+* **A Mobile Device:** Your Android or iOS smartphone/tablet.
+* **A Tailscale Account:** It's completely free for personal use.
+
+---
+
+### Step 1: Install Tailscale on the Host Machine
+
+1. Go to [Tailscale.com](https://tailscale.com/) and create a free account.
+2. Download and install the Tailscale client for your host machine's operating system.
+3. Open the Tailscale app and **log in** with your account.
+4. Once connected, Tailscale will assign a private IP address to your machine (it usually starts with `100.x.x.x`). 
+5. Find this IP address by clicking the Tailscale icon in your system tray/menu bar. **Copy this IP**—you will need it later.
+
+### Step 2: Configure Giano Reader for Network Access
+
+Enable the Web Server mode from the Giano Reader settings and note the port on which the app is exposed (by default 8888).
+
+### Step 3: Install Tailscale on Your Mobile Device
+
+1. Open the **App Store** (iOS) or **Google Play Store** (Android).
+2. Search for and install the **Tailscale** app.
+3. Open the app, agree to the VPN configuration prompts, and **log in using the exact same account** you used on your host machine.
+4. Make sure the toggle switch in the app is set to **Active / Connected**. 
+
+*(Your phone is now securely connected to the same virtual local network as your computer).*
+
+### Step 4: Access Giano Reader from Your Smartphone
+
+1. Open your preferred mobile browser (Safari, Chrome, etc.).
+2. In the address bar, type your host machine's Tailscale IP address followed by the Giano Reader port (the default development port is `1420`). 
+   
+   **Format:** `http://<Tailscale-IP>:<Port>`
+   **Example:** `http://100.115.92.4:8888`
+
+3. Press Enter. The Giano Reader web interface should now load perfectly on your mobile device!
+
+> [!TIP]
+> Since you will be using Giano Reader frequently, you can remove the browser's address bar to make it look and feel like a native mobile app:
+>
+> * **On iOS (Safari):** Tap the **Share** icon at the bottom of the screen, scroll down, and tap **"Add to Home Screen"**.
+> * **On Android (Chrome):** Tap the **3-dot menu** in the top right corner and select **"Add to Home screen"**.
+>
+> A Giano Reader icon will be added to your home screen. Whenever you want to read, just make sure Tailscale is active in the background and tap the icon!
+
+---
+
 ## Settings
 
 Open Settings by clicking the **gear** icon in the sidebar.
 
 | Setting | Description |
-|---|---|
+| --- | ---|
 | **Interface language** | UI text language (17 languages available with automatic i18n alignment) |
 | **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
 | **Font** | Font family for reading text |
@@ -279,6 +379,7 @@ Open Settings by clicking the **gear** icon in the sidebar.
 | **OpenRouter API Key** | API Key to enable advanced PRO translation using artificial intelligence models |
 | **Fetch models** | Clicking the button fetches the list of available models from OpenRouter |
 | **OpenRouter Model (PRO)** | Dropdown selector to choose the LLM model to use for PRO translations |
+| **Web Server Mode** | Toggle to start/stop the embedded HTTP server for mobile access (default port: 8888) |
 
 All settings are saved automatically. In the desktop application (Tauri), the Library and Bookmarks databases are stored in dedicated JSON files directly in the filesystem (`giano-library.json` and `giano-bookmarks.json` in the app's standard data directory), permanently bypassing browser storage quota limitations (`localStorage`) and avoiding "storage quota exceeded" errors when importing large ebook collections.
 
@@ -303,3 +404,12 @@ Some EPUBs do not define a cover image in their manifest. In this case, GianoRea
 
 **How do I remove a book from the Library without deleting it from disk?**
 Open the book details panel (the **ⓘ** button) and click **Remove from library**. The actual EPUB file remains completely intact on your disk.
+
+**I enabled Web Server Mode but my phone can't connect.**
+Make sure both devices are on the same Wi-Fi network. Check that your firewall is not blocking the port (default 8888). If the URL shows `127.0.0.1`, your computer has no LAN IP — try connecting to a network with a router.
+
+**The web client shows "Disconnected".**
+GianoReader must be running with Web Server Mode active. If you closed the app or toggled the server off, the web client loses connectivity. Reopen GianoReader, enable Web Server Mode, and tap "Reconnect" on the phone.
+
+**How do I open the browser DevTools for debugging?**
+Launch the application with the `--dev` flag to enable DevTools (F12). For example on Windows: `"C:\Program Files\Giano Reader\Giano Reader.exe" --dev`. This opens the WebView2 developer console on startup, useful for diagnosing translation errors, network issues, or TTS failures. Without the flag, DevTools are disabled in production builds.

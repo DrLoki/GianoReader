@@ -1,3 +1,94 @@
+# 🚀 GianoReader Release v0.9.0
+
+This release introduces **Web Server Mode** — an embedded HTTP server that exposes the EPUB library to any device on the local network via a mobile-first PWA web client. Also includes a responsive dual-panel reading layout, lazy translation with sentinel-based loading, and full REST API for books, chapters, bookmarks, and preferences.
+
+---
+
+## ⚠️ Post-Install Migration Required
+
+The app identifier has changed from `com.bolzonella.giano-reader` to `giano-reader`. After installing v0.9.0, run the migration script **once** to preserve your existing data (library, bookmarks, reading state):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/migrate-appdata.ps1
+```
+
+This moves your data from `%LOCALAPPDATA%\com.bolzonella.giano-reader\` to `%LOCALAPPDATA%\giano-reader\` and removes the old directory. If you skip this step, the app will start fresh with an empty library.
+
+---
+
+## 📝 Changelog (v0.8.3 → v0.9.0)
+
+### 🌐 Web Server Mode
+- **Embedded HTTP Server (axum)**: Toggle a local web server directly from the desktop app's Settings panel. Serves the EPUB library on a configurable port (default 8888) to any device on the LAN.
+- **QR Code for Quick Access**: Displays a QR code in Settings with the LAN URL for instant mobile connection.
+- **REST API**: Full JSON API for books, chapters, covers, TOC, reading state, bookmarks, preferences, and translation.
+- **Persistence (sled)**: Server-side key-value store for reading state, bookmarks, and user preferences — shared across all connected devices.
+
+### 📱 Mobile-First PWA Web Client
+- **Responsive Dual-Panel Layout**: Side-by-side Original + Translated panels on tablets/wide screens (≥768px); single-panel slide view on mobile portrait with swipe and tab switching.
+- **Lazy Translation (Sentinel Pattern)**: Translates paragraphs in chunks of 12 as the user scrolls through the translated panel — same proven approach as the desktop app. IntersectionObserver with `root: translatedSlot`.
+- **IndexedDB Translation Cache**: Translated paragraphs are cached locally per (bookId, chapter, paragraphId, targetLang) to avoid repeated API calls.
+- **Synchronized Scroll (Wide Mode)**: Bidirectional proportional scroll sync between Original and Translated panels on wide screens.
+- **Chapter Navigation**: Bottom bar with Previous/Next chapter buttons and settings gear.
+- **Settings Bottom Sheet**: Slide-up sheet for theme (light/dark/sepia), translation language, font size, UI language. Changes persist immediately via the API.
+- **Library Screen**: Book grid with covers, progress indicators, and a Bookmarks tab showing all bookmarks across all books.
+- **Bookmarks**: Create bookmarks at current reading position; tap to navigate directly to the bookmarked chapter and paragraph.
+- **Auto-Skip Empty Chapters**: If a chapter has no paragraphs (cover/title pages), automatically advances to the first chapter with content.
+- **Disconnected Overlay**: Full-screen overlay with reconnect button when the server becomes unreachable.
+- **Installable PWA**: Web manifest with standalone display mode for home-screen installation.
+
+### 🏗️ Architecture
+- **Rust Backend**: Minimal surface — axum server, sled persistence, EPUB parser (spine navigation, paragraph extraction, cover serving), Google Translate bridge (chunked batching).
+- **TypeScript Web Client**: Strict TypeScript, Web Components (no Shadow DOM), CSS custom properties for theming. Vite build targeting es2021/chrome105/safari13.
+- **rust-embed**: Web client `dist/` is embedded into the Tauri binary at compile time — no external files needed.
+- **CORS**: All origins allowed for LAN device access.
+
+### 📊 Real Progress Bar (Desktop & Mobile)
+- **Proportional Chapter Ticks (Desktop)**: Progress bar tick marks are now positioned proportionally to the actual text length of each chapter — short chapters get less space, long chapters more. Chapter lengths are computed in background after book load.
+- **Intra-Chapter Scroll Tracking (Desktop)**: The progress thumb moves smoothly as you scroll within a chapter, not just when you switch chapters. The indicator now shows a percentage (e.g. "42%") instead of "Ch. X / Y".
+- **Click-to-Navigate Respects Proportions (Desktop)**: Clicking the progress bar now navigates to the correct chapter based on its proportional position.
+- **Mobile Progress Bar (Web Client)**: New 3px accent-colored progress bar between the reading content and the bottom navigation. Shows real-time scroll percentage with a small label on the right.
+
+### 🛠️ Developer Mode
+- **`--dev` Launch Flag**: Launch the installed app with `"Giano Reader.exe" --dev` to open WebView2 DevTools (F12) in production builds. Useful for diagnosing translation errors, TTS issues, or network problems without rebuilding.
+
+### 🔧 Bug Fixes & Improvements
+- **JSON Serialization**: Added `#[serde(rename_all = "camelCase")]` to all REST response models (`BookSummary`, `ChapterResponse`, `TocEntry`, `Paragraph`) — fixes field name mismatches between Rust backend and TypeScript client.
+- **Touch Scroll Fix**: Added `touch-action: pan-y` and passive pointer listeners to the card UI for reliable mobile scrolling.
+- **API State Validation**: `getReadingState` now checks `response.ok` before parsing, preventing malformed state from breaking navigation.
+- **UI Language Live Update**: Changing the interface language in Settings now re-renders the current view immediately without requiring a page refresh.
+- **TTS Error Diagnostics**: Enhanced OpenRouter TTS error logging with full response body, headers, and request details for easier debugging.
+- **App Identifier Changed**: From `com.bolzonella.giano-reader` to `giano-reader` (see migration warning above).
+- **Release Profile**: Removed `panic = "abort"` for better error handling in production.
+---
+
+# 🚀 GianoReader Release v0.8.3
+
+This release introduces a **Resizable Library Modal**, a **Clean Library** tool to detect and remove broken book links, complete **TTS Voice Gender Indicators** across all models, the full **Gemini TTS 30-voice catalog**, and **TTS Audio Download** with native Save dialog support.
+
+---
+
+## 📝 Changelog (v0.8.2 → v0.8.3)
+
+### 📚 Library Modal Enhancements
+- **Resizable Library Modal**: The library modal window is now user-resizable (drag from bottom-right corner). Supports grow up to 90vw × 90vh with minimum constraints (320×300px) to prevent accidental collapse.
+- **Clean Library Tool**: New toolbar button (broken-link icon) that scans all books in the library and verifies file existence on disk. Displays results in a styled in-app modal listing broken entries (title + path), with a one-click "Remove" action to purge invalid entries. Fully localized across all 20 supported languages.
+
+### 🎙️ TTS Voice Improvements
+- **Gender Indicators on All Models**: Added ♀️/♂️ labels to Grok Voice TTS (Eve ♀️, Ara ♀️, Rex ♂️, Sal ♂️, Leo ♂️) and OpenAI fallback voices (Alloy ♀️, Echo ♂️, Fable ♂️, Onyx ♂️, Nova ♀️, Shimmer ♀️).
+- **Complete Gemini TTS Voice Catalog**: Expanded from 6 to all 30 official Google Gemini TTS voices, organized in Female/Male optgroups with style descriptors (e.g., "Kore ♀️ — Firm", "Puck ♂️ — Upbeat").
+
+### ⬇️ TTS Audio Download
+- **Native Save Dialog**: The TTS download button now opens a native "Save As" file dialog (via Tauri plugin-dialog) letting users choose where to save the audio file. Browser fallback remains for non-Tauri environments.
+- **Gemini WAV Support**: Gemini TTS sessions now store PCM audio for download. The assembled output is exported as a proper WAV file (24kHz 16-bit mono with RIFF header), while other models continue to export MP3.
+- **Download Button Repositioned**: Moved to the far right of the TTS toolbar, after the progress percentage indicator, for clearer visual hierarchy.
+- **Activation Fix**: The download button now correctly activates for all PRO models (including Gemini) once playback begins, resolving the issue where it remained permanently disabled.
+
+### 🌐 Localization
+- **20-Language Coverage for Clean Library**: All new UI strings (`libCheck`, `libCheckRunning`, `libCheckAllGood`, `libCheckBroken`, `libCheckConfirm`, `libCheckRemoveAction`, `libCheckRemoved`) translated across English, Italian, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Thai, Filipino, Arabic, Albanian, Swedish, Ukrainian, and Slovenian.
+
+---
+
 # 🚀 GianoReader Release v0.8.2
 
 This release introduces a **Unified Reader Toolbar** for side-by-side reading layout customization, a new **Dual-Pane Hide/Show Toggle** with automatic scroll-sync restoration, **On-Hover TOC Chapter Translations** in the sidebar, complete multi-language localized labels across all 19 supported languages, and a thorough **Dead Code Removal** of the obsolete Python sidecar pipeline.

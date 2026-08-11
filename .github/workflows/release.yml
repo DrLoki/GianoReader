@@ -53,9 +53,13 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - name: Install npm dependencies
+      - name: Install npm dependencies (giano-reader)
         run: npm ci
         working-directory: giano-reader
+
+      - name: Install npm dependencies (web-client)
+        run: npm ci
+        working-directory: web-client
 
       - name: Build Tauri app
         run: npm run tauri build -- ${{ matrix.args }}
