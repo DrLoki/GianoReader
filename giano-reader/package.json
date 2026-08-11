@@ -12,6 +12,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "@saurl/tauri-plugin-safe-area-insets-css-api": "^0.1.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "epubjs": "^0.3.93",

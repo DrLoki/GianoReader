@@ -45,10 +45,17 @@ body {
   font-family: var(--font-family);
   background: var(--bg);
   color: var(--text);
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
-#app { display: flex; height: 100vh; }
+#app {
+  display: flex;
+  height: 100dvh;
+
+  /* Required for edge-to-edge Android rendering; works with iOS */
+  margin-top: var(--safe-area-top, env(safe-area-inset-top, 0px));
+  margin-bottom: var(--safe-area-bottom, env(safe-area-inset-bottom, 0px));
+}
 
 /* ── Sidebar ── */
 #sidebar {
@@ -305,7 +312,7 @@ body {
 .sync-notice {
   font-size: 0.7rem;
   color: #e67e22;
-  margin-left: auto;
+  margin-left: 1rem;
   text-transform: none;
   letter-spacing: 0;
 }
@@ -919,6 +926,7 @@ body.theme-sepia {
 #toggle-numbers-btn svg.icon,
 #hide-original-btn svg.icon,
 #hide-translation-btn svg.icon,
+#swap-panels-btn svg.icon,
 #view-toggle-btn svg.icon {
   filter: none !important;
   color: var(--text-muted);
@@ -930,6 +938,7 @@ body.theme-sepia {
 #toggle-numbers-btn:hover:not(:disabled) svg.icon,
 #hide-original-btn:hover:not(:disabled) svg.icon,
 #hide-translation-btn:hover:not(:disabled) svg.icon,
+#swap-panels-btn:hover:not(:disabled) svg.icon,
 #view-toggle-btn:hover:not(:disabled) svg.icon {
   color: var(--text);
 }
@@ -941,6 +950,8 @@ body.theme-sepia {
 #hide-original-btn[aria-pressed="true"] svg.icon,
 #hide-translation-btn.active svg.icon,
 #hide-translation-btn[aria-pressed="true"] svg.icon,
+#swap-panels-btn.active svg.icon,
+#swap-panels-btn[aria-pressed="true"] svg.icon,
 #view-toggle-btn.active svg.icon,
 #view-toggle-btn[aria-pressed="true"] svg.icon {
   filter: none !important;

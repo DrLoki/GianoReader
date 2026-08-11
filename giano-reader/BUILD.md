@@ -44,6 +44,17 @@ Useful for rapid UI iteration. File open/save dialogs and filesystem access will
 
 ---
 
+
+## Android
+
+Will attempt to run on a connected Android device or in an Android emulator. Android SDK is required, recommend utilizing Android Studio for IDE, SDK management, and Device Manager. Additional details found at https://v2.tauri.app/develop/
+
+```bash
+npm run tauri android init
+npm run tauri android dev
+```
+
+---
 ## Production build
 
 ```bash
