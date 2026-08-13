@@ -151,6 +151,13 @@ export const translations = {
     tts_download: 'Download MP3',
     tts_download_pro_only: 'MP3 download is only available in PRO mode',
     tts_progress: 'Transcoding progress',
+    // Update checker
+    updateAvailable: 'Update available',
+    updateMsg: 'Version {version} is available. Do you want to download and install it?',
+    updateInstall: 'Download & install',
+    updateLater: 'Later',
+    updateDownloading: 'Downloading... {pct}%',
+    updateError: 'Update error: {error}',
   },
   zh: {
     viewToggle: '切换原始视图',
@@ -1961,6 +1968,13 @@ export const translations = {
     tts_download: 'Scarica MP3',
     tts_download_pro_only: 'Il download MP3 è disponibile solo in modalità PRO',
     tts_progress: 'Progresso transcodifica',
+    // Update checker
+    updateAvailable: 'Aggiornamento disponibile',
+    updateMsg: 'È disponibile la versione {version}. Vuoi scaricarla e installarla?',
+    updateInstall: 'Scarica e installa',
+    updateLater: 'Dopo',
+    updateDownloading: 'Download in corso... {pct}%',
+    updateError: 'Errore aggiornamento: {error}',
   },
   th: {
     viewToggle: 'สลับมุมมองต้นฉบับ',

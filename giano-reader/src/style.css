@@ -2008,3 +2008,34 @@ html.rtl .text-panel [data-segment-id].translation-error {
   padding: 1em 0;
   font-size: 0.9em;
 }
+
+/* ── Update modal ── */
+#update-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+#update-progress-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  accent-color: var(--accent);
+  background: var(--surface);
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
+  overflow: hidden;
+}
+#update-progress-bar::-webkit-progress-bar   { background: var(--surface); border-radius: 4px; }
+#update-progress-bar::-webkit-progress-value { background: var(--accent);  border-radius: 4px; }
+#update-progress-bar::-moz-progress-bar      { background: var(--accent);  border-radius: 4px; }
+
+#update-progress-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}

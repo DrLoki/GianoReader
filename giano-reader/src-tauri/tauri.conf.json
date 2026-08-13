@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://translate.googleapis.com https://openrouter.ai; img-src 'self' data: blob: giano-assets: https://api.qrserver.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' blob:; worker-src blob:"
+      "csp": "default-src 'self'; connect-src 'self' https://translate.googleapis.com https://openrouter.ai https://github.com https://objects.githubusercontent.com; img-src 'self' data: blob: giano-assets: https://api.qrserver.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' blob:; worker-src blob:"
     }
   },
   "bundle": {
@@ -36,5 +36,13 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM4RDRCREE3RDg2MTU2RTMKUldUalZtSFlwNzNVeUxTMFRMV2dZKzQ0cEF3UlZrZHRzekJsOUlNb0xjMno4ai9Va0orckFPUGoK",
+      "endpoint": [
+        "https://github.com/DrLoki/GianoReader/releases/latest/download/latest.json"
+      ]
+    }
+  }
 }

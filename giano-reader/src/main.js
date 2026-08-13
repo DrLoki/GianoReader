@@ -3791,6 +3791,90 @@ window.addEventListener('beforeunload', () => {
   if (book) { try { book.destroy(); } catch (_) { } }
 });
 
+// ── Controllo aggiornamenti ────────────────────────────────────────────────
+/**
+ * Verifica all'avvio se è disponibile una nuova versione tramite tauri-plugin-updater.
+ * Mostra una modale non bloccante con la possibilità di scaricare e installare.
+ * Eseguito solo nell'ambiente Tauri; silenziato in caso di errore di rete.
+ */
+async function checkForUpdates() {
+  if (!(window.__TAURI__ || window.__TAURI_INTERNALS__)) return;
+  try {
+    const { check } = await import('@tauri-apps/plugin-updater');
+    const update = await check();
+    if (!update?.available) return;
+
+    const lang = loadSettings().uiLang || 'en';
+    const modal = document.getElementById('update-modal');
+    const versionEl = document.getElementById('update-modal-version');
+    const titleEl = document.getElementById('update-modal-title');
+    const msgEl = document.getElementById('update-modal-msg');
+    const installBtn = document.getElementById('update-install-btn');
+    const skipBtn = document.getElementById('update-skip-btn');
+    const progressWrap = document.getElementById('update-progress-wrap');
+    const progressBar = document.getElementById('update-progress-bar');
+    const progressLabel = document.getElementById('update-progress-label');
+
+    if (!modal) return;
+
+    const version = update.version || '';
+    if (versionEl) versionEl.textContent = version;
+    if (titleEl) titleEl.textContent = t(lang, 'updateAvailable');
+    if (msgEl) msgEl.innerHTML = t(lang, 'updateMsg', { version: `<strong>${version}</strong>` });
+    if (installBtn) installBtn.textContent = t(lang, 'updateInstall');
+    if (skipBtn) skipBtn.textContent = t(lang, 'updateLater');
+
+    modal.classList.remove('hidden');
+
+    skipBtn?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    }, { once: true });
+
+    installBtn?.addEventListener('click', async () => {
+      installBtn.disabled = true;
+      skipBtn.disabled = true;
+      if (progressWrap) progressWrap.classList.remove('hidden');
+
+      try {
+        let downloaded = 0;
+        let total = 0;
+
+        await update.downloadAndInstall(event => {
+          if (event.event === 'Started') {
+            total = event.data.contentLength ?? 0;
+          } else if (event.event === 'Progress') {
+            downloaded += event.data.chunkLength ?? 0;
+            const pct = total > 0 ? Math.round((downloaded / total) * 100) : 0;
+            if (progressBar) progressBar.value = pct;
+            if (progressLabel) progressLabel.textContent = t(lang, 'updateDownloading', { pct });
+          }
+          // 'Finished' → l'app si riavvierà automaticamente
+        });
+
+        // Se arriviamo qui (improbabile), riavvia manualmente
+        const { relaunch } = await import('@tauri-apps/plugin-process');
+        await relaunch();
+      } catch (err) {
+        console.error('[updater] download error:', err);
+        if (progressWrap) progressWrap.classList.add('hidden');
+        if (msgEl) msgEl.textContent = t(lang, 'updateError', { error: String(err) });
+        if (installBtn) installBtn.disabled = false;
+        if (skipBtn) skipBtn.disabled = false;
+      }
+    }, { once: true });
+
+  } catch (err) {
+    // Errore silenzioso: rete non disponibile o endpoint irraggiungibile
+    console.info('[updater] check skipped:', err?.message ?? err);
+  }
+}
+
+// Avvia il controllo aggiornamenti 3 secondi dopo il caricamento
+// (ritardo per non interferire con il cold start dell'app)
+if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+  setTimeout(checkForUpdates, 3000);
+}
+
 // ── Library ────────────────────────────────────────────────────────────────
 const LIBRARY_KEY = 'giano-reader-library';
 let _cachedLibrary = null;

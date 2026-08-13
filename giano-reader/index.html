@@ -503,6 +503,22 @@
     </div>
   </div>
 
+  <!-- Modal: aggiornamento disponibile -->
+  <div id="update-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="update-modal-title">
+    <div class="modal-box">
+      <h2 id="update-modal-title">⬆ Update available</h2>
+      <p id="update-modal-msg">A new version <strong id="update-modal-version"></strong> is available.</p>
+      <div class="modal-actions">
+        <button id="update-install-btn" class="btn-primary">Download &amp; install</button>
+        <button id="update-skip-btn" class="secondary">Later</button>
+      </div>
+      <div id="update-progress-wrap" class="hidden">
+        <progress id="update-progress-bar" value="0" max="100"></progress>
+        <span id="update-progress-label">0%</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom Context Menu -->
   <div id="custom-context-menu" class="context-menu hidden">
     <div class="context-menu-item" id="ctx-prev">
