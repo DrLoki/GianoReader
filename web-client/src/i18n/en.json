@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Add bookmark",
   "bookmarks.deleteTooltip": "Delete bookmark",
   "bookmarks.defaultLabel": "Chapter {chapter}",
+  "bookmarks.positionLabel": "Chapter {chapter} · Par. {paragraph}",
   "bookmarks.empty": "No bookmarks saved",
 
   "fab.bookmark": "Add bookmark",

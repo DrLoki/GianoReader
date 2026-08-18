@@ -102,6 +102,7 @@ const viewerWrapper = document.getElementById('viewer-wrapper');
 const toggleTranslationModeBtn = document.getElementById('toggle-translation-mode-btn');
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
+const cloudflareWorkerSubdomainInput = document.getElementById('cloudflare-worker-subdomain');
 
 // Web Server Mode
 const webServerSettings = document.getElementById('web-server-settings');
@@ -512,6 +513,8 @@ function applyUiLang(lang) {
   if (orModelLabel) orModelLabel.textContent = t(lang, 'openrouterModelPro');
   const orModelPlaceholder = document.getElementById('openrouter-model-placeholder');
   if (orModelPlaceholder) orModelPlaceholder.textContent = t(lang, 'openrouterSelectModel');
+  const cfSubdomainLabel = document.getElementById('cloudflare-worker-subdomain-label');
+  if (cfSubdomainLabel) cfSubdomainLabel.textContent = t(lang, 'cloudflareWorkerSubdomain');
   if (toggleTranslationModeBtn) {
     toggleTranslationModeBtn.title = t(lang, 'toggleTranslationMode');
     toggleTranslationModeBtn.setAttribute('aria-label', t(lang, 'toggleTranslationMode'));
@@ -573,7 +576,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.0' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.1' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -1340,6 +1343,9 @@ ttsController._onProgressChange = (pct) => {
   const openrouterApiKey = s.openrouterApiKey || '';
   if (openrouterKeyInput) openrouterKeyInput.value = openrouterApiKey;
 
+  const cloudflareWorkerSubdomain = s.cloudflareWorkerSubdomain || '';
+  if (cloudflareWorkerSubdomainInput) cloudflareWorkerSubdomainInput.value = cloudflareWorkerSubdomain;
+
   const translationMode = s.translationMode || 'free';
   if (toggleTranslationModeBtn) {
     const isPro = translationMode === 'pro';
@@ -1455,6 +1461,16 @@ if (openrouterModelSelect) {
     s.openrouterModel = openrouterModelSelect.value;
     saveSettings(s);
   });
+}
+
+if (cloudflareWorkerSubdomainInput) {
+  const handleSubdomainUpdate = () => {
+    const s = loadSettings();
+    s.cloudflareWorkerSubdomain = cloudflareWorkerSubdomainInput.value.trim();
+    saveSettings(s);
+  };
+  cloudflareWorkerSubdomainInput.addEventListener('change', handleSubdomainUpdate);
+  cloudflareWorkerSubdomainInput.addEventListener('input', handleSubdomainUpdate);
 }
 
 const openrouterFetchBtn = document.getElementById('openrouter-fetch-btn');
@@ -1939,7 +1955,8 @@ function paragraphsToHtml(paragraphs) {
   }).join('');
 }
 function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // Serializza il contenuto inline di un elemento preservando link e formattazione base,
@@ -2441,9 +2458,9 @@ async function translatePdfOverlay(startPct = 0) {
   }
 }
 
-  const lang = langSelect.value;
-  const rawLabel = langSelect.options[langSelect.selectedIndex].text;
-  translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
+const lang = langSelect.value;
+const rawLabel = langSelect.options[langSelect.selectedIndex].text;
+translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
 // ── Traduzione lazy ────────────────────────────────────────────────────────
 // startPct: percentuale di scroll da cui partire (0-100). Traduce prima il chunk
 // visibile a quella posizione, poi espande lazy verso il basso e verso l'alto.
@@ -3478,11 +3495,13 @@ async function renderBookmarks(query = '') {
   for (const bm of filtered) {
     const li = document.createElement('li');
     li.className = 'bookmark-item';
+    const title = bm.bookTitle || bm.fileName || bm.bookId || '';
+    const chapterLabel = bm.chapterLabel || (bm.chapterIndex != null ? `Chapter ${bm.chapterIndex + 1}` : '');
     li.innerHTML = `
       <span class="bm-icon"><img src="/icons/book-bookmark.svg" class="icon" alt="" /></span>
       <span class="bm-info">
-        <span class="bm-title" title="${escapeHtml(bm.bookTitle || bm.fileName)}">${escapeHtml(bm.bookTitle || bm.fileName)}</span>
-        <span class="bm-chapter">${escapeHtml(bm.chapterLabel)}${bm.scrollPct != null ? ` · ${bm.scrollPct}%` : ''}</span>
+        <span class="bm-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+        <span class="bm-chapter">${escapeHtml(chapterLabel)}${bm.scrollPct != null ? ` · ${bm.scrollPct}%` : ''}</span>
       </span>
       <button class="bm-delete" title="Delete bookmark" data-id="${bm.id}"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
     `;
@@ -3576,9 +3595,10 @@ async function deleteBookmark(id) {
 
 // Mostra la modal di rilocazione e restituisce il nuovo path scelto, o null se annullato
 async function askRelocate(bm) {
-  bmMissingName.textContent = bm.fileName;
+  const fileName = bm.fileName || bm.bookTitle || '';
+  bmMissingName.textContent = fileName;
   document.getElementById('bm-modal-msg').innerHTML =
-    t(loadSettings().uiLang || 'en', 'fileNotFoundMsg', { name: `<strong>${escapeHtml(bm.fileName)}</strong>` });
+    t(loadSettings().uiLang || 'en', 'fileNotFoundMsg', { name: `<strong>${escapeHtml(fileName)}</strong>` });
   bookmarkMissingModal.classList.remove('hidden');
 
   return new Promise(resolve => {
@@ -3628,6 +3648,9 @@ async function openBookmark(bm) {
     /^[A-Za-z]:[\\\/]/.test(bm.filePath)   // Windows
   );
 
+  const bmFileName = bm.fileName || bm.bookTitle || '';
+  const bmChapterLabel = bm.chapterLabel || (bm.chapterIndex != null ? `Chapter ${bm.chapterIndex + 1}` : '');
+
   if (!hasAbsolutePath) {
     if (isTauri) {
       // Path not absolute: ask user to locate the file
@@ -3635,13 +3658,13 @@ async function openBookmark(bm) {
       if (!newPath) return;
       await updateBookmarkPath(bm, newPath);
     } else {
-      await showAlert(`Please open the file "${bm.fileName}" manually and navigate to: ${bm.chapterLabel}`);
+      await showAlert(`Please open the file "${bmFileName}" manually and navigate to: ${bmChapterLabel}`);
       return;
     }
   }
 
   if (!isTauri) {
-    await showAlert(`Please open the file "${bm.fileName}" manually and navigate to: ${bm.chapterLabel}`);
+    await showAlert(`Please open the file "${bmFileName}" manually and navigate to: ${bmChapterLabel}`);
     return;
   }
 

@@ -39,6 +39,7 @@ export interface Bookmark {
   id: string;
   chapterIndex: number;
   paragraphId: string;
+  paragraphIndex?: number;
   label?: string;
   createdAt: string;
 }
@@ -48,6 +49,7 @@ export interface Preferences {
   uiLanguage: string;
   translationLang: string;
   fontSize: number;
+  cloudflareWorkerSubdomain?: string;
 }
 
 export interface CacheKey {

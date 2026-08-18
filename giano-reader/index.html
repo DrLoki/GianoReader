@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,17 +8,19 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
+
 <body class="dark">
   <div id="app">
     <aside id="sidebar">
       <div id="sidebar-header">
         <button id="open-btn">Open book</button>
         <button id="library-btn" title="Library">
-          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="4" height="18" rx="1"/>
-            <rect x="9" y="6" width="4" height="15" rx="1"/>
-            <rect x="15" y="2" width="4" height="19" rx="1"/>
-            <line x1="2" y1="21" x2="22" y2="21"/>
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="4" height="18" rx="1" />
+            <rect x="9" y="6" width="4" height="15" rx="1" />
+            <rect x="15" y="2" width="4" height="19" rx="1" />
+            <line x1="2" y1="21" x2="22" y2="21" />
           </svg>
         </button>
         <button id="settings-btn" title="Settings"><img src="/icons/gear.svg" class="icon" alt="" /></button>
@@ -61,8 +64,10 @@
 
       <!-- Segnalibri in fondo alla sidebar -->
       <div id="bookmarks-bar">
-        <button id="bookmarks-open-btn" title="Open bookmarks"><img src="/icons/book-bookmark.svg" class="icon" alt="" /> Bookmarks</button>
-        <button id="add-bookmark-btn" title="Add bookmark at current position" disabled><img src="/icons/star.svg" class="icon" alt="" /></button>
+        <button id="bookmarks-open-btn" title="Open bookmarks"><img src="/icons/book-bookmark.svg" class="icon"
+            alt="" /> Bookmarks</button>
+        <button id="add-bookmark-btn" title="Add bookmark at current position" disabled><img src="/icons/star.svg"
+            class="icon" alt="" /></button>
       </div>
     </aside>
 
@@ -73,49 +78,56 @@
           <span id="original-header-label">Original</span>
           <div class="header-divider"></div>
           <button id="view-toggle-btn" class="view-toggle-btn" aria-pressed="false" disabled title="" aria-label="">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14,2 14,8 20,8"/>
-              <rect x="8" y="13" width="8" height="6" rx="1"/>
-              <line x1="8" y1="10" x2="13" y2="10"/>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14,2 14,8 20,8" />
+              <rect x="8" y="13" width="8" height="6" rx="1" />
+              <line x1="8" y1="10" x2="13" y2="10" />
             </svg>
           </button>
         </div>
         <div id="reader-header-center">
           <button id="hide-original-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="2" y="3" width="20" height="18" rx="2"/>
-              <line x1="14" y1="3" x2="14" y2="21"/>
-              <polyline points="10,9 6,12 10,15"/>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="18" rx="2" />
+              <line x1="14" y1="3" x2="14" y2="21" />
+              <polyline points="10,9 6,12 10,15" />
             </svg>
           </button>
           <button id="hide-translation-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="2" y="3" width="20" height="18" rx="2"/>
-              <line x1="10" y1="3" x2="10" y2="21"/>
-              <polyline points="14,9 18,12 14,15"/>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="18" rx="2" />
+              <line x1="10" y1="3" x2="10" y2="21" />
+              <polyline points="14,9 18,12 14,15" />
             </svg>
           </button>
         </div>
         <div id="reader-header-right">
           <span id="translation-lang-label">Translation</span>
           <div class="header-divider"></div>
-          <button id="toggle-translation-mode-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">FREE</button>
+          <button id="toggle-translation-mode-btn" class="view-toggle-btn" aria-pressed="false" title=""
+            aria-label="">FREE</button>
           <button id="toggle-pairing-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.03457 19.176 5.09322 19.4357 5.00624 19.6738C4.83151 20.1522 4.73789 20.6653 4.73789 21.2C4.73789 21.6418 5.09606 22 5.53789 22H12Z"/>
-              <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor"/>
-              <circle cx="11.5" cy="7.5" r="1.5" fill="currentColor"/>
-              <circle cx="16.5" cy="9.5" r="1.5" fill="currentColor"/>
-              <circle cx="15.5" cy="14.5" r="1.5" fill="currentColor"/>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path
+                d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.03457 19.176 5.09322 19.4357 5.00624 19.6738C4.83151 20.1522 4.73789 20.6653 4.73789 21.2C4.73789 21.6418 5.09606 22 5.53789 22H12Z" />
+              <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor" />
+              <circle cx="11.5" cy="7.5" r="1.5" fill="currentColor" />
+              <circle cx="16.5" cy="9.5" r="1.5" fill="currentColor" />
+              <circle cx="15.5" cy="14.5" r="1.5" fill="currentColor" />
             </svg>
           </button>
           <button id="toggle-numbers-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="4" y1="9" x2="20" y2="9"/>
-              <line x1="4" y1="15" x2="20" y2="15"/>
-              <line x1="9" y1="4" x2="9" y2="20"/>
-              <line x1="15" y1="4" x2="15" y2="20"/>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="4" y1="9" x2="20" y2="9" />
+              <line x1="4" y1="15" x2="20" y2="15" />
+              <line x1="9" y1="4" x2="9" y2="20" />
+              <line x1="15" y1="4" x2="15" y2="20" />
             </svg>
           </button>
           <span id="translation-status"></span>
@@ -126,13 +138,15 @@
       <!-- TTS Control Bar -->
       <div id="tts-controls">
         <button id="tts-play-btn" disabled title="Play" aria-label="Play">
-          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
-            <polygon points="6,4 20,12 6,20"/>
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+            aria-hidden="true">
+            <polygon points="6,4 20,12 6,20" />
           </svg>
         </button>
         <button id="tts-stop-btn" disabled title="Stop" aria-label="Stop">
-          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
-            <rect x="5" y="5" width="14" height="14" rx="2"/>
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"
+            aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" rx="2" />
           </svg>
         </button>
 
@@ -213,11 +227,13 @@
   <div id="epub-hidden-mount" aria-hidden="true"></div>
 
   <!-- Modal: segnalibri -->
-  <div id="bookmarks-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-modal-title">
+  <div id="bookmarks-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="bm-modal-title">
     <div class="modal-box modal-box--bookmarks">
       <div class="modal-header">
         <h2 id="bm-modal-title"><img src="/icons/book-bookmark.svg" class="icon" alt="" /> Bookmarks</h2>
-        <button id="bm-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+        <button id="bm-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon"
+            alt="" /></button>
       </div>
       <div id="bm-search-bar">
         <input type="search" id="bm-search-input" placeholder="Search by title..." autocomplete="off" />
@@ -226,18 +242,22 @@
         <li id="bookmarks-placeholder">No bookmarks saved</li>
       </ul>
       <div class="modal-footer">
-        <button id="bm-import-btn" title="Import bookmarks from JSON"><img src="/icons/upload.svg" class="icon" alt="" /></button>
-        <button id="bm-export-btn" title="Export bookmarks to JSON"><img src="/icons/download.svg" class="icon" alt="" /></button>
+        <button id="bm-import-btn" title="Import bookmarks from JSON"><img src="/icons/upload.svg" class="icon"
+            alt="" /></button>
+        <button id="bm-export-btn" title="Export bookmarks to JSON"><img src="/icons/download.svg" class="icon"
+            alt="" /></button>
         <input type="file" id="bm-import-input" accept=".json" style="display:none" />
       </div>
     </div>
   </div>
 
   <!-- Modal: file segnalibro non trovato -->
-  <div id="bookmark-missing-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bm-missing-modal-title">
+  <div id="bookmark-missing-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="bm-missing-modal-title">
     <div class="modal-box">
       <h2 id="bm-missing-modal-title">File not found</h2>
-      <p id="bm-modal-msg">The file <strong id="bm-missing-name"></strong> was not found at the saved location. Please locate the file.</p>
+      <p id="bm-modal-msg">The file <strong id="bm-missing-name"></strong> was not found at the saved location. Please
+        locate the file.</p>
       <div class="modal-actions">
         <button id="bm-relocate-btn">Browse...</button>
         <button id="bm-cancel-btn" class="secondary">Cancel</button>
@@ -246,11 +266,13 @@
   </div>
 
   <!-- Modal: settings -->
-  <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+  <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="settings-modal-title">
     <div class="modal-box modal-box--settings">
       <div class="modal-header">
         <h2 id="settings-modal-title"><img src="/icons/gear.svg" class="icon" alt="" /> Settings</h2>
-        <button id="settings-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+        <button id="settings-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon"
+            alt="" /></button>
       </div>
       <div class="settings-row">
         <label for="ui-lang-select">Interface language</label>
@@ -316,8 +338,9 @@
         <div class="settings-input-group">
           <input type="number" id="max-file-size-mb" min="10" max="2000" step="1" value="150" />
           <button id="optimal-limit-btn" type="button" title="">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </button>
         </div>
@@ -332,11 +355,12 @@
         <div class="settings-input-group">
           <input type="password" id="openrouter-key-input" placeholder="sk-or-..." autocomplete="off" />
           <button id="openrouter-fetch-btn" type="button" title="Fetch models">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-              <path d="M3 3v5h5"/>
-              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-              <path d="M16 16h5v5"/>
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+              <path d="M16 16h5v5" />
             </svg>
           </button>
         </div>
@@ -348,6 +372,11 @@
           <option value="" id="openrouter-model-placeholder">Select a model...</option>
         </select>
       </div>
+      <div class="settings-row">
+        <label for="cloudflare-worker-subdomain" id="cloudflare-worker-subdomain-label">Cloudflare Worker
+          Subdomain</label>
+        <input type="text" id="cloudflare-worker-subdomain" placeholder="e.g. happy-reader" autocomplete="off" />
+      </div>
       <!-- Web Server Mode (Tauri only) -->
       <div id="web-server-settings" class="settings-row hidden">
         <label>Web Server Mode</label>
@@ -357,14 +386,16 @@
               <input type="checkbox" id="web-server-toggle" />
               <span class="switch-slider"></span>
             </label>
-            <input type="number" id="web-server-port" value="8888" min="1024" max="65535" placeholder="Port" title="Server port" />
+            <input type="number" id="web-server-port" value="8888" min="1024" max="65535" placeholder="Port"
+              title="Server port" />
           </div>
           <p id="web-server-error" class="settings-error hidden"></p>
           <div id="web-server-info" class="hidden">
             <p id="web-server-url" class="web-server-url"></p>
             <img id="web-server-qr" class="web-server-qr" alt="QR Code" />
           </div>
-          <p id="web-server-warning" class="settings-error hidden">⚠ Server only reachable from this device (no LAN IP found)</p>
+          <p id="web-server-warning" class="settings-error hidden">⚠ Server only reachable from this device (no LAN IP
+            found)</p>
         </div>
       </div>
 
@@ -376,11 +407,13 @@
   </div>
 
   <!-- Modal: library -->
-  <div id="library-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="library-modal-title">
+  <div id="library-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="library-modal-title">
     <div class="modal-box modal-box--library">
       <div class="modal-header">
         <h2 id="library-modal-title">Library</h2>
-        <button id="lib-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+        <button id="lib-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon"
+            alt="" /></button>
       </div>
       <div id="lib-search-bar">
         <input type="search" id="lib-search-input" placeholder="" autocomplete="off" />
@@ -397,21 +430,24 @@
       <div id="lib-toolbar">
         <button id="lib-scan-btn"><img src="/icons/upload.svg" class="icon" alt="" /> Select folder</button>
         <button id="lib-check-btn" title="Clean library">
-          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18.84 12.25l1.72-1.71a4.04 4.04 0 0 0-5.7-5.71L13.15 6.55"/>
-            <path d="M5.16 11.75l-1.72 1.71a4.04 4.04 0 0 0 5.7 5.71l1.71-1.72"/>
-            <line x1="2" y1="2" x2="6" y2="6"/>
-            <line x1="18" y1="18" x2="22" y2="22"/>
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18.84 12.25l1.72-1.71a4.04 4.04 0 0 0-5.7-5.71L13.15 6.55" />
+            <path d="M5.16 11.75l-1.72 1.71a4.04 4.04 0 0 0 5.7 5.71l1.71-1.72" />
+            <line x1="2" y1="2" x2="6" y2="6" />
+            <line x1="18" y1="18" x2="22" y2="22" />
           </svg>
         </button>
         <button id="lib-import-btn" title="Import library"><img src="/icons/upload.svg" class="icon" alt="" /></button>
-        <button id="lib-export-btn" title="Export library"><img src="/icons/download.svg" class="icon" alt="" /></button>
+        <button id="lib-export-btn" title="Export library"><img src="/icons/download.svg" class="icon"
+            alt="" /></button>
         <button id="lib-clear-btn" title="Clear library">
-          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-            <path d="M10 11v6M14 11v6"/>
-            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6M14 11v6" />
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
           </svg>
         </button>
         <input type="file" id="lib-import-input" accept=".json" style="display:none" />
@@ -420,11 +456,13 @@
   </div>
 
   <!-- Modal: library clean results -->
-  <div id="lib-check-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lib-check-modal-title">
+  <div id="lib-check-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="lib-check-modal-title">
     <div class="modal-box modal-box--lib-check">
       <div class="modal-header">
         <h2 id="lib-check-modal-title">Clean library</h2>
-        <button id="lib-check-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+        <button id="lib-check-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon"
+            alt="" /></button>
       </div>
       <p id="lib-check-msg"></p>
       <ul id="lib-check-list"></ul>
@@ -437,11 +475,13 @@
   </div>
 
   <!-- Modal: book detail -->
-  <div id="book-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="book-detail-title">
+  <div id="book-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="book-detail-title">
     <div class="modal-box modal-box--book-detail">
       <div class="modal-header">
         <h2 id="book-detail-title">Book details</h2>
-        <button id="book-detail-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+        <button id="book-detail-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon"
+            alt="" /></button>
       </div>
       <div id="book-detail-body">
         <div id="book-detail-cover-col">
@@ -492,11 +532,24 @@
       </div>
       <div class="modal-footer modal-footer--detail">
         <button id="book-detail-delete-btn" class="btn-danger">
-          <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6M14 11v6" />
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+          </svg>
           <span id="book-detail-delete-label">Delete from library</span>
         </button>
         <button id="book-detail-save-btn" class="btn-primary">
-          <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <svg style="width:1em;height:1em;vertical-align:-0.15em;margin-right:5px" xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <polyline points="17 21 17 13 7 13 7 21" />
+            <polyline points="7 3 7 8 15 8" />
+          </svg>
           <span id="book-detail-save-label">Save</span>
         </button>
       </div>
@@ -504,7 +557,8 @@
   </div>
 
   <!-- Modal: aggiornamento disponibile -->
-  <div id="update-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="update-modal-title">
+  <div id="update-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="update-modal-title">
     <div class="modal-box">
       <h2 id="update-modal-title">⬆ Update available</h2>
       <p id="update-modal-msg">A new version <strong id="update-modal-version"></strong> is available.</p>
@@ -523,28 +577,46 @@
   <div id="custom-context-menu" class="context-menu hidden">
     <div class="context-menu-item" id="ctx-prev">
       <span class="ctx-label">
-        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+          style="width:1.2em; height:1.2em; vertical-align:middle;">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
         <span class="ctx-text">Capitolo precedente</span>
       </span>
       <span class="ctx-shortcut">ALT+&larr;</span>
     </div>
     <div class="context-menu-item" id="ctx-next">
       <span class="ctx-label">
-        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+          style="width:1.2em; height:1.2em; vertical-align:middle;">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
         <span class="ctx-text">Capitolo successivo</span>
       </span>
       <span class="ctx-shortcut">ALT+&rarr;</span>
     </div>
     <div class="context-menu-item" id="ctx-refresh">
       <span class="ctx-label">
-        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+          style="width:1.2em; height:1.2em; vertical-align:middle;">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+        </svg>
         <span class="ctx-text">Aggiorna</span>
       </span>
       <span class="ctx-shortcut">CTRL+R</span>
     </div>
     <div class="context-menu-item" id="ctx-print">
       <span class="ctx-label">
-        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+          style="width:1.2em; height:1.2em; vertical-align:middle;">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
         <span class="ctx-text">Stampa</span>
       </span>
       <span class="ctx-shortcut">CTRL+P</span>
@@ -575,4 +647,5 @@
 
   <script type="module" src="/src/main.js"></script>
 </body>
+
 </html>

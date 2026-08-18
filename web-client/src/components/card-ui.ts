@@ -61,8 +61,111 @@ class CardUI extends HTMLElement {
   /** Switch the visible card (narrow mode). In wide mode this is a no-op visually. */
   public switchTo(card: 'original' | 'translated'): void {
     if (card === this.activeCard) return;
+    const previousCard = this.activeCard;
+    this.syncScroll(previousCard, card);
     this.activeCard = card;
     this.updatePositions();
+    this.dispatchEvent(
+      new CustomEvent('card-change', {
+        bubbles: true,
+        composed: true,
+        detail: { activeCard: card, previousCard },
+      })
+    );
+  }
+
+  /**
+   * Synchronises scroll position between cards.
+   * Finds the topmost visible paragraph in the source panel and scrolls
+   * the destination panel to align the corresponding paragraph at the same relative position.
+   */
+  public syncScroll(fromCard: 'original' | 'translated', toCard: 'original' | 'translated'): void {
+    if (fromCard === toCard) return;
+
+    const fromSlot = fromCard === 'original' ? this.getOriginalSlot() : this.getTranslatedSlot();
+    const toSlot = toCard === 'original' ? this.getOriginalSlot() : this.getTranslatedSlot();
+
+    if (!fromSlot || !toSlot) return;
+
+    // Fast path: if at very top
+    if (fromSlot.scrollTop <= 2) {
+      toSlot.scrollTop = 0;
+      return;
+    }
+
+    // Fast path: if at very bottom
+    const maxSource = fromSlot.scrollHeight - fromSlot.clientHeight;
+    if (maxSource > 0 && fromSlot.scrollTop >= maxSource - 2) {
+      const maxTarget = toSlot.scrollHeight - toSlot.clientHeight;
+      if (maxTarget > 0) {
+        toSlot.scrollTop = maxTarget;
+        return;
+      }
+    }
+
+    // Paragraph-based synchronization
+    const paragraphs = fromSlot.querySelectorAll<HTMLElement>('[data-id], [data-index]');
+    const containerRect = fromSlot.getBoundingClientRect();
+
+    let targetParagraphInfo: { id: string | null; index: string | null; ratioInP: number } | null = null;
+
+    if (paragraphs.length > 0 && containerRect.height > 0) {
+      for (let i = 0; i < paragraphs.length; i++) {
+        const p = paragraphs[i];
+        const rect = p.getBoundingClientRect();
+
+        // A paragraph is visible if its bottom is past the top edge of the scroll container
+        if (rect.bottom > containerRect.top + 1) {
+          const id = p.getAttribute('data-id');
+          const index = p.getAttribute('data-index');
+          const offsetInP = Math.max(0, containerRect.top - rect.top);
+          const ratioInP = rect.height > 0 ? Math.min(1, Math.max(0, offsetInP / rect.height)) : 0;
+          targetParagraphInfo = { id, index, ratioInP };
+          break;
+        }
+      }
+
+      // If scrolled past all paragraphs, use the last paragraph
+      if (!targetParagraphInfo && paragraphs.length > 0) {
+        const lastP = paragraphs[paragraphs.length - 1];
+        targetParagraphInfo = {
+          id: lastP.getAttribute('data-id'),
+          index: lastP.getAttribute('data-index'),
+          ratioInP: 1,
+        };
+      }
+    }
+
+    if (targetParagraphInfo) {
+      let targetP: HTMLElement | null = null;
+      if (targetParagraphInfo.id) {
+        targetP = toSlot.querySelector<HTMLElement>(`[data-id="${targetParagraphInfo.id}"]`);
+      }
+      if (!targetP && targetParagraphInfo.index !== null) {
+        targetP = toSlot.querySelector<HTMLElement>(`[data-index="${targetParagraphInfo.index}"]`);
+      }
+
+      if (targetP) {
+        const toContainerRect = toSlot.getBoundingClientRect();
+        const targetPRect = targetP.getBoundingClientRect();
+
+        if (toContainerRect.height > 0 && targetPRect.height > 0) {
+          const delta = targetPRect.top - toContainerRect.top;
+          toSlot.scrollTop = Math.max(0, toSlot.scrollTop + delta + (targetParagraphInfo.ratioInP * targetPRect.height));
+          return;
+        } else {
+          targetP.scrollIntoView({ block: 'start' });
+          return;
+        }
+      }
+    }
+
+    // Proportional scroll fallback
+    if (maxSource > 0) {
+      const ratio = fromSlot.scrollTop / maxSource;
+      const maxTarget = Math.max(0, toSlot.scrollHeight - toSlot.clientHeight);
+      toSlot.scrollTop = ratio * maxTarget;
+    }
   }
 
   /** Returns the currently active card identifier. */

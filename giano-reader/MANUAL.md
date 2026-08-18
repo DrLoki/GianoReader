@@ -345,23 +345,48 @@ Enable the Web Server mode from the Giano Reader settings and note the port on w
 
 *(Your phone is now securely connected to the same virtual local network as your computer).*
 
-### Step 4: Access Giano Reader from Your Smartphone
+### Step 4: Access Giano Reader from Your Smartphone or Desktop Browser
 
-1. Open your preferred mobile browser (Safari, Chrome, etc.).
-2. In the address bar, type your host machine's Tailscale IP address followed by the Giano Reader port (the default development port is `1420`). 
+1. Open your preferred mobile or desktop browser (Chrome, Safari, Edge, etc.).
+2. In the address bar, type your host machine's Tailscale IP address or local LAN IP followed by the Giano Reader port (default port is `8888`). 
    
-   **Format:** `http://<Tailscale-IP>:<Port>`
-   **Example:** `http://100.115.92.4:8888`
+   **Format:** `http://<IP-Address>:<Port>`
+   **Example:** `http://100.115.92.4:8888` or `http://localhost:8888`
 
-3. Press Enter. The Giano Reader web interface should now load perfectly on your mobile device!
+3. Press Enter. The Giano Reader web client will load.
 
 > [!TIP]
-> Since you will be using Giano Reader frequently, you can remove the browser's address bar to make it look and feel like a native mobile app:
+> **Installing Giano Reader as a PWA (Progressive Web App):**
+> Giano Reader is a full Progressive Web App and can be installed as a standalone app on both mobile devices and desktop computers:
 >
 > * **On iOS (Safari):** Tap the **Share** icon at the bottom of the screen, scroll down, and tap **"Add to Home Screen"**.
-> * **On Android (Chrome):** Tap the **3-dot menu** in the top right corner and select **"Add to Home screen"**.
->
-> A Giano Reader icon will be added to your home screen. Whenever you want to read, just make sure Tailscale is active in the background and tap the icon!
+> * **On Android (Chrome):** Tap the **3-dot menu** in the top right corner and select **"Add to Home screen"** or **"Install app"**.
+> * **On Desktop (Chrome / Edge):**
+>   - If accessing via `http://localhost:8888` or `http://127.0.0.1:8888`, click the **Install** icon in the address bar (or 3-dot menu → **"Install Giano Reader..."**).
+>   - If accessing via a **LAN / Tailscale IP** (e.g. `http://192.168.1.5:8888` or `http://100.x.x.x:8888`), Chromium blocks PWA installation on non-localhost HTTP by default. To enable installation:
+>     1. Navigate to `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in Chrome (or `edge://flags` in Edge).
+>     2. Add your server URL (e.g. `http://192.168.1.5:8888,http://100.115.92.4:8888`).
+>     3. Set the flag to **Enabled** and click **Relaunch**.
+>     4. Reload the Giano Reader page and the **Install** button will appear in the address bar.
+
+### 💡 Zero-Configuration Alternative: Automatic HTTPS with Tailscale Serve
+
+If you prefer not to configure flags on individual client browsers, you can enable native HTTPS across your entire Tailscale network with a single command on your host computer:
+
+1. Enable **MagicDNS** and **HTTPS Certificates** in your [Tailscale Admin Console](https://login.tailscale.com/admin/dns).
+2. On your host machine (where Giano Reader is running with Web Server Mode enabled on port `8888`), open a terminal and run:
+   ```bash
+   tailscale serve --bg https / http://127.0.0.1:8888
+   ```
+3. Tailscale will automatically provision a valid, trusted TLS/SSL certificate and assign an HTTPS URL for your device:
+   ```
+   https://<your-machine-name>.<your-tailnet>.ts.net
+   ```
+
+**Key Advantages:**
+* **Instant PWA Installation:** Because the connection is recognized as a genuine Secure Context (HTTPS), Chrome and Edge on both desktop and mobile will immediately show the native **Install App** button without any need to touch `chrome://flags`.
+* **Complete Offline Support:** Service Workers register and precache books and chapters automatically.
+* **End-to-End Encryption:** Encrypted network transport across your private Tailscale network.
 
 ---
 
@@ -371,7 +396,7 @@ Open Settings by clicking the **gear** icon in the sidebar.
 
 | Setting | Description |
 | --- | ---|
-| **Interface language** | UI text language (17 languages available with automatic i18n alignment) |
+| **Interface language** | UI text language (20 languages available with automatic i18n alignment) |
 | **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
 | **Font** | Font family for reading text |
 | **Font size** | Slider from 12px to 32px |
@@ -379,6 +404,7 @@ Open Settings by clicking the **gear** icon in the sidebar.
 | **OpenRouter API Key** | API Key to enable advanced PRO translation using artificial intelligence models |
 | **Fetch models** | Clicking the button fetches the list of available models from OpenRouter |
 | **OpenRouter Model (PRO)** | Dropdown selector to choose the LLM model to use for PRO translations |
+| **Cloudflare Worker Subdomain** | Cloudflare subdomain prefix for your CORS proxy worker (e.g. `happy-reader` to use `https://giano-translate-proxy.happy-reader.workers.dev`). If empty, direct Google Translate endpoint is used. |
 | **Web Server Mode** | Toggle to start/stop the embedded HTTP server for mobile access (default port: 8888) |
 
 All settings are saved automatically. In the desktop application (Tauri), the Library and Bookmarks databases are stored in dedicated JSON files directly in the filesystem (`giano-library.json` and `giano-bookmarks.json` in the app's standard data directory), permanently bypassing browser storage quota limitations (`localStorage`) and avoiding "storage quota exceeded" errors when importing large ebook collections.
@@ -391,7 +417,7 @@ All settings are saved automatically. In the desktop application (Tauri), the Li
 Some EPUBs generated by Calibre may take longer than usual to load. Wait up to 20 seconds. If the problem persists, try re-exporting the file from Calibre as an EPUB 2 file.
 
 **The translation doesn't start or shows errors.**
-Check your internet connection. The FREE Google Translate endpoint is unofficial and may be temporarily unavailable. Try again in a few seconds, or toggle translation languages/modes to force a retry.
+Check your internet connection. The FREE Google Translate endpoint is unofficial and may be subject to CORS or temporary blocks. You can set up your own Cloudflare Worker CORS proxy (see `CLOUDFLARE_WORKER_SETUP.md`) and enter your subdomain in Settings under **Cloudflare Worker Subdomain**. Alternatively, configure an OpenRouter API key for PRO AI translation.
 
 **Bookmarks do not open automatically.**
 Automatic bookmark reopening requires the desktop application (Tauri). In the browser, you will need to open the file manually and navigate to the indicated chapter.
@@ -413,3 +439,10 @@ GianoReader must be running with Web Server Mode active. If you closed the app o
 
 **How do I open the browser DevTools for debugging?**
 Launch the application with the `--dev` flag to enable DevTools (F12). For example on Windows: `"C:\Program Files\Giano Reader\Giano Reader.exe" --dev`. This opens the WebView2 developer console on startup, useful for diagnosing translation errors, network issues, or TTS failures. Without the flag, DevTools are disabled in production builds.
+
+**Why doesn't the PWA "Install" button appear in Chrome or Edge on desktop?**
+Chromium browsers require a Secure Context (HTTPS or `localhost`) to register Service Workers and allow PWA installation. If you are opening Giano Reader on another PC using a LAN IP (e.g. `http://192.168.1.5:8888`), Chromium marks HTTP as insecure and disables installation. To enable it:
+1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in Chrome (or `edge://flags` in Edge).
+2. Enter the server origin (e.g. `http://192.168.1.5:8888`).
+3. Set the option to **Enabled** and click **Relaunch**.
+4. Refresh the page to see the **Install** button.

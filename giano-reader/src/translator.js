@@ -23,14 +23,14 @@ const CHAR_LIMIT = 4500;
  */
 async function translateChunkPro(text, targetLang, apiKey, model, signal) {
   const url = 'https://openrouter.ai/api/v1/chat/completions';
-  
+
   console.log(`[GianoReader PRO] Starting translation request...`);
   console.log(`[GianoReader PRO] Target Language: ${targetLang}`);
   console.log(`[GianoReader PRO] Model: ${model}`);
   console.log(`[GianoReader PRO] Text Length: ${text.length} chars`);
-  
+
   const startTime = performance.now();
-  
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -77,12 +77,12 @@ CRITICAL: Return ONLY the translated text, preserving the exact paragraph count 
   }
 
   const data = await res.json();
-  
+
   // Log token usage if present
   if (data.usage) {
     console.log(`[GianoReader PRO] Token Usage - Prompt: ${data.usage.prompt_tokens}, Completion: ${data.usage.completion_tokens}, Total: ${data.usage.total_tokens}`);
   }
-  
+
   const choice = data.choices?.[0];
   if (!choice || !choice.message?.content) {
     throw new Error('Invalid response format from OpenRouter');
@@ -90,7 +90,7 @@ CRITICAL: Return ONLY the translated text, preserving the exact paragraph count 
 
   const result = choice.message.content.trim();
   console.log(`[GianoReader PRO] Chunk translation complete! Translated text size: ${result.length} chars`);
-  
+
   return result;
 }
 
@@ -101,22 +101,29 @@ CRITICAL: Return ONLY the translated text, preserving the exact paragraph count 
  * @returns {Promise<string>} Testo tradotto.
  */
 async function translateChunk(text, targetLang) {
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-  
+  const settings = loadSettings();
+  let subdomain = (settings.cloudflareWorkerSubdomain || '').trim();
+  subdomain = subdomain.replace(/^https?:\/\//, '').replace(/^giano-translate-proxy\./, '').replace(/\.workers\.dev.*$/, '').trim();
+
+  const baseUrl = subdomain
+    ? `https://giano-translate-proxy.${subdomain}.workers.dev`
+    : 'https://translate.googleapis.com/translate_a/single';
+  const url = `${baseUrl}?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+
   console.log(`[GianoReader FREE] Starting translation request...`);
   console.log(`[GianoReader FREE] Target Language: ${targetLang}`);
   console.log(`[GianoReader FREE] Text Length: ${text.length} chars`);
-  
+
   const startTime = performance.now();
   const res = await fetch(url);
   const duration = (performance.now() - startTime) / 1000;
-  
+
   console.log(`[GianoReader FREE] HTTP response received in ${duration.toFixed(2)}s with status ${res.status}`);
-  
+
   if (!res.ok) throw new Error(`Translation error: ${res.status}`);
   const data = await res.json();
   const result = data[0].map(seg => seg[0]).join('');
-  
+
   console.log(`[GianoReader FREE] Chunk translation complete! Translated text size: ${result.length} chars`);
   return result;
 }

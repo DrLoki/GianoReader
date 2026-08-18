@@ -7,6 +7,7 @@ import { createBookmark } from '../api/bookmarks';
 import { showToast } from './toast';
 import * as translationCache from '../cache/translation-cache';
 import type { CacheKey, ChapterResponse, Paragraph, ReadingState } from '../types';
+import { isOfflineMode, isLocalId, getLocalChapter } from '../api/local-db';
 import './card-ui';
 
 /**
@@ -406,6 +407,22 @@ class ReadingScreen extends HTMLElement {
       this.activateTab('translated', tabTranslated, tabOriginal, cardUi);
     });
 
+    // Listen to card-change from card-ui (e.g. on swipe) to sync header tabs
+    cardUi?.addEventListener('card-change', ((e: CustomEvent<{ activeCard: 'original' | 'translated' }>) => {
+      const card = e.detail?.activeCard;
+      if (card === 'translated') {
+        tabTranslated?.classList.add('active');
+        tabTranslated?.setAttribute('aria-selected', 'true');
+        tabOriginal?.classList.remove('active');
+        tabOriginal?.setAttribute('aria-selected', 'false');
+      } else if (card === 'original') {
+        tabOriginal?.classList.add('active');
+        tabOriginal?.setAttribute('aria-selected', 'true');
+        tabTranslated?.classList.remove('active');
+        tabTranslated?.setAttribute('aria-selected', 'false');
+      }
+    }) as EventListener);
+
     // Settings button dispatches event for parent to open settings-sheet
     const settingsBtn = this.querySelector('.settings-btn') as HTMLButtonElement;
     settingsBtn?.addEventListener('click', () => {
@@ -473,13 +490,14 @@ class ReadingScreen extends HTMLElement {
     const originalSlot = cardUi?.getOriginalSlot();
     if (!originalSlot || !this.bookId) return;
 
-    const paragraphId = this.findTopmostVisibleParagraphId(originalSlot);
-    if (!paragraphId) return;
+    const paragraph = this.findTopmostVisibleParagraph(originalSlot);
+    if (!paragraph?.id) return;
 
     try {
       await createBookmark(this.bookId, {
         chapterIndex: this.currentChapter,
-        paragraphId,
+        paragraphId: paragraph.id,
+        paragraphIndex: isNaN(paragraph.index) ? undefined : paragraph.index,
       });
       showToast(t('toast.bookmarkSaved'), 'success');
     } catch {
@@ -499,19 +517,38 @@ class ReadingScreen extends HTMLElement {
   public async loadChapter(chapterIndex: number): Promise<void> {
     if (!this.bookId) return;
 
-    const response = await apiFetch(`/api/books/${this.bookId}/chapter/${chapterIndex}`);
-    if (!response.ok) return;
+    let chapter: ChapterResponse;
+    if (isOfflineMode() || isLocalId(this.bookId)) {
+      try {
+        chapter = await getLocalChapter(this.bookId, chapterIndex);
+      } catch (e) {
+        console.error('Error loading local chapter:', e);
+        return;
+      }
+    } else {
+      const response = await apiFetch(`/api/books/${this.bookId}/chapter/${chapterIndex}`);
+      if (!response.ok) return;
+      chapter = await response.json();
+    }
 
-    const chapter: ChapterResponse = await response.json();
     this.currentChapter = chapterIndex;
     this.paragraphData = chapter.paragraphs;
 
     // If chapter has no paragraphs (cover/title page), skip to next chapter
     if (chapter.paragraphs.length === 0) {
       const nextIndex = chapterIndex + 1;
-      const nextResponse = await apiFetch(`/api/books/${this.bookId}/chapter/${nextIndex}`);
-      if (nextResponse.ok) {
-        return this.loadChapter(nextIndex);
+      if (isOfflineMode() || isLocalId(this.bookId)) {
+        try {
+          await getLocalChapter(this.bookId, nextIndex);
+          return this.loadChapter(nextIndex);
+        } catch {
+          return;
+        }
+      } else {
+        const nextResponse = await apiFetch(`/api/books/${this.bookId}/chapter/${nextIndex}`);
+        if (nextResponse.ok) {
+          return this.loadChapter(nextIndex);
+        }
       }
       // If no next chapter either, just stay on empty (end of book)
       return;
@@ -541,10 +578,12 @@ class ReadingScreen extends HTMLElement {
       // Only restore saved position for the initial chapter load
       if (chapterIndex === this.initialState.currentChapter) {
         this.restoreScrollPosition(originalSlot);
+        this.restoreScrollPosition(translatedSlot);
       } else {
         originalSlot.scrollTop = 0;
+        translatedSlot.scrollTop = 0;
       }
-      this.attachScrollListener(originalSlot);
+      this.attachScrollListener(originalSlot, translatedSlot);
       this.setupTranslationObserver(originalSlot, translatedSlot);
     });
 
@@ -573,9 +612,9 @@ class ReadingScreen extends HTMLElement {
    * Restores scroll position from the initial reading state.
    * Prioritises paragraphId; falls back to scrollOffset.
    */
-  private restoreScrollPosition(originalSlot: HTMLElement): void {
+  private restoreScrollPosition(slot: HTMLElement): void {
     if (this.initialState.paragraphId) {
-      const target = originalSlot.querySelector<HTMLElement>(
+      const target = slot.querySelector<HTMLElement>(
         `[data-id="${this.initialState.paragraphId}"]`
       );
       if (target) {
@@ -585,26 +624,34 @@ class ReadingScreen extends HTMLElement {
     }
 
     // Fall back to scrollOffset
-    originalSlot.scrollTop = this.initialState.scrollOffset;
+    slot.scrollTop = this.initialState.scrollOffset;
   }
 
   /**
-   * Attaches a debounced scroll listener on the original card's content slot.
-   * On scroll, calculates the current reading position and persists it.
+   * Attaches a debounced scroll listener on both the Original and Translated
+   * card content slots. On narrow/portrait screens the two panels are
+   * independent slide views (not scroll-synced by <card-ui>), so the
+   * Translated panel needs its own listener to keep the progress bar and
+   * persisted reading state up to date while the user reads the translation.
+   * On wide screens both listeners still work fine since the panels are
+   * scroll-synced by <card-ui>.
    */
-  private attachScrollListener(originalSlot: HTMLElement): void {
-    originalSlot.addEventListener('scroll', () => {
+  private attachScrollListener(originalSlot: HTMLElement, translatedSlot: HTMLElement): void {
+    const onScroll = (slot: HTMLElement) => {
       // Update progress bar immediately (visual only, no API call)
-      this.updateProgressBar(this.calculateProgress(originalSlot));
+      this.updateProgressBar(this.calculateProgress(slot));
 
       if (this.scrollDebounceTimer !== null) {
         clearTimeout(this.scrollDebounceTimer);
       }
 
       this.scrollDebounceTimer = setTimeout(() => {
-        this.saveReadingState(originalSlot);
+        this.saveReadingState(slot);
       }, 1000);
-    });
+    };
+
+    originalSlot.addEventListener('scroll', () => onScroll(originalSlot));
+    translatedSlot.addEventListener('scroll', () => onScroll(translatedSlot));
   }
 
   /**
@@ -639,22 +686,34 @@ class ReadingScreen extends HTMLElement {
    * Finds the topmost paragraph whose top edge is at or below
    * the visible area of the scroll container.
    */
-  private findTopmostVisibleParagraphId(originalSlot: HTMLElement): string | null {
+  private findTopmostVisibleParagraph(originalSlot: HTMLElement): { id: string; index: number } | null {
     const paragraphs = originalSlot.querySelectorAll<HTMLElement>('[data-id]');
     const containerRect = originalSlot.getBoundingClientRect();
 
     for (const p of paragraphs) {
       const rect = p.getBoundingClientRect();
       if (rect.top >= containerRect.top) {
-        return p.getAttribute('data-id');
+        const id = p.getAttribute('data-id');
+        const indexStr = p.getAttribute('data-index');
+        if (!id) continue;
+        return { id, index: indexStr === null ? NaN : parseInt(indexStr, 10) };
       }
     }
 
     // If none found above the top, return the last paragraph
     if (paragraphs.length > 0) {
-      return paragraphs[paragraphs.length - 1].getAttribute('data-id');
+      const last = paragraphs[paragraphs.length - 1];
+      const id = last.getAttribute('data-id');
+      const indexStr = last.getAttribute('data-index');
+      if (id) {
+        return { id, index: indexStr === null ? NaN : parseInt(indexStr, 10) };
+      }
     }
     return null;
+  }
+
+  private findTopmostVisibleParagraphId(originalSlot: HTMLElement): string | null {
+    return this.findTopmostVisibleParagraph(originalSlot)?.id || null;
   }
 
   /**

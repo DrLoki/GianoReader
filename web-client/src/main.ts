@@ -1,6 +1,7 @@
 import { getPreferences } from './api/preferences';
 import { setLocale } from './i18n/index';
 import type { Preferences } from './types';
+import { isOfflineMode, getLocalPreferences, syncOfflineBookmarksToServerForAll } from './api/local-db';
 import './styles/base.css';
 import './styles/themes.css';
 import './styles/components.css';
@@ -24,10 +25,14 @@ export function applyPreferences(prefs: Preferences): void {
 
 async function init(): Promise<void> {
   let prefs: Preferences;
-  try {
-    prefs = await getPreferences();
-  } catch {
-    prefs = DEFAULT_PREFS;
+  if (isOfflineMode()) {
+    prefs = getLocalPreferences();
+  } else {
+    try {
+      prefs = await getPreferences();
+    } catch {
+      prefs = DEFAULT_PREFS;
+    }
   }
 
   // Apply CSS custom properties before first paint
@@ -45,10 +50,19 @@ async function init(): Promise<void> {
   }
 }
 
-init();
+init().then(async () => {
+  if (!isOfflineMode()) {
+    try {
+      await syncOfflineBookmarksToServerForAll();
+    } catch (e) {
+      console.warn('Failed to sync offline bookmarks:', e);
+    }
+  }
+});
 
 // Register disconnected event listener
 document.addEventListener('disconnected', () => {
+  if (isOfflineMode()) return;
   // Only mount if not already present
   if (!document.querySelector('disconnected-overlay')) {
     const overlay = document.createElement('disconnected-overlay');

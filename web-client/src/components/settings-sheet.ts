@@ -4,6 +4,7 @@ import { showToast } from './toast';
 import { applyPreferences } from '../main';
 import { t, setLocale } from '../i18n/index';
 import type { Preferences } from '../types';
+import { isOfflineMode } from '../api/local-db';
 
 const SHEET_STYLES = `
 settings-sheet {
@@ -305,17 +306,25 @@ class SettingsSheet extends HTMLElement {
           <div class="settings-connection">
             <div class="settings-connection-row">
               <span>Server</span>
-              <span>${serverUrl}</span>
+              <span>${isOfflineMode() ? 'Locale (Offline)' : serverUrl}</span>
             </div>
             <div class="settings-connection-row">
               <span>Status</span>
               <span>
-                <span class="settings-status-dot ${isConnected ? 'connected' : 'disconnected'}"></span>
-                ${isConnected ? t('settings.statusConnected') : t('settings.statusDisconnected')}
+                <span class="settings-status-dot ${isOfflineMode() ? 'disconnected' : (isConnected ? 'connected' : 'disconnected')}"></span>
+                ${isOfflineMode() ? 'Offline' : (isConnected ? t('settings.statusConnected') : t('settings.statusDisconnected'))}
               </span>
             </div>
           </div>
         </div>
+
+        ${isOfflineMode() ? `
+        <div class="settings-section" style="margin-top: 1.25rem;">
+          <button class="switch-mode-btn" style="background: var(--accent, #c0392b); border: none; border-radius: 8px; color: #fff; padding: 0.625rem 1.5rem; cursor: pointer; width: 100%; font-weight: 600; min-height: 44px;">
+            Torna alla modalità Server (Online)
+          </button>
+        </div>
+        ` : ''}
       </div>
     `;
   }
@@ -411,6 +420,15 @@ class SettingsSheet extends HTMLElement {
     handle?.addEventListener('touchend', () => {
       this.isSwiping = false;
     });
+
+    if (isOfflineMode()) {
+      const switchModeBtn = this.querySelector('.switch-mode-btn') as HTMLButtonElement | null;
+      switchModeBtn?.addEventListener('click', () => {
+        localStorage.setItem('giano-offline-mode', 'false');
+        this.close();
+        window.location.reload();
+      });
+    }
   }
 
   private applyAndPersist(partial: Partial<Preferences>): void {

@@ -103,11 +103,23 @@ class DisconnectedOverlay extends HTMLElement {
         <p>${t('disconnected.message', { url: serverUrl })}</p>
         <p class="disconnected-url"><strong>${t('disconnected.serverUrl')}:</strong> ${serverUrl}</p>
         <button class="reconnect-btn" aria-label="${t('disconnected.reconnect')}">${t('disconnected.reconnect')}</button>
+        <div style="margin-top: 1.25rem;">
+          <button class="offline-btn" style="background: transparent; border: 1px solid var(--border-color, #444); border-radius: 8px; color: #fff; padding: 0.5rem 1.25rem; font-size: 0.9rem; font-weight: 500; cursor: pointer; min-height: 44px; width: 100%; transition: background 0.2s;" aria-label="Usa in modalità locale (Offline)">
+            Usa in modalità locale (Offline)
+          </button>
+        </div>
       </div>
     `;
 
     const btn = this.querySelector('.reconnect-btn') as HTMLButtonElement;
     btn?.addEventListener('click', () => this.reconnect());
+
+    const offlineBtn = this.querySelector('.offline-btn') as HTMLButtonElement;
+    offlineBtn?.addEventListener('click', () => {
+      localStorage.setItem('giano-offline-mode', 'true');
+      this.remove();
+      window.location.reload();
+    });
   }
 
   private async reconnect(): Promise<void> {

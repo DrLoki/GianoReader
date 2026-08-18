@@ -101,7 +101,8 @@ function extractParagraphs(body) {
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function paragraphsToHtml(paragraphs) {
@@ -155,6 +156,11 @@ describe('Apertura libro semplice', () => {
 
   it('escapeHtml previene XSS', () => {
     expect(escapeHtml('<script>alert("xss")</script>')).toBe('&lt;script&gt;alert("xss")&lt;/script&gt;');
+  });
+
+  it('escapeHtml non lancia errore con null o undefined (bookmark PWA senza campi desktop)', () => {
+    expect(escapeHtml(null)).toBe('');
+    expect(escapeHtml(undefined)).toBe('');
   });
 
   it('loadEpub imposta book a null dopo un errore', () => {

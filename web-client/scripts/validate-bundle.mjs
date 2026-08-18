@@ -59,8 +59,13 @@ if (!existsSync(distDir)) {
   );
 
   let cdnFound = false;
-  // Match http:// or https:// URLs that are NOT localhost, 127.0.0.1, or XML namespaces (w3.org)
-  const cdnPattern = /https?:\/\/(?!localhost|127\.0\.0\.1|www\.w3\.org)[^\s"'`)>]+/g;
+  // Match http:// or https:// URLs that are NOT:
+  //   - localhost / 127.0.0.1
+  //   - XML/RDF namespace URIs (w3.org, idpf.org, purl.org, dublin core)
+  //   - Embedded documentation/license URLs inside bundled deps (jszip, pako, localforage)
+  //   - The approved Cloudflare Worker translation proxy
+  const cdnPattern =
+    /https?:\/\/(?!localhost|127\.0\.0\.1|www\.w3\.org|www\.idpf\.org|purl\.org|stuartk\.com\/jszip|raw\.github\.com\/Stuk|github\.com\/nodeca\/pako|stuk\.github\.io\/jszip|localforage\.github\.io\/localForage|mozilla\.github\.io\/localForage|translate\.googleapis\.com|giano-translate-proxy\.[^.]+\.workers\.dev)[^\s"'`)<>]+/g;
 
   for (const file of bundleFiles) {
     const content = readFileSync(file, 'utf-8');

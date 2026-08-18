@@ -1,5 +1,6 @@
 import { apiFetch } from './client';
 import type { Preferences } from '../types';
+import { isOfflineMode, getLocalPreferences, saveLocalPreferences } from './local-db';
 
 /**
  * Fetches the current user preferences from the server.
@@ -8,6 +9,9 @@ import type { Preferences } from '../types';
  * Calls GET /api/preferences.
  */
 export async function getPreferences(): Promise<Preferences> {
+  if (isOfflineMode()) {
+    return getLocalPreferences();
+  }
   const response = await apiFetch('/api/preferences');
   return response.json() as Promise<Preferences>;
 }
@@ -23,6 +27,12 @@ export async function getPreferences(): Promise<Preferences> {
  * @returns The full updated Preferences object after applying changes
  */
 export async function putPreferences(partial: Partial<Preferences>): Promise<Preferences> {
+  if (isOfflineMode()) {
+    const current = getLocalPreferences();
+    const updated = { ...current, ...partial };
+    saveLocalPreferences(updated);
+    return updated;
+  }
   const response = await apiFetch('/api/preferences', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -30,3 +40,4 @@ export async function putPreferences(partial: Partial<Preferences>): Promise<Pre
   });
   return response.json() as Promise<Preferences>;
 }
+

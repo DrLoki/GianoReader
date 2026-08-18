@@ -1,4 +1,98 @@
 import { apiFetch } from './client';
+import { isOfflineMode, getLocalPreferences } from './local-db';
+
+const STATIC_LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'it', name: 'Italiano' },
+  { code: 'es', name: 'Español' },
+  { code: 'fr', name: 'Français' },
+  { code: 'de', name: 'Deutsch' },
+  { code: 'pt', name: 'Português' },
+  { code: 'ru', name: 'Русский' },
+  { code: 'zh', name: '中文' },
+  { code: 'ja', name: '日本語' },
+  { code: 'ko', name: '한국어' },
+  { code: 'ar', name: 'العربية' },
+  { code: 'hi', name: 'हिन्दी' },
+  { code: 'bn', name: 'বাংলা' },
+  { code: 'id', name: 'Bahasa Indonesia' },
+  { code: 'th', name: 'ไทย' },
+  { code: 'fil', name: 'Filipino' },
+  { code: 'sq', name: 'Shqip' },
+  { code: 'sv', name: 'Svenska' },
+  { code: 'uk', name: 'Українська' },
+  { code: 'sl', name: 'Slovenščina' }
+];
+
+const CHAR_LIMIT = 4500;
+
+function getWorkerUrl(): string {
+  try {
+    const localPrefs = getLocalPreferences();
+    let subdomain = (localPrefs?.cloudflareWorkerSubdomain || '').trim();
+    if (!subdomain) {
+      const desktop = JSON.parse(localStorage.getItem('giano-reader-settings') || '{}');
+      subdomain = (desktop.cloudflareWorkerSubdomain || '').trim();
+    }
+    subdomain = subdomain
+      .replace(/^https?:\/\//, '')
+      .replace(/^giano-translate-proxy\./, '')
+      .replace(/\.workers\.dev.*$/, '')
+      .trim();
+
+    if (subdomain) {
+      return `https://giano-translate-proxy.${subdomain}.workers.dev`;
+    }
+  } catch {
+    // Ignore errors
+  }
+  return 'https://translate.googleapis.com/translate_a/single';
+}
+
+async function translateChunkOffline(text: string, targetLang: string): Promise<string> {
+  const baseUrl = getWorkerUrl();
+  const url = `${baseUrl}?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Translation proxy error: ${res.status}`);
+  const data = await res.json();
+  return data[0].map((seg: any) => seg[0]).join('');
+}
+
+async function postTranslateOffline(
+  paragraphs: string[],
+  targetLang: string
+): Promise<string[]> {
+  const results = new Array(paragraphs.length).fill('');
+  const batches: { start: number; end: number; text: string }[] = [];
+  let batchStart = 0;
+  let batchText = '';
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const para = paragraphs[i];
+    const separator = batchText ? '\n\n' : '';
+    if (batchText && (batchText + separator + para).length > CHAR_LIMIT) {
+      batches.push({ start: batchStart, end: i, text: batchText });
+      batchStart = i;
+      batchText = para;
+    } else {
+      batchText = batchText + separator + para;
+    }
+  }
+  if (batchText) {
+    batches.push({ start: batchStart, end: paragraphs.length, text: batchText });
+  }
+
+  for (const batch of batches) {
+    const translated = await translateChunkOffline(batch.text, targetLang);
+    const parts = translated.split(/\n\n+/);
+    const count = batch.end - batch.start;
+    for (let j = 0; j < count; j++) {
+      results[batch.start + j] = (parts[j] || '').trim();
+    }
+  }
+
+  return results;
+}
 
 /**
  * Sends texts to the translation endpoint.
@@ -13,6 +107,10 @@ export async function postTranslate(
   sourceLang: string,
   targetLang: string,
 ): Promise<string[]> {
+  if (isOfflineMode()) {
+    return postTranslateOffline(texts, targetLang);
+  }
+
   const response = await apiFetch('/api/translate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -29,6 +127,10 @@ export async function postTranslate(
  * @returns Array of language objects with code and display name
  */
 export async function getLanguages(): Promise<{ code: string; name: string }[]> {
+  if (isOfflineMode()) {
+    return STATIC_LANGUAGES;
+  }
   const response = await apiFetch('/api/translate/languages');
   return response.json();
 }
+

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import './reading-screen';
 
 vi.mock('../api/bookmarks', () => ({
@@ -7,6 +7,21 @@ vi.mock('../api/bookmarks', () => ({
 
 vi.mock('./toast', () => ({
   showToast: vi.fn(),
+}));
+
+vi.mock('../api/client', () => ({
+  apiFetch: vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      bookId: 'book-123',
+      chapterIndex: 0,
+      title: 'Chapter 1',
+      paragraphs: [
+        { id: 'p1', index: 0, text: 'Hello', html: 'Hello' },
+        { id: 'p2', index: 1, text: 'World', html: 'World' },
+      ],
+    }),
+  }),
 }));
 
 describe('reading-screen', () => {
@@ -22,6 +37,10 @@ describe('reading-screen', () => {
     document.body.appendChild(el);
   });
 
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
   describe('Layout structure', () => {
     it('renders a fixed 56px header', () => {
       const header = el.querySelector('.reading-header') as HTMLElement;
@@ -30,10 +49,16 @@ describe('reading-screen', () => {
       expect(style).toContain('height: 56px');
     });
 
-    it('renders a settings button with ⚙ icon in the header', () => {
+    it('renders a library button in the header', () => {
+      const libBtn = el.querySelector('.fab-library-btn') as HTMLButtonElement;
+      expect(libBtn).not.toBeNull();
+      expect(libBtn.getAttribute('aria-label')).toBe('Back to library');
+    });
+
+    it('renders a settings button in chapter nav', () => {
       const settingsBtn = el.querySelector('.settings-btn') as HTMLButtonElement;
       expect(settingsBtn).not.toBeNull();
-      expect(settingsBtn.textContent?.trim()).toBe('⚙');
+      expect(settingsBtn.getAttribute('aria-label')).toBe('Settings');
     });
 
     it('renders Original and Translated tab buttons', () => {
@@ -52,37 +77,28 @@ describe('reading-screen', () => {
       expect(cardUi).not.toBeNull();
     });
 
-    it('content area fills remaining viewport height (top: 56px, bottom: 0)', () => {
+    it('content area fills remaining viewport height', () => {
       const style = el.querySelector('style')?.textContent ?? '';
       expect(style).toContain('top: 56px');
-      expect(style).toContain('bottom: 0');
+      expect(style).toContain('bottom: 55px');
     });
 
-    it('renders FAB group with Bookmark, Library, and TTS buttons', () => {
-      const fabs = el.querySelectorAll('.fab');
-      expect(fabs.length).toBe(3);
-      expect(fabs[0].classList.contains('fab-bookmark')).toBe(true);
-      expect(fabs[1].classList.contains('fab-library')).toBe(true);
-      expect(fabs[2].classList.contains('fab-tts')).toBe(true);
+    it('renders FAB group with Bookmark button', () => {
+      const bookmarkFab = el.querySelector('.fab-bookmark');
+      expect(bookmarkFab).not.toBeNull();
     });
 
     it('FAB group is fixed bottom-right', () => {
       const style = el.querySelector('style')?.textContent ?? '';
-      expect(style).toContain('bottom: 16px');
+      expect(style).toContain('bottom: 68px');
       expect(style).toContain('right: 16px');
       expect(style).toContain('position: fixed');
-    });
-
-    it('TTS FAB is disabled (placeholder)', () => {
-      const ttsFab = el.querySelector('.fab-tts') as HTMLButtonElement;
-      expect(ttsFab.disabled).toBe(true);
     });
   });
 
   describe('Touch targets', () => {
     it('settings button has min-width and min-height of 44px', () => {
       const style = el.querySelector('style')?.textContent ?? '';
-      // Settings btn style
       expect(style).toMatch(/\.settings-btn[^}]*min-width:\s*44px/s);
       expect(style).toMatch(/\.settings-btn[^}]*min-height:\s*44px/s);
     });
@@ -121,14 +137,9 @@ describe('reading-screen', () => {
       expect(btn.getAttribute('aria-label')).toBe('Add bookmark');
     });
 
-    it('Library FAB has aria-label', () => {
-      const btn = el.querySelector('.fab-library') as HTMLButtonElement;
+    it('Library button has aria-label', () => {
+      const btn = el.querySelector('.fab-library-btn') as HTMLButtonElement;
       expect(btn.getAttribute('aria-label')).toBe('Back to library');
-    });
-
-    it('TTS FAB has aria-label', () => {
-      const btn = el.querySelector('.fab-tts') as HTMLButtonElement;
-      expect(btn.getAttribute('aria-label')).toBe('Text to speech');
     });
 
     it('tab group has role="tablist"', () => {
@@ -144,31 +155,9 @@ describe('reading-screen', () => {
       expect(tabOriginal.getAttribute('aria-selected')).toBe('true');
       expect(tabTranslated.getAttribute('aria-selected')).toBe('false');
     });
-
-    it('DOM tab order follows visual order (header → content → FABs)', () => {
-      // All focusable elements in DOM order
-      const focusable = el.querySelectorAll('button, [tabindex]');
-      const classes = Array.from(focusable).map((el) =>
-        Array.from(el.classList).join(' ')
-      );
-      // Header buttons first, then FABs at the end
-      const settingsIdx = classes.findIndex((c) => c.includes('settings-btn'));
-      const tabOrigIdx = classes.findIndex((c) => c.includes('tab-original'));
-      const tabTransIdx = classes.findIndex((c) => c.includes('tab-translated'));
-      const fabBookmarkIdx = classes.findIndex((c) => c.includes('fab-bookmark'));
-      const fabLibraryIdx = classes.findIndex((c) => c.includes('fab-library'));
-      const fabTtsIdx = classes.findIndex((c) => c.includes('fab-tts'));
-
-      // Verify order: settings < tabs < fabs
-      expect(settingsIdx).toBeLessThan(tabOrigIdx);
-      expect(tabOrigIdx).toBeLessThan(tabTransIdx);
-      expect(tabTransIdx).toBeLessThan(fabBookmarkIdx);
-      expect(fabBookmarkIdx).toBeLessThan(fabLibraryIdx);
-      expect(fabLibraryIdx).toBeLessThan(fabTtsIdx);
-    });
   });
 
-  describe('Tab switching', () => {
+  describe('Tab switching & Synchronization', () => {
     it('clicking Original tab activates it and adds active class', () => {
       const tabOriginal = el.querySelector('.tab-original') as HTMLButtonElement;
       const tabTranslated = el.querySelector('.tab-translated') as HTMLButtonElement;
@@ -203,9 +192,7 @@ describe('reading-screen', () => {
       const tabTranslated = el.querySelector('.tab-translated') as HTMLButtonElement;
       const tabOriginal = el.querySelector('.tab-original') as HTMLButtonElement;
 
-      // Switch to translated first
       tabTranslated.click();
-      // Then back
       tabOriginal.click();
       expect(cardUi.getActiveCard()).toBe('original');
     });
@@ -217,6 +204,40 @@ describe('reading-screen', () => {
       tabTranslated.click();
       expect(tabTranslated.getAttribute('aria-selected')).toBe('true');
       expect(tabOriginal.getAttribute('aria-selected')).toBe('false');
+    });
+
+    it('updates active tab when card-ui dispatches card-change event', () => {
+      const tabOriginal = el.querySelector('.tab-original') as HTMLButtonElement;
+      const tabTranslated = el.querySelector('.tab-translated') as HTMLButtonElement;
+      const cardUi = el.querySelector('card-ui') as HTMLElement;
+
+      // Simulate swipe / programmatic switch to translated
+      cardUi.dispatchEvent(
+        new CustomEvent('card-change', {
+          bubbles: true,
+          composed: true,
+          detail: { activeCard: 'translated' },
+        })
+      );
+
+      expect(tabTranslated.classList.contains('active')).toBe(true);
+      expect(tabTranslated.getAttribute('aria-selected')).toBe('true');
+      expect(tabOriginal.classList.contains('active')).toBe(false);
+      expect(tabOriginal.getAttribute('aria-selected')).toBe('false');
+
+      // Simulate swipe back to original
+      cardUi.dispatchEvent(
+        new CustomEvent('card-change', {
+          bubbles: true,
+          composed: true,
+          detail: { activeCard: 'original' },
+        })
+      );
+
+      expect(tabOriginal.classList.contains('active')).toBe(true);
+      expect(tabOriginal.getAttribute('aria-selected')).toBe('true');
+      expect(tabTranslated.classList.contains('active')).toBe(false);
+      expect(tabTranslated.getAttribute('aria-selected')).toBe('false');
     });
   });
 
@@ -237,7 +258,6 @@ describe('reading-screen', () => {
 
       el.setBook('book-123', { currentChapter: 2, paragraphId: 'p5', scrollOffset: 100, progress: 40 });
 
-      // Set up a card-ui with an original slot containing paragraphs
       const cardUi = el.querySelector('card-ui') as HTMLElement & {
         getOriginalSlot: () => HTMLElement | null;
       };
@@ -249,12 +269,12 @@ describe('reading-screen', () => {
       const btn = el.querySelector('.fab-bookmark') as HTMLButtonElement;
       btn.click();
 
-      // Wait for async handler
       await new Promise(resolve => setTimeout(resolve, 10));
 
       expect(createBookmark).toHaveBeenCalledWith('book-123', {
         chapterIndex: 2,
         paragraphId: expect.any(String),
+        paragraphIndex: expect.any(Number),
       });
       expect(showToast).toHaveBeenCalledWith('Bookmark saved', 'success');
     });
@@ -263,7 +283,6 @@ describe('reading-screen', () => {
       const { createBookmark } = await import('../api/bookmarks');
       const { showToast } = await import('./toast');
 
-      // Make createBookmark reject
       vi.mocked(createBookmark).mockRejectedValueOnce(new Error('Network error'));
 
       el.setBook('book-123', { currentChapter: 2, paragraphId: 'p5', scrollOffset: 100, progress: 40 });
@@ -284,11 +303,11 @@ describe('reading-screen', () => {
       expect(showToast).toHaveBeenCalledWith('Something went wrong. Please try again.', 'error');
     });
 
-    it('library FAB dispatches navigate event with screen: library', () => {
+    it('library button in header dispatches navigate event with screen: library', () => {
       const handler = vi.fn();
       el.addEventListener('navigate', handler);
 
-      const btn = el.querySelector('.fab-library') as HTMLButtonElement;
+      const btn = el.querySelector('.fab-library-btn') as HTMLButtonElement;
       btn.click();
 
       expect(handler).toHaveBeenCalledTimes(1);

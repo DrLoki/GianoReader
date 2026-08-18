@@ -111,7 +111,7 @@ bookmarks-sheet {
 .bookmarks-delete-btn {
   background: none;
   border: none;
-  color: var(--on-surface-muted, #aaa);
+  color: #e53935;
   font-size: 1.2rem;
   cursor: pointer;
   padding: 8px;
@@ -122,22 +122,22 @@ bookmarks-sheet {
   justify-content: center;
   border-radius: 4px;
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
 .bookmarks-delete-btn .bm-icon {
-  width: 1em;
-  height: 1em;
+  width: 1.1em;
+  height: 1.1em;
   display: block;
-  filter: brightness(0) invert(0.6);
-}
-
-.bookmarks-delete-btn:hover .bm-icon {
-  filter: brightness(0) saturate(100%) invert(27%) sepia(90%) saturate(800%) hue-rotate(330deg);
+  fill: currentColor;
 }
 
 .bookmarks-delete-btn:hover {
-  color: #e53935;
-  background: rgba(229, 57, 53, 0.1);
+  background: rgba(229, 57, 53, 0.15);
+}
+
+.bookmarks-delete-btn:active {
+  background: rgba(229, 57, 53, 0.25);
 }
 
 .bookmarks-empty {
@@ -169,8 +169,8 @@ function escapeHtml(str: string): string {
 /**
  * A slide-up bottom sheet listing all bookmarks for the current book.
  *
- * Bookmarks are ordered by chapterIndex ascending, then paragraphId numerically ascending.
- * Each entry shows a label (default "Chapter {chapterIndex + 1}" if absent).
+ * Bookmarks are ordered by chapterIndex ascending, then paragraphIndex (or paragraphId)
+ * numerically ascending. Each entry shows a label (default "Chapter X · Par. Y" if absent).
  * Tapping an entry dispatches a 'navigate-bookmark' CustomEvent with chapterIndex and paragraphId.
  * Delete button calls DELETE /api/books/:id/bookmarks/:bookmarkId; on failure shows error toast
  * without modifying the list.
@@ -242,6 +242,11 @@ class BookmarksSheet extends HTMLElement {
       if (a.chapterIndex !== b.chapterIndex) {
         return a.chapterIndex - b.chapterIndex;
       }
+      const aIdx = a.paragraphIndex;
+      const bIdx = b.paragraphIndex;
+      if (aIdx != null && bIdx != null) {
+        return aIdx - bIdx;
+      }
       const aNum = parseInt(a.paragraphId, 10);
       const bNum = parseInt(b.paragraphId, 10);
       if (!isNaN(aNum) && !isNaN(bNum)) {
@@ -262,13 +267,23 @@ class BookmarksSheet extends HTMLElement {
 
     list.innerHTML = this.bookmarks
       .map(
-        (bm) => `
-        <li class="bookmarks-item" data-bookmark-id="${escapeHtml(bm.id)}" data-chapter-index="${bm.chapterIndex}" data-paragraph-id="${escapeHtml(bm.paragraphId)}">
+        (bm) => {
+          const paragraphIndex = bm.paragraphIndex ?? parseInt(bm.paragraphId, 10);
+          const paragraph = isNaN(paragraphIndex) ? '0' : String(paragraphIndex + 1);
+          const label = escapeHtml(
+            bm.label || t('bookmarks.positionLabel', {
+              chapter: String(bm.chapterIndex + 1),
+              paragraph: paragraph,
+            }),
+          );
+          return `
+        <li class="bookmarks-item" data-bookmark-id="${escapeHtml(bm.id)}" data-chapter-index="${bm.chapterIndex}" data-paragraph-id="${escapeHtml(bm.paragraphId)}" data-paragraph-index="${bm.paragraphIndex ?? ''}">
           <div class="bookmarks-item-content">
-            <div class="bookmarks-item-label">${escapeHtml(bm.label || t('bookmarks.defaultLabel', { chapter: String(bm.chapterIndex + 1) }))}</div>
+            <div class="bookmarks-item-label">${label}</div>
           </div>
           <button class="bookmarks-delete-btn" aria-label="${escapeHtml(t('bookmarks.deleteTooltip'))}" data-bookmark-id="${escapeHtml(bm.id)}"><img class="bm-icon" src="/icons/xmark.svg" alt="" aria-hidden="true"></button>
-        </li>`,
+        </li>`;
+        },
       )
       .join('');
 

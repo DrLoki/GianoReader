@@ -1,8 +1,18 @@
-import { getBooks, getCoverUrl } from '../api/books';
-import { getBookmarks } from '../api/bookmarks';
+import { getBooks, getCoverUrl, getToc } from '../api/books';
+import { getBookmarks, deleteBookmark } from '../api/bookmarks';
 import { getReadingState } from '../api/state';
+import { showToast } from './toast';
 import { t } from '../i18n/index';
 import type { BookSummary, Bookmark } from '../types';
+import {
+  isOfflineMode,
+  isLocalId,
+  parseAndSaveEpub,
+  getOfflineCachedIds,
+  downloadBookForOffline,
+  removeOfflineBook,
+} from '../api/local-db';
+
 
 interface BookmarkWithBook extends Bookmark {
   bookId: string;
@@ -24,20 +34,64 @@ class LibraryScreen extends HTMLElement {
   private activeTab: 'library' | 'bookmarks' = 'library';
   private searchQuery: string = '';
   private statusFilter: StatusFilter = '';
+  private offlineCachedIds: Set<string> = new Set();
+  private downloadingIds: Set<string> = new Set();
 
   connectedCallback(): void {
     this.render();
     this.loadBooks();
+
+    if (isOfflineMode()) {
+      const fileInput = this.querySelector('#import-epub-file') as HTMLInputElement;
+      fileInput?.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+
+        const content = this.querySelector('.library-content') as HTMLElement;
+        if (content) {
+          content.innerHTML = `
+            <div class="library-loading" role="status" aria-live="polite">
+              <div class="spinner" aria-hidden="true"></div>
+              <p>Importazione libro in corso...</p>
+            </div>
+          `;
+        }
+
+        try {
+          await parseAndSaveEpub(file);
+          this.loadBooks();
+        } catch (err: any) {
+          if (content) {
+            content.innerHTML = `
+              <div class="library-error" role="alert">
+                <p>Errore durante l'importazione: ${err?.message || err}</p>
+                <button class="retry-import-btn" style="background: var(--accent, #c0392b); border: none; border-radius: 8px; color: #fff; padding: 0.5rem 1.5rem; cursor: pointer; min-height: 44px; margin-top: 1rem;">Riprova</button>
+              </div>
+            `;
+            content.querySelector('.retry-import-btn')?.addEventListener('click', () => this.loadBooks());
+          }
+        }
+      });
+    }
   }
+
 
   private render(): void {
     this.innerHTML = `
       <style>${LibraryScreen.styles}</style>
       <div class="library-container">
         <header class="library-header">
-          <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">
-            <img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true">
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">
+              <img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true">
+            </button>
+            ${isOfflineMode() ? `
+              <label class="import-btn-label" for="import-epub-file" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; background: transparent; transition: background 0.15s;" title="Importa EPUB">
+                <img class="icon" src="/icons/upload.svg" alt="Importa EPUB" style="filter: brightness(0) invert(1);">
+              </label>
+              <input type="file" id="import-epub-file" accept=".epub" style="display: none;">
+            ` : ''}
+          </div>
           <div class="tab-group" role="tablist">
             <button class="tab-btn tab-library active" role="tab" aria-selected="true">${t('library.title')}</button>
             <button class="tab-btn tab-bookmarks" role="tab" aria-selected="false">
@@ -45,6 +99,7 @@ class LibraryScreen extends HTMLElement {
             </button>
           </div>
         </header>
+
         <div class="library-content"></div>
         <div class="filter-bar" role="search" aria-label="${t('library.title')}">
           <div class="filter-search-row">
@@ -146,6 +201,13 @@ class LibraryScreen extends HTMLElement {
 
     try {
       this.books = await getBooks();
+      if (!isOfflineMode()) {
+        try {
+          this.offlineCachedIds = await getOfflineCachedIds();
+        } catch {
+          this.offlineCachedIds = new Set();
+        }
+      }
       this.applyFilters();
     } catch {
       content.innerHTML = `
@@ -235,6 +297,100 @@ class LibraryScreen extends HTMLElement {
         img.src = LibraryScreen.placeholderSvg;
       });
     });
+
+    content.querySelectorAll<HTMLButtonElement>('.offline-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const bookId = btn.dataset.bookId;
+        const action = btn.dataset.action;
+        if (!bookId) return;
+        if (action === 'download') {
+          this.handleDownloadOffline(bookId);
+        } else if (action === 'remove') {
+          this.handleRemoveOffline(bookId);
+        }
+      });
+    });
+  }
+
+  /** Handles the "Scarica per uso offline" button click: downloads the book into IndexedDB. */
+  private async handleDownloadOffline(bookId: string): Promise<void> {
+    if (this.downloadingIds.has(bookId)) return;
+    this.downloadingIds.add(bookId);
+    this.refreshCardControl(bookId);
+
+    const book = this.books.find((b) => b.id === bookId);
+    if (!book) {
+      this.downloadingIds.delete(bookId);
+      return;
+    }
+
+    try {
+      const toc = await getToc(bookId);
+      await downloadBookForOffline(
+        bookId,
+        book.title,
+        book.author,
+        getCoverUrl(bookId),
+        toc,
+        (done, total) => this.updateDownloadProgress(bookId, done, total),
+      );
+      this.offlineCachedIds.add(bookId);
+    } catch (err) {
+      console.error('Failed to download book for offline use:', err);
+    } finally {
+      this.downloadingIds.delete(bookId);
+      this.refreshCardControl(bookId);
+    }
+  }
+
+  /** Handles the "Rimuovi offline" button click: deletes the local offline copy. */
+  private async handleRemoveOffline(bookId: string): Promise<void> {
+    try {
+      await removeOfflineBook(bookId);
+      this.offlineCachedIds.delete(bookId);
+    } catch (err) {
+      console.error('Failed to remove offline copy:', err);
+    } finally {
+      this.refreshCardControl(bookId);
+    }
+  }
+
+  /** Updates the inline progress bar/text for a card currently being downloaded. */
+  private updateDownloadProgress(bookId: string, done: number, total: number): void {
+    const control = this.querySelector(`.offline-control[data-book-id="${bookId}"]`) as HTMLElement | null;
+    if (!control) return;
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const fill = control.querySelector('.offline-progress-fill') as HTMLElement | null;
+    const text = control.querySelector('.offline-progress-text') as HTMLElement | null;
+    if (fill) fill.style.width = `${pct}%`;
+    if (text) text.textContent = `${done}/${total}`;
+  }
+
+  /** Re-renders just the offline control markup for a given card without reloading the whole grid. */
+  private refreshCardControl(bookId: string): void {
+    const card = this.querySelector(`.book-card[data-book-id="${bookId}"]`) as HTMLElement | null;
+    const info = card?.querySelector('.book-info') as HTMLElement | null;
+    if (!card || !info) return;
+
+    const existing = info.querySelector('.offline-control, .offline-btn');
+    const html = this.renderOfflineControl(bookId);
+    if (existing) {
+      existing.outerHTML = html;
+    } else {
+      info.insertAdjacentHTML('beforeend', html);
+    }
+
+    const btn = info.querySelector('.offline-btn') as HTMLButtonElement | null;
+    btn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      if (action === 'download') {
+        this.handleDownloadOffline(bookId);
+      } else if (action === 'remove') {
+        this.handleRemoveOffline(bookId);
+      }
+    });
   }
 
   private async showBookmarks(): Promise<void> {
@@ -292,8 +448,10 @@ class LibraryScreen extends HTMLElement {
       </div>
     `;
 
-    content.querySelectorAll<HTMLElement>('.bookmark-item').forEach((item) => {
-      item.addEventListener('click', () => {
+    content.querySelectorAll<HTMLElement>('.bookmark-item-content').forEach((info) => {
+      info.addEventListener('click', () => {
+        const item = info.closest('.bookmark-item') as HTMLElement | null;
+        if (!item) return;
         const bookId = item.dataset.bookId;
         const chapter = parseInt(item.dataset.chapter || '0', 10);
         const paragraphId = item.dataset.paragraphId || null;
@@ -311,28 +469,66 @@ class LibraryScreen extends HTMLElement {
         );
       });
     });
+
+    content.querySelectorAll<HTMLButtonElement>('.bookmark-delete-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const item = btn.closest('.bookmark-item') as HTMLElement | null;
+        const bookId = btn.dataset.bookId;
+        const bookmarkId = btn.dataset.bookmarkId;
+        if (!item || !bookId || !bookmarkId) return;
+        this.handleDeleteBookmark(bookId, bookmarkId, item);
+      });
+    });
+  }
+
+  private async handleDeleteBookmark(bookId: string, bookmarkId: string, itemEl: HTMLElement): Promise<void> {
+    try {
+      await deleteBookmark(bookId, bookmarkId);
+      itemEl.remove();
+      const content = this.querySelector('.library-content') as HTMLElement | null;
+      if (content && !content.querySelector('.bookmark-item')) {
+        content.innerHTML = `
+          <div class="library-empty" role="status" aria-live="polite">
+            <p>${t('bookmarks.empty')}</p>
+          </div>
+        `;
+      }
+    } catch {
+      showToast(t('toast.errorGeneric'), 'error');
+    }
   }
 
   private renderBookmarkItem(bm: BookmarkWithBook): string {
-    const label = bm.label || t('bookmarks.defaultLabel', { chapter: String(bm.chapterIndex + 1) });
+    const paragraphIndex = bm.paragraphIndex ?? parseInt(bm.paragraphId, 10);
+    const paragraph = isNaN(paragraphIndex) ? '0' : String(paragraphIndex + 1);
+    const label = bm.label || t('bookmarks.positionLabel', {
+      chapter: String(bm.chapterIndex + 1),
+      paragraph: paragraph,
+    });
     const date = new Date(bm.createdAt).toLocaleDateString();
     return `
       <div class="bookmark-item" role="listitem" tabindex="0"
            data-book-id="${bm.bookId}" data-chapter="${bm.chapterIndex}" data-paragraph-id="${bm.paragraphId}">
-        <div class="bookmark-book-title">${escapeHtml(bm.bookTitle)}</div>
-        <div class="bookmark-label">${escapeHtml(label)}</div>
-        <div class="bookmark-date">${date}</div>
+        <div class="bookmark-item-content">
+          <div class="bookmark-book-title">${escapeHtml(bm.bookTitle)}</div>
+          <div class="bookmark-label">${escapeHtml(label)}</div>
+          <div class="bookmark-date">${date}</div>
+        </div>
+        <button class="bookmark-delete-btn" aria-label="${escapeAttr(t('bookmarks.deleteTooltip'))}" data-book-id="${bm.bookId}" data-bookmark-id="${bm.id}"><img class="bm-icon" src="/icons/xmark.svg" alt="" aria-hidden="true"></button>
       </div>
     `;
   }
 
   private renderCard(book: BookSummary): string {
-    const coverSrc = getCoverUrl(book.id);
+    const coverSrc = isLocalId(book.id) ? (book.coverUrl || LibraryScreen.placeholderSvg) : getCoverUrl(book.id);
     const progressText = t('library.progress', { progress: String(book.progress) });
     const status = book.status;
     const statusBadge = status
       ? `<span class="status-badge status-badge--${escapeAttr(status)}">${escapeHtml(LibraryScreen.statusLabel(status))}</span>`
       : '';
+
+    const offlineControl = (!isOfflineMode() && !isLocalId(book.id)) ? this.renderOfflineControl(book.id) : '';
 
     return `
       <div class="book-card" role="listitem" tabindex="0" data-book-id="${book.id}"
@@ -345,8 +541,40 @@ class LibraryScreen extends HTMLElement {
           <p class="book-title">${escapeHtml(book.title)}</p>
           <p class="book-author">${escapeHtml(book.author)}</p>
           <p class="book-progress">${escapeHtml(progressText)}</p>
+          ${offlineControl}
         </div>
       </div>
+    `;
+  }
+
+  /** Renders the offline download/remove control + progress bar placeholder for a server book card. */
+  private renderOfflineControl(bookId: string): string {
+    const isDownloading = this.downloadingIds.has(bookId);
+    const isCached = this.offlineCachedIds.has(bookId);
+
+    if (isDownloading) {
+      return `
+        <div class="offline-control offline-control--progress" data-book-id="${bookId}">
+          <div class="offline-progress-bar"><div class="offline-progress-fill" style="width: 0%"></div></div>
+          <span class="offline-progress-text">0/0</span>
+        </div>
+      `;
+    }
+
+    if (isCached) {
+      return `
+        <button class="offline-btn offline-btn--cached" data-book-id="${bookId}" data-action="remove"
+                aria-label="Rimuovi copia offline">
+          ✓ Offline
+        </button>
+      `;
+    }
+
+    return `
+      <button class="offline-btn offline-btn--download" data-book-id="${bookId}" data-action="download"
+              aria-label="Scarica per uso offline">
+        ☁ Scarica per uso offline
+      </button>
     `;
   }
 
@@ -712,6 +940,62 @@ class LibraryScreen extends HTMLElement {
       font-weight: 500;
     }
 
+    /* ── Offline download control ──────────────── */
+    .offline-btn {
+      margin-top: 4px;
+      width: 100%;
+      min-height: 32px;
+      border: 1px solid var(--border, #444);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary, #aaa);
+      font-size: 0.68rem;
+      padding: 4px 6px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .offline-btn--download:hover {
+      background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+      color: var(--text-primary, #fff);
+    }
+
+    .offline-btn--cached {
+      border-color: #2e7d32;
+      color: #2e7d32;
+    }
+
+    .offline-btn--cached:hover {
+      background: rgba(46, 125, 50, 0.15);
+    }
+
+    .offline-control--progress {
+      margin-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .offline-progress-bar {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+
+    .offline-progress-fill {
+      height: 100%;
+      background: var(--accent, #c0392b);
+      transition: width 0.2s ease;
+    }
+
+    .offline-progress-text {
+      font-size: 0.65rem;
+      color: var(--text-secondary, #aaa);
+      text-align: center;
+    }
+
     /* ── Bookmarks list ─────────────────────────── */
     .bookmarks-list {
       display: flex;
@@ -720,10 +1004,12 @@ class LibraryScreen extends HTMLElement {
     }
 
     .bookmark-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       padding: 12px 16px;
       background: var(--surface, #1e1e1e);
       border-radius: 8px;
-      cursor: pointer;
       transition: background 0.15s;
     }
 
@@ -735,6 +1021,43 @@ class LibraryScreen extends HTMLElement {
     .bookmark-item:focus-visible {
       outline: 2px solid var(--accent, #c0392b);
       outline-offset: 2px;
+    }
+
+    .bookmark-item-content {
+      flex: 1;
+      min-width: 0;
+      cursor: pointer;
+    }
+
+    .bookmark-delete-btn {
+      background: none;
+      border: none;
+      color: #e53935;
+      cursor: pointer;
+      padding: 8px;
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      flex-shrink: 0;
+      transition: background 0.2s ease;
+    }
+
+    .bookmark-delete-btn .bm-icon {
+      width: 1.1em;
+      height: 1.1em;
+      display: block;
+      fill: currentColor;
+    }
+
+    .bookmark-delete-btn:hover {
+      background: rgba(229, 57, 53, 0.15);
+    }
+
+    .bookmark-delete-btn:active {
+      background: rgba(229, 57, 53, 0.25);
     }
 
     .bookmark-book-title {

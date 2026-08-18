@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Aggiungi segnalibro",
   "bookmarks.deleteTooltip": "Elimina segnalibro",
   "bookmarks.defaultLabel": "Capitolo {chapter}",
+  "bookmarks.positionLabel": "Capitolo {chapter} · Par. {paragraph}",
   "bookmarks.empty": "Nessun segnalibro salvato",
 
   "fab.bookmark": "Aggiungi segnalibro",
