@@ -805,6 +805,14 @@ class ReadingScreen extends HTMLElement {
         for (let i = 0; i < uncachedIndices.length; i++) {
           const idx = uncachedIndices[i];
           const translated = translations[i];
+          if (!translated || translated.trim() === '') {
+            // The translation engine returned nothing for this paragraph
+            // (can happen with very short/dialogue-style text). Surface it
+            // as an error with tap-to-retry instead of silently leaving the
+            // paragraph blank and uncached forever.
+            this.showError(translatedSlot, idx);
+            continue;
+          }
           this.setTranslatedText(translatedSlot, idx, translated);
           // Cache it
           const paragraph = this.paragraphData[idx];
@@ -890,13 +898,18 @@ class ReadingScreen extends HTMLElement {
         if (!paragraph) return;
         try {
           const translations = await postTranslate([paragraph.text], 'auto', this.targetLang);
-          this.setTranslatedText(translatedSlot, index, translations[0]);
+          const translated = translations[0];
+          if (!translated || translated.trim() === '') {
+            this.showError(translatedSlot, index);
+            return;
+          }
+          this.setTranslatedText(translatedSlot, index, translated);
           translationCache.set({
             bookId: this.bookId,
             chapterIndex: this.currentChapter,
             paragraphId: paragraph.id,
             targetLang: this.targetLang,
-          }, translations[0]);
+          }, translated);
         } catch {
           this.showError(translatedSlot, index);
         }

@@ -55,7 +55,17 @@ export async function get(key: CacheKey): Promise<string | undefined> {
     const request = store.get(compositeKey);
 
     request.onsuccess = () => {
-      resolve(request.result as string | undefined);
+      const result = request.result as string | undefined;
+      // Treat empty/whitespace-only cached entries as a cache miss. These can
+      // happen when a previous translation attempt failed silently (e.g. the
+      // translation engine merged short adjacent lines and one paragraph
+      // ended up with no text) — we don't want to serve that stale blank
+      // result forever, so we force a retranslation instead.
+      if (result === undefined || result.trim() === '') {
+        resolve(undefined);
+        return;
+      }
+      resolve(result);
     };
 
     request.onerror = () => {
@@ -65,6 +75,12 @@ export async function get(key: CacheKey): Promise<string | undefined> {
 }
 
 export async function set(key: CacheKey, value: string): Promise<void> {
+  // Never persist an empty/whitespace-only translation: it's almost always
+  // the symptom of a failed/lost translation rather than a legitimate
+  // result, and caching it would make the failure permanent for this
+  // paragraph (see `get()` above for the matching read-side guard).
+  if (!value || value.trim() === '') return;
+
   const database = await openDB();
   if (!database) return;
 
