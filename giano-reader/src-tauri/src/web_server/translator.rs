@@ -71,20 +71,45 @@ pub async fn translate(
 
     for batch in &batches {
         let translated = translate_chunk(&client, &batch.text, source_lang, target_lang).await?;
-
-        // Split the translated text by double-newline to realign with original paragraphs
-        let parts: Vec<&str> = translated.split("\n\n").collect();
         let count = batch.end - batch.start;
 
-        for j in 0..count {
-            results[batch.start + j] = parts
-                .get(j)
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default();
+        // Split the translated text by double-newline to realign with original paragraphs
+        match realign_batch(&translated, count) {
+            Some(parts) => {
+                for (j, part) in parts.into_iter().enumerate() {
+                    results[batch.start + j] = part;
+                }
+            }
+            None => {
+                // The translation engine did not preserve the "\n\n" separators
+                // exactly (common with short dialogue-style lines, e.g.
+                // "-i miss you"), so the split can't be trusted: fall back to
+                // translating each paragraph in this batch individually to
+                // avoid silently losing/misaligning text.
+                for j in 0..count {
+                    let idx = batch.start + j;
+                    let single = translate_chunk(&client, &texts[idx], source_lang, target_lang).await?;
+                    results[idx] = single.trim().to_string();
+                }
+            }
         }
     }
 
     Ok(results)
+}
+
+/// Attempts to split `translated` back into `count` pieces using the `"\n\n"`
+/// separator used when joining the batch. Returns `None` if the number of
+/// resulting pieces doesn't match `count` — this happens when the translation
+/// engine reflows/merges short adjacent lines (e.g. short dialogue) and does
+/// not preserve the separator reliably, meaning the split cannot be trusted
+/// to realign translations with their original paragraphs.
+fn realign_batch(translated: &str, count: usize) -> Option<Vec<String>> {
+    let parts: Vec<&str> = translated.split("\n\n").collect();
+    if parts.len() != count {
+        return None;
+    }
+    Some(parts.iter().map(|s| s.trim().to_string()).collect())
 }
 
 /// Groups paragraphs into batches that don't exceed [`CHAR_LIMIT`] when joined by `\n\n`.
@@ -299,5 +324,31 @@ mod tests {
         let result = translate(vec![], "en", "it").await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_realign_batch_matching_count() {
+        let result = realign_batch("Ciao\n\nMondo", 2);
+        assert_eq!(result, Some(vec!["Ciao".to_string(), "Mondo".to_string()]));
+    }
+
+    #[test]
+    fn test_realign_batch_trims_each_part() {
+        let result = realign_batch(" Ciao \n\n Mondo ", 2);
+        assert_eq!(result, Some(vec!["Ciao".to_string(), "Mondo".to_string()]));
+    }
+
+    #[test]
+    fn test_realign_batch_mismatch_returns_none() {
+        // Simulates the engine merging two short dialogue lines into one
+        // segment, so only 1 piece comes back instead of the expected 2.
+        let result = realign_batch("mi manchi anche tu", 2);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_realign_batch_single_paragraph() {
+        let result = realign_batch("Ciao mondo", 1);
+        assert_eq!(result, Some(vec!["Ciao mondo".to_string()]));
     }
 }

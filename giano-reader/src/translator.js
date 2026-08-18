@@ -178,8 +178,24 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
     // Risplittiamo per doppio newline per riallineare ai paragrafi originali
     const parts = translated.split(/\n\n+/);
     const count = batch.end - batch.start;
-    for (let j = 0; j < count; j++) {
-      results[batch.start + j] = (parts[j] || '').trim();
+
+    if (parts.length === count) {
+      for (let j = 0; j < count; j++) {
+        results[batch.start + j] = (parts[j] || '').trim();
+      }
+    } else {
+      // Il motore di traduzione non ha preservato esattamente i separatori
+      // \n\n (capita spesso con frasi brevi/dialoghi, es. "-i miss you"),
+      // quindi non possiamo fidarci dello split: ritraduciamo ogni paragrafo
+      // del batch singolarmente per non perdere/disallineare il testo.
+      for (let j = 0; j < count; j++) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const idx = batch.start + j;
+        const single = isPro
+          ? await translateChunkPro(paragraphs[idx], targetLang, apiKey, model, signal)
+          : await translateChunk(paragraphs[idx], targetLang);
+        results[idx] = single.trim();
+      }
     }
   }
 

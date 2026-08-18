@@ -86,8 +86,21 @@ async function postTranslateOffline(
     const translated = await translateChunkOffline(batch.text, targetLang);
     const parts = translated.split(/\n\n+/);
     const count = batch.end - batch.start;
-    for (let j = 0; j < count; j++) {
-      results[batch.start + j] = (parts[j] || '').trim();
+
+    if (parts.length === count) {
+      for (let j = 0; j < count; j++) {
+        results[batch.start + j] = (parts[j] || '').trim();
+      }
+    } else {
+      // The translation engine did not preserve the \n\n separators exactly
+      // (common with short dialogue-style lines, e.g. "-i miss you"), so the
+      // split can't be trusted: fall back to translating each paragraph in
+      // this batch individually to avoid losing/misaligning text.
+      for (let j = 0; j < count; j++) {
+        const idx = batch.start + j;
+        const single = await translateChunkOffline(paragraphs[idx], targetLang);
+        results[idx] = single.trim();
+      }
     }
   }
 

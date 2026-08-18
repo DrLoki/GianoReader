@@ -233,4 +233,36 @@ describe('OpenRouter Premium Translations Feature', () => {
     const fetchUrl = global.fetch.mock.calls[0][0];
     expect(fetchUrl).toContain('https://giano-translate-proxy.custom-proxy.workers.dev');
   });
+
+  // ── 7. Regression: short dialogue lines merged by the translation engine ──
+  it('falls back to per-paragraph translation when the engine merges short dialogue lines', async () => {
+    const settings = { translationMode: 'free' };
+    global.localStorage.setItem('giano-reader-settings', JSON.stringify(settings));
+
+    // Google Translate merges the two short dialogue lines into a single
+    // segment instead of preserving the "\n\n" separator, so the batch
+    // response has only 1 part instead of the expected 2.
+    const mergedBatchResponse = [
+      [
+        ['mi manchi anche a me', 'i miss you too']
+      ]
+    ];
+    // Per-paragraph fallback calls, one per paragraph in the mismatched batch
+    const fallback1 = [[['ti manco', '-i miss you']]];
+    const fallback2 = [[['mi manchi anche a me', '-miss you too']]];
+
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => mergedBatchResponse })
+      .mockResolvedValueOnce({ ok: true, json: async () => fallback1 })
+      .mockResolvedValueOnce({ ok: true, json: async () => fallback2 });
+
+    const paragraphs = ['-i miss you', '-miss you too'];
+    const results = await translateParagraphs(paragraphs, 'it');
+
+    expect(results).toHaveLength(2);
+    expect(results[0]).toBe('ti manco');
+    expect(results[1]).toBe('mi manchi anche a me');
+    // 1 batch request + 2 fallback requests (one per paragraph)
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
 });
