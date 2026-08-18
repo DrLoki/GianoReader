@@ -85,8 +85,12 @@ function makeBookmarkFunctions(storage) {
 
 // ── Pure functions from main.js ──────────────────────────────────────────
 function extractParagraphs(body) {
-  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'];
-  const blocks = body.querySelectorAll?.(selectors.join(', '));
+  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
+  const rawBlocks = body.querySelectorAll?.(selectors.join(', '));
+  const blocks = rawBlocks ? Array.from(rawBlocks).filter(el => {
+    if (el.tagName.toLowerCase() !== 'blockquote') return true;
+    return !el.querySelector(selectors.join(', '));
+  }) : rawBlocks;
   if (blocks && blocks.length > 0) {
     const r = [];
     blocks.forEach(el => {
@@ -146,6 +150,23 @@ describe('Apertura libro semplice', () => {
     body.innerHTML = '<p>Testo</p><p>   </p><p>Altro</p>';
     const result = extractParagraphs(body);
     expect(result).toHaveLength(2);
+  });
+
+  it('extractParagraphs estrae testo da <blockquote> con span annidati (es. dialoghi SMS)', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<p>Then we\'re going to have to do something about that…</p>' +
+      '<blockquote><span class="italic"><span class="calibre3">–having fun. wish you were here</span></span></blockquote>' +
+      '<p>In the picture, Erin was posing with Liz.</p>';
+    const result = extractParagraphs(body);
+    expect(result.map(r => r.text)).toContain('–having fun. wish you were here');
+  });
+
+  it('extractParagraphs non duplica il testo se il <blockquote> contiene un <p>', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<blockquote><p>Testo citato</p></blockquote>';
+    const result = extractParagraphs(body);
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('Testo citato');
   });
 
   it('paragraphsToHtml genera HTML valido dai paragrafi', () => {

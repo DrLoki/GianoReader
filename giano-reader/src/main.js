@@ -1986,8 +1986,16 @@ function safeInnerHtml(el) {
 // Estrae paragrafi da un nodo DOM (body di un capitolo EPUB)
 // Restituisce oggetti { text, html, id } — text per la traduzione, html per il rendering, id per la navigazione
 function extractParagraphs(body) {
-  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'];
-  const blocks = body.querySelectorAll?.(selectors.join(', '));
+  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
+  const rawBlocks = body.querySelectorAll?.(selectors.join(', '));
+  // Un <blockquote> che contiene a sua volta p/h*/li/blockquote (blocchi già
+  // selezionati singolarmente) non va incluso come blocco proprio, altrimenti
+  // il suo testo verrebbe duplicato. Va incluso solo se è "foglia" di testo
+  // (contiene solo span/testo inline, come nei blockquote di dialogo/SMS).
+  const blocks = rawBlocks ? Array.from(rawBlocks).filter(el => {
+    if (el.tagName.toLowerCase() !== 'blockquote') return true;
+    return !el.querySelector(selectors.join(', '));
+  }) : rawBlocks;
   if (blocks && blocks.length > 0) {
     const r = [];
     const seenIds = new Set();
