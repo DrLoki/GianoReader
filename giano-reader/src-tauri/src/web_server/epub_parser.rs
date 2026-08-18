@@ -339,23 +339,58 @@ fn find_chapter_title<R: std::io::Read + std::io::Seek>(doc: &EpubDoc<R>, chapte
     format!("Chapter {}", chapter_index + 1)
 }
 
+/// Block-level tag names that are treated as individual paragraphs.
+/// `blockquote` is included to support dialogue/SMS-style text that epub
+/// producers (e.g. calibre) wrap in `<blockquote><span>...</span></blockquote>`
+/// instead of `<p>`.
+const BLOCK_TAGS: [&str; 9] = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote"];
+
+/// Finds the earliest occurrence of any of `BLOCK_TAGS` starting from `from`.
+/// Returns the byte position of the `<` and the matched tag name.
+fn find_next_block_tag(content: &str, from: usize) -> Option<(usize, &'static str)> {
+    let mut best: Option<(usize, &'static str)> = None;
+    for &tag in BLOCK_TAGS.iter() {
+        if let Some(pos) = find_tag_start(content, from, tag) {
+            if best.is_none_or(|(best_pos, _)| pos < best_pos) {
+                best = Some((pos, tag));
+            }
+        }
+    }
+    best
+}
+
+/// Given the position of a closing tag's `<` (as returned by `find_closing_tag`),
+/// returns the byte position right after its `>`. This is more robust than a
+/// fixed-length skip since closing tags can vary in length (`</p>` vs `</blockquote>`).
+fn skip_past_closing_tag(content: &str, close_pos: usize) -> usize {
+    match content[close_pos..].find('>') {
+        Some(offset) => close_pos + offset + 1,
+        None => close_pos + 1,
+    }
+}
+
 /// Extracts paragraphs from XHTML content.
-/// Splits by `<p` tags and processes each one to produce sanitized HTML and plain text.
+/// Scans for block-level tags (`<p>`, `<h1>`-`<h6>`, `<li>`, `<blockquote>`) and
+/// processes each one to produce sanitized HTML and plain text.
+/// A `<blockquote>` that itself contains nested block-level tags (e.g. a `<p>`,
+/// or another `<blockquote>`) is not extracted as its own paragraph — its
+/// content is instead picked up individually on later loop iterations — to
+/// avoid duplicating text. A "leaf" `<blockquote>` (containing only inline
+/// content like `<span>`, as used for dialogue/SMS text) is extracted normally.
 /// Generates stable paragraph IDs using sha256(book_id + chapter_index + paragraph_index).
 fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<Paragraph> {
     let mut paragraphs = Vec::new();
 
-    // Find all <p...>...</p> segments
     let mut search_from = 0;
-    while let Some(p_start) = find_tag_start(content, search_from, "p") {
+    while let Some((tag_start, tag_name)) = find_next_block_tag(content, search_from) {
         // Find the opening tag end
-        let tag_end = match content[p_start..].find('>') {
-            Some(pos) => p_start + pos + 1,
+        let tag_end = match content[tag_start..].find('>') {
+            Some(pos) => tag_start + pos + 1,
             None => break,
         };
 
-        // Find the closing </p> tag
-        let close_tag = match find_closing_tag(content, tag_end, "p") {
+        // Find the matching closing tag
+        let close_tag = match find_closing_tag(content, tag_end, tag_name) {
             Some(pos) => pos,
             None => {
                 search_from = tag_end;
@@ -365,11 +400,19 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
 
         let inner_html = &content[tag_end..close_tag];
 
+        // A blockquote wrapping other block-level tags is a container, not a
+        // paragraph itself: skip past its opening tag only, so the nested
+        // block(s) get extracted individually on the next iterations.
+        if tag_name == "blockquote" && find_next_block_tag(inner_html, 0).is_some() {
+            search_from = tag_end;
+            continue;
+        }
+
         // Skip empty paragraphs
         let text = strip_all_tags(inner_html);
         let trimmed_text = text.trim();
         if trimmed_text.is_empty() {
-            search_from = close_tag + 4; // skip past </p>
+            search_from = skip_past_closing_tag(content, close_tag);
             continue;
         }
 
@@ -384,7 +427,7 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
             text: trimmed_text.to_string(),
         });
 
-        search_from = close_tag + 4; // skip past </p>
+        search_from = skip_past_closing_tag(content, close_tag);
     }
 
     paragraphs
@@ -697,6 +740,53 @@ mod tests {
         let paras = extract_paragraphs(content, "test_book", 0);
         assert_eq!(paras.len(), 1);
         assert_eq!(paras[0].text, "Hello world");
+    }
+
+    #[test]
+    fn extract_paragraphs_includes_headings_and_list_items() {
+        let content = "<h1>Title</h1><li>Item one</li>";
+        let paras = extract_paragraphs(content, "test_book", 0);
+        assert_eq!(paras.len(), 2);
+        assert_eq!(paras[0].text, "Title");
+        assert_eq!(paras[1].text, "Item one");
+    }
+
+    #[test]
+    fn extract_paragraphs_includes_leaf_blockquote_with_nested_spans() {
+        // Regression test: calibre-produced epubs wrap SMS/dialogue text like
+        // `-having fun. wish you were here` in nested <span> tags inside a
+        // <blockquote>, with no <p> at all. This text must not be dropped.
+        let content = concat!(
+            r#"<p class="calibre12">Then we're going to have to do something about that.</p>"#,
+            r#"<blockquote class="calibre16"><span class="italic">"#,
+            r#"<span class="calibre3">-having fun. wish you were here</span></span></blockquote>"#,
+            r#"<p class="calibre18">In the picture, Erin was posing with Liz.</p>"#,
+        );
+        let paras = extract_paragraphs(content, "test_book", 0);
+        let texts: Vec<&str> = paras.iter().map(|p| p.text.as_str()).collect();
+        assert!(texts.contains(&"-having fun. wish you were here"));
+        assert_eq!(paras.len(), 3);
+    }
+
+    #[test]
+    fn extract_paragraphs_handles_double_nested_blockquote() {
+        // Some epubs nest two <blockquote> levels around the leaf span.
+        let content = concat!(
+            r#"<blockquote class="calibre19"><blockquote class="calibre17">"#,
+            r#"<span class="italic"><span class="calibre3">-i miss you</span></span>"#,
+            r#"</blockquote></blockquote>"#,
+        );
+        let paras = extract_paragraphs(content, "test_book", 0);
+        assert_eq!(paras.len(), 1);
+        assert_eq!(paras[0].text, "-i miss you");
+    }
+
+    #[test]
+    fn extract_paragraphs_blockquote_with_nested_p_is_not_duplicated() {
+        let content = "<blockquote><p>Quoted text</p></blockquote>";
+        let paras = extract_paragraphs(content, "test_book", 0);
+        assert_eq!(paras.len(), 1);
+        assert_eq!(paras[0].text, "Quoted text");
     }
 
     #[test]

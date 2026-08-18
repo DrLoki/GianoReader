@@ -8,12 +8,12 @@
 // and the full list of files emitted into dist/. The defaults keep the file
 // valid when served by the Vite dev server.
 
-const BUILD_VERSION = '84da3f44673d';
+const BUILD_VERSION = '69b2631b590c';
 const CACHE_NAME = `giano-reader-${BUILD_VERSION}`;
 
 const PRECACHE_URLS = [
   "/",
-  "/assets/index-DZD5xQs0.js",
+  "/assets/index-jEdP9KAx.js",
   "/assets/index-xRpeU4Wy.css",
   "/favicon.ico",
   "/icons/book-bookmark.svg",
