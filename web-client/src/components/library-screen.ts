@@ -934,6 +934,7 @@ class LibraryScreen extends HTMLElement {
       display: flex;
       flex-direction: column;
       gap: 2px;
+      flex: 1;
     }
 
     .book-title {
@@ -966,7 +967,7 @@ class LibraryScreen extends HTMLElement {
 
     /* ── Offline download control ──────────────── */
     .offline-btn {
-      margin-top: 4px;
+      margin-top: auto;
       width: 100%;
       min-height: 32px;
       border: 1px solid var(--border, #444);
@@ -1009,12 +1010,12 @@ class LibraryScreen extends HTMLElement {
     .offline-btn--delete .delete-icon {
       width: 0.85em;
       height: 0.85em;
-      filter: none;
-      opacity: 0.8;
+      filter: brightness(0) saturate(100%) invert(28%) sepia(93%) saturate(1654%) hue-rotate(343deg) brightness(91%) contrast(97%);
+      opacity: 1;
     }
 
     .offline-control--progress {
-      margin-top: 4px;
+      margin-top: auto;
       display: flex;
       flex-direction: column;
       gap: 2px;
