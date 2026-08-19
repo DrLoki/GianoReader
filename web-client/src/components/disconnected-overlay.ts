@@ -2,6 +2,19 @@ import { getPreferences } from '../api/preferences';
 import { t } from '../i18n/index';
 
 /**
+ * Escape HTML special characters to prevent XSS when interpolating
+ * values into innerHTML templates.
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Full-screen overlay shown when the Web Server is unreachable.
  *
  * Displays the last known server URL and a "Reconnect" button.
@@ -14,6 +27,8 @@ import { t } from '../i18n/index';
  * Validates: Requirements 15.3, 15.4, 15.5
  */
 class DisconnectedOverlay extends HTMLElement {
+  private abortController: AbortController | null = null;
+
   connectedCallback(): void {
     // Block all interactions on the main app while overlay is visible
     const app = document.getElementById('app');
@@ -26,10 +41,19 @@ class DisconnectedOverlay extends HTMLElement {
     // Restore pointer-events on #app when overlay is removed
     const app = document.getElementById('app');
     if (app) app.style.pointerEvents = '';
+
+    // Clean up event listeners
+    this.abortController?.abort();
+    this.abortController = null;
   }
 
   private render(): void {
-    const serverUrl = window.location.origin;
+    // Abort any previous listeners if render is called again
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    const serverUrl = escapeHtml(window.location.origin);
 
     this.setAttribute('role', 'alertdialog');
     this.setAttribute('aria-modal', 'true');
@@ -97,29 +121,49 @@ class DisconnectedOverlay extends HTMLElement {
         .reconnect-btn:hover:not(:disabled) {
           opacity: 0.85;
         }
+
+        .offline-btn {
+          background: transparent;
+          border: 1px solid var(--border-color, #444);
+          border-radius: 8px;
+          color: #fff;
+          padding: 0.5rem 1.25rem;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          min-height: 44px;
+          width: 100%;
+          margin-top: 1.25rem;
+          transition: background 0.2s;
+        }
+
+        .offline-btn:hover {
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        .offline-btn:focus-visible {
+          outline: 2px solid var(--accent, #c0392b);
+          outline-offset: 2px;
+        }
       </style>
       <div class="disconnected-content">
-        <h2>${t('disconnected.title')}</h2>
-        <p>${t('disconnected.message', { url: serverUrl })}</p>
-        <p class="disconnected-url"><strong>${t('disconnected.serverUrl')}:</strong> ${serverUrl}</p>
-        <button class="reconnect-btn" aria-label="${t('disconnected.reconnect')}">${t('disconnected.reconnect')}</button>
-        <div style="margin-top: 1.25rem;">
-          <button class="offline-btn" style="background: transparent; border: 1px solid var(--border-color, #444); border-radius: 8px; color: #fff; padding: 0.5rem 1.25rem; font-size: 0.9rem; font-weight: 500; cursor: pointer; min-height: 44px; width: 100%; transition: background 0.2s;" aria-label="Usa in modalità locale (Offline)">
-            Usa in modalità locale (Offline)
-          </button>
-        </div>
+        <h2>${escapeHtml(t('disconnected.title'))}</h2>
+        <p>${escapeHtml(t('disconnected.message', { url: serverUrl }))}</p>
+        <p class="disconnected-url"><strong>${escapeHtml(t('disconnected.serverUrl'))}:</strong> ${serverUrl}</p>
+        <button class="reconnect-btn" aria-label="${escapeHtml(t('disconnected.reconnect'))}">${escapeHtml(t('disconnected.reconnect'))}</button>
+        <button class="offline-btn" aria-label="${escapeHtml(t('offline.switchToOffline'))}">${escapeHtml(t('offline.switchToOffline'))}</button>
       </div>
     `;
 
     const btn = this.querySelector('.reconnect-btn') as HTMLButtonElement;
-    btn?.addEventListener('click', () => this.reconnect());
+    btn?.addEventListener('click', () => this.reconnect(), { signal });
 
     const offlineBtn = this.querySelector('.offline-btn') as HTMLButtonElement;
     offlineBtn?.addEventListener('click', () => {
       localStorage.setItem('giano-offline-mode', 'true');
       this.remove();
       window.location.reload();
-    });
+    }, { signal });
   }
 
   private async reconnect(): Promise<void> {

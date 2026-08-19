@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "إضافة إشارة مرجعية",
   "bookmarks.deleteTooltip": "حذف الإشارة المرجعية",
   "bookmarks.defaultLabel": "الفصل {chapter}",
+  "bookmarks.positionLabel": "الفصل {chapter} · الفقرة {paragraph}",
   "bookmarks.empty": "لا توجد إشارات مرجعية محفوظة",
 
   "fab.bookmark": "إضافة إشارة مرجعية",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "تم حذف الإشارة المرجعية",
   "toast.settingsSaved": "تم حفظ الإعدادات",
   "toast.errorGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
-  "toast.networkError": "خطأ في الشبكة. تحقق من اتصالك."
+  "toast.networkError": "خطأ في الشبكة. تحقق من اتصالك.",
+
+  "offline.importing": "جارٍ استيراد الكتاب…",
+  "offline.importError": "خطأ في الاستيراد: {error}",
+  "offline.retry": "إعادة المحاولة",
+  "offline.importEpub": "استيراد EPUB",
+  "offline.downloadForOffline": "تنزيل للاستخدام دون اتصال",
+  "offline.removeOffline": "إزالة النسخة دون اتصال",
+  "offline.cached": "دون اتصال",
+  "offline.switchToOffline": "الاستخدام في الوضع المحلي (دون اتصال)",
+  "offline.switchToOnline": "العودة إلى وضع الخادم (متصل)",
+  "offline.localMode": "محلي (دون اتصال)",
+  "offline.translationRequiresInternet": "تتطلب الترجمة اتصالاً بالإنترنت"
 }

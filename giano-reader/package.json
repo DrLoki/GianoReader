@@ -1,11 +1,13 @@
 {
   "name": "giano-reader",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
+    "build:webclient": "npm --prefix ../web-client install && npm --prefix ../web-client run build",
+    "predev": "npm run build:webclient",
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
@@ -17,7 +19,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "epubjs": "^0.3.93",
-    "pdfjs-dist": "^5.7.284"
+    "pdfjs-dist": "^6.2.108"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.11.0",

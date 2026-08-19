@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Ajouter un signet",
   "bookmarks.deleteTooltip": "Supprimer le signet",
   "bookmarks.defaultLabel": "Chapitre {chapter}",
+  "bookmarks.positionLabel": "Chapitre {chapter} · Par. {paragraph}",
   "bookmarks.empty": "Aucun signet enregistré",
 
   "fab.bookmark": "Ajouter un signet",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "Signet supprimé",
   "toast.settingsSaved": "Paramètres enregistrés",
   "toast.errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
-  "toast.networkError": "Erreur réseau. Vérifiez votre connexion."
+  "toast.networkError": "Erreur réseau. Vérifiez votre connexion.",
+
+  "offline.importing": "Importation du livre…",
+  "offline.importError": "Erreur d'importation : {error}",
+  "offline.retry": "Réessayer",
+  "offline.importEpub": "Importer un EPUB",
+  "offline.downloadForOffline": "Télécharger pour une utilisation hors ligne",
+  "offline.removeOffline": "Supprimer la copie hors ligne",
+  "offline.cached": "Hors ligne",
+  "offline.switchToOffline": "Utiliser en mode local (hors ligne)",
+  "offline.switchToOnline": "Revenir au mode serveur (en ligne)",
+  "offline.localMode": "Local (hors ligne)",
+  "offline.translationRequiresInternet": "La traduction nécessite une connexion Internet"
 }

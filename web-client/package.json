@@ -19,6 +19,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "epubjs": "^0.3.93"
+    "epubjs": "^0.3.93",
+    "giano-reader": "file:../giano-reader"
   }
 }

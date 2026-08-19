@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Shto faqeshënues",
   "bookmarks.deleteTooltip": "Fshi faqeshënuesin",
   "bookmarks.defaultLabel": "Kapitulli {chapter}",
+  "bookmarks.positionLabel": "Kapitulli {chapter} · Par. {paragraph}",
   "bookmarks.empty": "Nuk ka faqeshënues të ruajtur",
 
   "fab.bookmark": "Shto faqeshënues",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "Faqeshënuesi u fshi",
   "toast.settingsSaved": "Cilësimet u ruajtën",
   "toast.errorGeneric": "Diçka shkoi keq. Ju lutem provoni përsëri.",
-  "toast.networkError": "Gabim rrjeti. Kontrolloni lidhjen tuaj."
+  "toast.networkError": "Gabim rrjeti. Kontrolloni lidhjen tuaj.",
+
+  "offline.importing": "Duke importuar librin…",
+  "offline.importError": "Gabim gjatë importimit: {error}",
+  "offline.retry": "Riprovo",
+  "offline.importEpub": "Importo EPUB",
+  "offline.downloadForOffline": "Shkarko për përdorim jashtë linje",
+  "offline.removeOffline": "Hiq kopjen jashtë linje",
+  "offline.cached": "Jashtë linje",
+  "offline.switchToOffline": "Përdor në modalitetin lokal (jashtë linje)",
+  "offline.switchToOnline": "Kthehu në modalitetin server (në linjë)",
+  "offline.localMode": "Lokal (jashtë linje)",
+  "offline.translationRequiresInternet": "Përkthimi kërkon një lidhje interneti"
 }

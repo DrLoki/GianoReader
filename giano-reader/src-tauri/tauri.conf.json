@@ -1,12 +1,12 @@
 {
   "productName": "Giano Reader",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "identifier": "giano-reader",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "cd ../web-client && npm run build && cd ../giano-reader && npm run build"
+    "beforeBuildCommand": "npm run build:webclient && npm run build"
   },
   "app": {
     "windows": [

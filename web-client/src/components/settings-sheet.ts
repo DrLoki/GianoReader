@@ -306,13 +306,13 @@ class SettingsSheet extends HTMLElement {
           <div class="settings-connection">
             <div class="settings-connection-row">
               <span>Server</span>
-              <span>${isOfflineMode() ? 'Locale (Offline)' : serverUrl}</span>
+              <span>${isOfflineMode() ? t('offline.localMode') : serverUrl}</span>
             </div>
             <div class="settings-connection-row">
               <span>Status</span>
               <span>
                 <span class="settings-status-dot ${isOfflineMode() ? 'disconnected' : (isConnected ? 'connected' : 'disconnected')}"></span>
-                ${isOfflineMode() ? 'Offline' : (isConnected ? t('settings.statusConnected') : t('settings.statusDisconnected'))}
+                ${isOfflineMode() ? t('offline.localMode') : (isConnected ? t('settings.statusConnected') : t('settings.statusDisconnected'))}
               </span>
             </div>
           </div>
@@ -321,7 +321,7 @@ class SettingsSheet extends HTMLElement {
         ${isOfflineMode() ? `
         <div class="settings-section" style="margin-top: 1.25rem;">
           <button class="switch-mode-btn" style="background: var(--accent, #c0392b); border: none; border-radius: 8px; color: #fff; padding: 0.625rem 1.5rem; cursor: pointer; width: 100%; font-weight: 600; min-height: 44px;">
-            Torna alla modalità Server (Online)
+            ${t('offline.switchToOnline')}
           </button>
         </div>
         ` : ''}

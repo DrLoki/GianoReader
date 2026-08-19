@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Lesezeichen hinzufügen",
   "bookmarks.deleteTooltip": "Lesezeichen löschen",
   "bookmarks.defaultLabel": "Kapitel {chapter}",
+  "bookmarks.positionLabel": "Kapitel {chapter} · Abs. {paragraph}",
   "bookmarks.empty": "Keine Lesezeichen gespeichert",
 
   "fab.bookmark": "Lesezeichen hinzufügen",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "Lesezeichen gelöscht",
   "toast.settingsSaved": "Einstellungen gespeichert",
   "toast.errorGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
-  "toast.networkError": "Netzwerkfehler. Überprüfen Sie Ihre Verbindung."
+  "toast.networkError": "Netzwerkfehler. Überprüfen Sie Ihre Verbindung.",
+
+  "offline.importing": "Buch wird importiert…",
+  "offline.importError": "Importfehler: {error}",
+  "offline.retry": "Wiederholen",
+  "offline.importEpub": "EPUB importieren",
+  "offline.downloadForOffline": "Für Offline-Nutzung herunterladen",
+  "offline.removeOffline": "Offline-Kopie entfernen",
+  "offline.cached": "Offline",
+  "offline.switchToOffline": "Im lokalen Modus verwenden (Offline)",
+  "offline.switchToOnline": "Zurück zum Servermodus (Online)",
+  "offline.localMode": "Lokal (Offline)",
+  "offline.translationRequiresInternet": "Für die Übersetzung ist eine Internetverbindung erforderlich"
 }

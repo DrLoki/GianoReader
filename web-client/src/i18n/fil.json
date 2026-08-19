@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Magdagdag ng bookmark",
   "bookmarks.deleteTooltip": "Burahin ang bookmark",
   "bookmarks.defaultLabel": "Kabanata {chapter}",
+  "bookmarks.positionLabel": "Kabanata {chapter} · Tal. {paragraph}",
   "bookmarks.empty": "Walang naka-save na bookmark",
 
   "fab.bookmark": "Magdagdag ng bookmark",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "Nabura ang bookmark",
   "toast.settingsSaved": "Na-save ang mga setting",
   "toast.errorGeneric": "May nangyaring mali. Pakisubukang muli.",
-  "toast.networkError": "Error sa network. Suriin ang iyong koneksyon."
+  "toast.networkError": "Error sa network. Suriin ang iyong koneksyon.",
+
+  "offline.importing": "Ini-import ang aklat…",
+  "offline.importError": "Error sa pag-import: {error}",
+  "offline.retry": "Subukang muli",
+  "offline.importEpub": "Mag-import ng EPUB",
+  "offline.downloadForOffline": "I-download para sa offline na paggamit",
+  "offline.removeOffline": "Alisin ang offline na kopya",
+  "offline.cached": "Offline",
+  "offline.switchToOffline": "Gamitin sa lokal na mode (Offline)",
+  "offline.switchToOnline": "Bumalik sa Server mode (Online)",
+  "offline.localMode": "Lokal (Offline)",
+  "offline.translationRequiresInternet": "Nangangailangan ng koneksyon sa internet ang pagsasalin"
 }

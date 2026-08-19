@@ -4,6 +4,9 @@ import type { BookSummary, TocEntry, ChapterResponse, ReadingState, Bookmark, Pr
 const DB_NAME = 'giano_local_db';
 const DB_VERSION = 1;
 
+/** Maximum number of chapters to download when caching a book for offline use. */
+const MAX_CHAPTERS_DOWNLOAD = 5000;
+
 export function isOfflineMode(): boolean {
   return localStorage.getItem('giano-offline-mode') === 'true';
 }
@@ -38,11 +41,18 @@ export function saveLocalPreferences(prefs: Preferences): void {
   localStorage.setItem('giano-local-preferences', JSON.stringify(prefs));
 }
 
+// ── Singleton IndexedDB connection ────────────────────────────────────────────
+let _dbInstance: IDBDatabase | null = null;
+let _dbPromise: Promise<IDBDatabase> | null = null;
+
 export function initDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (_dbInstance) return Promise.resolve(_dbInstance);
+  if (_dbPromise) return _dbPromise;
+
+  _dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains('books')) {
         db.createObjectStore('books', { keyPath: 'id' });
@@ -61,9 +71,25 @@ export function initDB(): Promise<IDBDatabase> {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      _dbInstance = request.result;
+      // If the connection is closed externally (e.g. versionchange from another tab),
+      // reset the singleton so the next call re-opens.
+      _dbInstance.onclose = () => { _dbInstance = null; _dbPromise = null; };
+      _dbInstance.onversionchange = () => {
+        _dbInstance?.close();
+        _dbInstance = null;
+        _dbPromise = null;
+      };
+      resolve(_dbInstance);
+    };
+    request.onerror = () => {
+      _dbPromise = null;
+      reject(request.error);
+    };
   });
+
+  return _dbPromise;
 }
 
 function getStore(storeName: string, mode: IDBTransactionMode): Promise<{ store: IDBObjectStore, transaction: IDBTransaction }> {
@@ -318,7 +344,7 @@ export async function getLocalBookmarks(bookId: string): Promise<Bookmark[]> {
 export async function createLocalBookmark(bookId: string, bookmark: Omit<Bookmark, 'id' | 'createdAt'>): Promise<Bookmark> {
   const db = await initDB();
   const fullBookmark: Bookmark = {
-    id: `local-bm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `local-bm-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
     ...bookmark,
     createdAt: new Date().toISOString(),
   };
@@ -326,8 +352,10 @@ export async function createLocalBookmark(bookId: string, bookmark: Omit<Bookmar
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('bookmarks', 'readwrite');
     const store = transaction.objectStore('bookmarks');
-    const request = store.put({ ...fullBookmark, bookId });
-    request.onsuccess = () => resolve(fullBookmark);
+    // Store with bookId for querying, and return with bookId for caller convenience
+    const record = { ...fullBookmark, bookId };
+    const request = store.put(record);
+    request.onsuccess = () => resolve(record as Bookmark & { bookId: string });
     request.onerror = () => reject(request.error);
   });
 }
@@ -428,77 +456,76 @@ export async function parseAndSaveEpub(file: File): Promise<string> {
   // @ts-ignore
   const book = ePub(arrayBuffer);
 
-  const meta = await book.loaded.metadata;
-  const bookId = `local-book-${Date.now()}`;
-  const title = meta.title || file.name.replace(/\.epub$/i, '');
-  const author = meta.creator || 'Unknown Author';
-
-  // Get cover image as Base64 Data URL
-  let coverUrl: string | null = null;
   try {
-    const rawCoverUrl = await book.coverUrl();
-    if (rawCoverUrl) {
-      const res = await fetch(rawCoverUrl);
-      const blob = await res.blob();
-      coverUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    }
-  } catch (e) {
-    console.error('Error extracting cover:', e);
-  }
+    const meta = await book.loaded.metadata;
+    const bookId = `local-book-${Date.now()}`;
+    const title = meta.title || file.name.replace(/\.epub$/i, '');
+    const author = meta.creator || 'Unknown Author';
 
-  // Get spine items
-  await book.loaded.spine;
-  const spineItems: any[] = [];
-  book.spine.each((item: any) => spineItems.push(item));
-
-  // Get table of contents
-  const nav = await book.loaded.navigation;
-  const toc: TocEntry[] = (nav.toc || []).map((item: any, i: number) => ({
-    index: i,
-    title: (item.label || '').trim(),
-    href: item.href || '',
-  }));
-
-  // Parse chapters
-  const chapters: { chapterIndex: number; paragraphs: any[] }[] = [];
-  for (let i = 0; i < spineItems.length; i++) {
-    const item = spineItems[i];
+    // Get cover image as Base64 Data URL
+    let coverUrl: string | null = null;
     try {
-      await item.load(book.load.bind(book));
-      const doc = item.document;
-      if (doc) {
-        const body = doc.body || doc.querySelector('body');
-        if (body) {
-          const paragraphs = extractParagraphs(body);
-          chapters.push({
-            chapterIndex: i,
-            paragraphs,
-          });
-        }
+      const rawCoverUrl = await book.coverUrl();
+      if (rawCoverUrl) {
+        const res = await fetch(rawCoverUrl);
+        const blob = await res.blob();
+        coverUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
       }
-      item.unload();
-    } catch (err) {
-      console.warn(`Failed to parse chapter ${i}:`, err);
+    } catch (e) {
+      console.error('Error extracting cover:', e);
     }
+
+    // Get spine items
+    await book.loaded.spine;
+    const spineItems: any[] = [];
+    book.spine.each((item: any) => spineItems.push(item));
+
+    // Get table of contents
+    const nav = await book.loaded.navigation;
+    const toc: TocEntry[] = (nav.toc || []).map((item: any, i: number) => ({
+      index: i,
+      title: (item.label || '').trim(),
+      href: item.href || '',
+    }));
+
+    // Parse chapters
+    const chapters: { chapterIndex: number; paragraphs: any[] }[] = [];
+    for (let i = 0; i < spineItems.length; i++) {
+      const item = spineItems[i];
+      try {
+        await item.load(book.load.bind(book));
+        const doc = item.document;
+        if (doc) {
+          const body = doc.body || doc.querySelector('body');
+          if (body) {
+            const paragraphs = extractParagraphs(body);
+            chapters.push({
+              chapterIndex: i,
+              paragraphs,
+            });
+          }
+        }
+        item.unload();
+      } catch (err) {
+        console.warn(`Failed to parse chapter ${i}:`, err);
+      }
+    }
+
+    // Save parsed book to local DB
+    await saveLocalBook(bookId, title, author, coverUrl, toc, chapters);
+
+    // Keep track of the last opened book ID
+    localStorage.setItem('giano-last-opened-book-id', bookId);
+
+    return bookId;
+  } finally {
+    try { book.destroy(); } catch (_) { /* ignore */ }
   }
-
-  // Save parsed book to local DB
-  await saveLocalBook(bookId, title, author, coverUrl, toc, chapters);
-
-  // Keep track of the last opened book ID
-  localStorage.setItem('giano-last-opened-book-id', bookId);
-
-  // Clean up
-  try {
-    book.destroy();
-  } catch (_) {}
-
-  return bookId;
 }
 
 // ── Server → Offline Download ──────────────────────────────────────────────────
@@ -563,133 +590,25 @@ export async function downloadBookForOffline(
     }
   }
 
-  // Fetch all chapters, stopping at the first 404
+  // Fetch all chapters, stopping at the first non-OK response or safety cap
   const chapters: { chapterIndex: number; paragraphs: import('../types').Paragraph[] }[] = [];
+  const estimatedTotal = Math.max(toc.length, 1);
   let i = 0;
-  while (true) {
+  while (i < MAX_CHAPTERS_DOWNLOAD) {
     try {
       const res = await fetch(`/api/books/${serverBookId}/chapter/${i}`);
       if (!res.ok) break;
       const data: import('../types').ChapterResponse = await res.json();
+      if (!data.paragraphs) break; // malformed response guard
       chapters.push({ chapterIndex: i, paragraphs: data.paragraphs });
       i++;
-      onProgress?.(i, Math.max(i + 1, toc.length));
+      onProgress?.(i, Math.max(estimatedTotal, i));
     } catch {
       break;
     }
   }
 
   await saveLocalBook(localId, title, author, coverUrl, toc, chapters);
-
-  // Pull server-side bookmarks into the local copy so they stay aligned
-  await syncServerBookmarksToOffline(serverBookId);
 }
 
-// ── Offline / Online bookmark sync ───────────────────────────────────────────────
 
-function getServerBookId(localBookId: string): string | null {
-  return localBookId.startsWith('offline-') ? localBookId.slice('offline-'.length) : null;
-}
-
-async function deleteLocalBookmarksForBook(bookId: string): Promise<void> {
-  const db = await initDB();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction('bookmarks', 'readwrite');
-    const store = tx.objectStore('bookmarks');
-    const req = store.openCursor();
-    req.onsuccess = (e) => {
-      const cursor = (e.target as IDBRequest<IDBCursorWithValue | null>).result;
-      if (cursor) {
-        if (cursor.value.bookId === bookId) {
-          cursor.delete();
-        }
-        cursor.continue();
-      } else {
-        resolve();
-      }
-    };
-    req.onerror = () => reject(req.error);
-  });
-}
-
-/**
- * Downloads the server bookmarks for a book and stores them under its offline
- * copy id (`offline-{serverBookId}`). Existing local bookmarks for that offline
- * copy are removed first to avoid duplicates.
- */
-export async function syncServerBookmarksToOffline(serverBookId: string): Promise<void> {
-  const localId = `offline-${serverBookId}`;
-  let serverBookmarks: Bookmark[] = [];
-  try {
-    const res = await fetch(`/api/books/${serverBookId}/bookmarks`);
-    if (res.ok) {
-      serverBookmarks = await res.json() as Bookmark[];
-    }
-  } catch {
-    return;
-  }
-
-  if (serverBookmarks.length === 0) return;
-
-  await deleteLocalBookmarksForBook(localId);
-
-  const db = await initDB();
-  const tx = db.transaction('bookmarks', 'readwrite');
-  const store = tx.objectStore('bookmarks');
-
-  await Promise.all(
-    serverBookmarks.map(
-      (bm) =>
-        new Promise<void>((resolve, reject) => {
-          const request = store.put({ ...bm, bookId: localId });
-          request.onsuccess = () => resolve();
-          request.onerror = () => reject(request.error);
-        }),
-    ),
-  );
-}
-
-/**
- * Pushes locally created bookmarks from an offline copy (`offline-{serverBookId}`)
- * back to the server. On success the local copies are removed so they are not
- * duplicated on the next offline switch.
- */
-export async function syncOfflineBookmarksToServer(offlineBookId: string): Promise<void> {
-  const serverBookId = getServerBookId(offlineBookId);
-  if (!serverBookId) return;
-
-  const localBookmarks = await getLocalBookmarks(offlineBookId);
-  if (localBookmarks.length === 0) return;
-
-  for (const bm of localBookmarks) {
-    try {
-      const res = await fetch(`/api/books/${serverBookId}/bookmarks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chapterIndex: bm.chapterIndex,
-          paragraphId: bm.paragraphId,
-          label: bm.label || undefined,
-        }),
-      });
-      if (!res.ok) return;
-    } catch {
-      return;
-    }
-  }
-
-  await deleteLocalBookmarksForBook(offlineBookId);
-}
-
-/**
- * Synchronises bookmarks for every offline-cached server book back to the server.
- * Intended to be called once when the app starts in online/server mode.
- */
-export async function syncOfflineBookmarksToServerForAll(): Promise<void> {
-  const books = await getLocalBooks();
-  for (const book of books) {
-    if (book.id.startsWith('offline-')) {
-      await syncOfflineBookmarksToServer(book.id);
-    }
-  }
-}

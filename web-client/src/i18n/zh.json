@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "添加书签",
   "bookmarks.deleteTooltip": "删除书签",
   "bookmarks.defaultLabel": "第 {chapter} 章",
+  "bookmarks.positionLabel": "第 {chapter} 章 · 第 {paragraph} 段",
   "bookmarks.empty": "暂无书签",
 
   "fab.bookmark": "添加书签",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "书签已删除",
   "toast.settingsSaved": "设置已保存",
   "toast.errorGeneric": "出现错误，请重试。",
-  "toast.networkError": "网络错误，请检查连接。"
+  "toast.networkError": "网络错误，请检查连接。",
+
+  "offline.importing": "正在导入书籍…",
+  "offline.importError": "导入错误：{error}",
+  "offline.retry": "重试",
+  "offline.importEpub": "导入 EPUB",
+  "offline.downloadForOffline": "下载以供离线使用",
+  "offline.removeOffline": "移除离线副本",
+  "offline.cached": "离线",
+  "offline.switchToOffline": "使用本地模式（离线）",
+  "offline.switchToOnline": "切换回服务器模式（在线）",
+  "offline.localMode": "本地（离线）",
+  "offline.translationRequiresInternet": "翻译需要互联网连接"
 }

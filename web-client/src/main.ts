@@ -1,7 +1,7 @@
 import { getPreferences } from './api/preferences';
 import { setLocale } from './i18n/index';
 import type { Preferences } from './types';
-import { isOfflineMode, getLocalPreferences, syncOfflineBookmarksToServerForAll } from './api/local-db';
+import { isOfflineMode, getLocalPreferences } from './api/local-db';
 import './styles/base.css';
 import './styles/themes.css';
 import './styles/components.css';
@@ -50,15 +50,7 @@ async function init(): Promise<void> {
   }
 }
 
-init().then(async () => {
-  if (!isOfflineMode()) {
-    try {
-      await syncOfflineBookmarksToServerForAll();
-    } catch (e) {
-      console.warn('Failed to sync offline bookmarks:', e);
-    }
-  }
-});
+init();
 
 // Register disconnected event listener
 document.addEventListener('disconnected', () => {

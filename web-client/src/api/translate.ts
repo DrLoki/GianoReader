@@ -51,6 +51,12 @@ function getWorkerUrl(): string {
 
 async function translateChunkOffline(text: string, targetLang: string): Promise<string> {
   const baseUrl = getWorkerUrl();
+  // If we're falling back to translate.googleapis.com while truly offline,
+  // navigator.onLine === false gives us a quick hint to fail fast with a
+  // meaningful message instead of waiting for a network timeout.
+  if (!navigator.onLine && baseUrl.includes('translate.googleapis.com')) {
+    throw new Error('OFFLINE_NO_INTERNET');
+  }
   const url = `${baseUrl}?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Translation proxy error: ${res.status}`);

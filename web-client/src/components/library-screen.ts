@@ -52,7 +52,7 @@ class LibraryScreen extends HTMLElement {
           content.innerHTML = `
             <div class="library-loading" role="status" aria-live="polite">
               <div class="spinner" aria-hidden="true"></div>
-              <p>Importazione libro in corso...</p>
+              <p>${t('offline.importing')}</p>
             </div>
           `;
         }
@@ -62,10 +62,11 @@ class LibraryScreen extends HTMLElement {
           this.loadBooks();
         } catch (err: any) {
           if (content) {
+            const safeMsg = escapeHtml(err?.message || String(err));
             content.innerHTML = `
               <div class="library-error" role="alert">
-                <p>Errore durante l'importazione: ${err?.message || err}</p>
-                <button class="retry-import-btn" style="background: var(--accent, #c0392b); border: none; border-radius: 8px; color: #fff; padding: 0.5rem 1.5rem; cursor: pointer; min-height: 44px; margin-top: 1rem;">Riprova</button>
+                <p>${t('offline.importError', { error: safeMsg })}</p>
+                <button class="retry-import-btn" style="background: var(--accent, #c0392b); border: none; border-radius: 8px; color: #fff; padding: 0.5rem 1.5rem; cursor: pointer; min-height: 44px; margin-top: 1rem;">${t('offline.retry')}</button>
               </div>
             `;
             content.querySelector('.retry-import-btn')?.addEventListener('click', () => this.loadBooks());
@@ -80,26 +81,6 @@ class LibraryScreen extends HTMLElement {
     this.innerHTML = `
       <style>${LibraryScreen.styles}</style>
       <div class="library-container">
-        <header class="library-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">
-              <img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true">
-            </button>
-            ${isOfflineMode() ? `
-              <label class="import-btn-label" for="import-epub-file" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; background: transparent; transition: background 0.15s;" title="Importa EPUB">
-                <img class="icon" src="/icons/upload.svg" alt="Importa EPUB" style="filter: brightness(0) invert(1);">
-              </label>
-              <input type="file" id="import-epub-file" accept=".epub" style="display: none;">
-            ` : ''}
-          </div>
-          <div class="tab-group" role="tablist">
-            <button class="tab-btn tab-library active" role="tab" aria-selected="true">${t('library.title')}</button>
-            <button class="tab-btn tab-bookmarks" role="tab" aria-selected="false">
-              <img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"> ${t('bookmarks.title')}
-            </button>
-          </div>
-        </header>
-
         <div class="library-content"></div>
         <div class="filter-bar" role="search" aria-label="${t('library.title')}">
           <div class="filter-search-row">
@@ -120,6 +101,25 @@ class LibraryScreen extends HTMLElement {
             <button class="chip" data-status="read" aria-pressed="false">${t('library.filterRead')}</button>
           </div>
         </div>
+        <header class="library-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">
+              <img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true">
+            </button>
+            ${isOfflineMode() ? `
+              <label class="import-btn-label" for="import-epub-file" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; background: transparent; transition: background 0.15s;" title="${t('offline.importEpub')}">
+                <img class="icon" src="/icons/upload.svg" alt="${t('offline.importEpub')}">
+              </label>
+              <input type="file" id="import-epub-file" accept=".epub" style="display: none;">
+            ` : ''}
+          </div>
+          <div class="tab-group" role="tablist">
+            <button class="tab-btn tab-library active" role="tab" aria-selected="true">${t('library.title')}</button>
+            <button class="tab-btn tab-bookmarks" role="tab" aria-selected="false">
+              <img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"> ${t('bookmarks.title')}
+            </button>
+          </div>
+        </header>
       </div>
     `;
 
@@ -183,9 +183,9 @@ class LibraryScreen extends HTMLElement {
   /** Show or hide the filter bar (only relevant for library tab). */
   private showFilterBar(visible: boolean): void {
     const bar = this.querySelector('.filter-bar') as HTMLElement;
-    const content = this.querySelector('.library-content') as HTMLElement;
+    const container = this.querySelector('.library-container') as HTMLElement;
     if (bar) bar.style.display = visible ? '' : 'none';
-    if (content) content.style.paddingBottom = visible ? '' : '1rem';
+    if (container) container.style.paddingBottom = visible ? '' : '64px';
   }
 
   private async loadBooks(): Promise<void> {
@@ -564,16 +564,16 @@ class LibraryScreen extends HTMLElement {
     if (isCached) {
       return `
         <button class="offline-btn offline-btn--cached" data-book-id="${bookId}" data-action="remove"
-                aria-label="Rimuovi copia offline">
-          ✓ Offline
+                aria-label="${t('offline.removeOffline')}">
+          ✓ ${t('offline.cached')}
         </button>
       `;
     }
 
     return `
       <button class="offline-btn offline-btn--download" data-book-id="${bookId}" data-action="download"
-              aria-label="Scarica per uso offline">
-        ☁ Scarica per uso offline
+              aria-label="${t('offline.downloadForOffline')}">
+        ☁ ${t('offline.downloadForOffline')}
       </button>
     `;
   }
@@ -608,27 +608,32 @@ class LibraryScreen extends HTMLElement {
       height: 1em;
       display: inline-block;
       vertical-align: middle;
-      filter: brightness(0) invert(1);
+      filter: var(--icon-filter, brightness(0) invert(1));
     }
 
     .library-container {
       max-width: 960px;
       margin: 0 auto;
-      /* Space for sticky filter bar */
-      padding-bottom: 110px;
+      /* Space for fixed bottom header + filter bar */
+      padding-bottom: 164px;
     }
 
-    /* ── Header ─────────────────────────────────── */
+    /* ── Header (fixed bottom) ──────────────────── */
     .library-header {
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 8px 12px;
-      background: var(--header-bg, #1a1a1a);
-      border-bottom: 1px solid var(--border-color, #333);
+      padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+      background: color-mix(in srgb, var(--header-bg, #1a1a1a) 85%, transparent);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border-color, #333);
     }
 
     .library-header .settings-btn {
@@ -680,6 +685,7 @@ class LibraryScreen extends HTMLElement {
       color: var(--text-color, #e0e0e0);
       background: var(--tab-active-bg, rgba(255, 255, 255, 0.15));
       font-weight: 600;
+      box-shadow: inset 0 -2px 0 var(--accent, #c0392b);
     }
 
     /* ── Content area ───────────────────────────── */
@@ -690,18 +696,18 @@ class LibraryScreen extends HTMLElement {
     /* ── Filter bar ─────────────────────────────── */
     .filter-bar {
       position: fixed;
-      bottom: 0;
+      bottom: 52px;
       left: 0;
       right: 0;
       z-index: 20;
-      background: var(--header-bg, #1a1a1a);
+      background: color-mix(in srgb, var(--header-bg, #1a1a1a) 85%, transparent);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border-top: 1px solid var(--border-color, #333);
       padding: 8px 12px 10px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      /* Respect safe-area on notched phones */
-      padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     }
 
     .filter-search-row {

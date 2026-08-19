@@ -60,5 +60,17 @@
   "toast.bookmarkDeleted": "Segnalibro eliminato",
   "toast.settingsSaved": "Impostazioni salvate",
   "toast.errorGeneric": "Si è verificato un errore. Riprova.",
-  "toast.networkError": "Errore di rete. Controlla la connessione."
+  "toast.networkError": "Errore di rete. Controlla la connessione.",
+
+  "offline.importing": "Importazione libro in corso…",
+  "offline.importError": "Errore durante l'importazione: {error}",
+  "offline.retry": "Riprova",
+  "offline.importEpub": "Importa EPUB",
+  "offline.downloadForOffline": "Scarica per uso offline",
+  "offline.removeOffline": "Rimuovi copia offline",
+  "offline.cached": "Offline",
+  "offline.switchToOffline": "Usa in modalità locale (Offline)",
+  "offline.switchToOnline": "Torna alla modalità Server (Online)",
+  "offline.localMode": "Locale (Offline)",
+  "offline.translationRequiresInternet": "La traduzione richiede una connessione internet"
 }

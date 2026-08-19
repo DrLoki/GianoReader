@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "ブックマークを追加",
   "bookmarks.deleteTooltip": "ブックマークを削除",
   "bookmarks.defaultLabel": "第{chapter}章",
+  "bookmarks.positionLabel": "第{chapter}章 · 第{paragraph}段",
   "bookmarks.empty": "ブックマークはありません",
 
   "fab.bookmark": "ブックマークを追加",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "ブックマークを削除しました",
   "toast.settingsSaved": "設定を保存しました",
   "toast.errorGeneric": "エラーが発生しました。もう一度お試しください。",
-  "toast.networkError": "ネットワークエラー。接続を確認してください。"
+  "toast.networkError": "ネットワークエラー。接続を確認してください。",
+
+  "offline.importing": "書籍をインポート中…",
+  "offline.importError": "インポートエラー: {error}",
+  "offline.retry": "再試行",
+  "offline.importEpub": "EPUBをインポート",
+  "offline.downloadForOffline": "オフライン用にダウンロード",
+  "offline.removeOffline": "オフラインコピーを削除",
+  "offline.cached": "オフライン",
+  "offline.switchToOffline": "ローカルモードで使用（オフライン）",
+  "offline.switchToOnline": "サーバーモードに戻る（オンライン）",
+  "offline.localMode": "ローカル（オフライン）",
+  "offline.translationRequiresInternet": "翻訳にはインターネット接続が必要です"
 }

@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Добавить закладку",
   "bookmarks.deleteTooltip": "Удалить закладку",
   "bookmarks.defaultLabel": "Глава {chapter}",
+  "bookmarks.positionLabel": "Глава {chapter} · Абз. {paragraph}",
   "bookmarks.empty": "Нет сохранённых закладок",
 
   "fab.bookmark": "Добавить закладку",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "Закладка удалена",
   "toast.settingsSaved": "Настройки сохранены",
   "toast.errorGeneric": "Что-то пошло не так. Попробуйте снова.",
-  "toast.networkError": "Ошибка сети. Проверьте подключение."
+  "toast.networkError": "Ошибка сети. Проверьте подключение.",
+
+  "offline.importing": "Импорт книги…",
+  "offline.importError": "Ошибка импорта: {error}",
+  "offline.retry": "Повторить",
+  "offline.importEpub": "Импортировать EPUB",
+  "offline.downloadForOffline": "Скачать для офлайн-использования",
+  "offline.removeOffline": "Удалить офлайн-копию",
+  "offline.cached": "Офлайн",
+  "offline.switchToOffline": "Использовать в локальном режиме (офлайн)",
+  "offline.switchToOnline": "Вернуться в режим сервера (онлайн)",
+  "offline.localMode": "Локальный (офлайн)",
+  "offline.translationRequiresInternet": "Для перевода требуется интернет-соединение"
 }

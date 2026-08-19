@@ -42,11 +42,11 @@ describe('reading-screen', () => {
   });
 
   describe('Layout structure', () => {
-    it('renders a fixed 56px header', () => {
+    it('renders a fixed 48px header at the bottom', () => {
       const header = el.querySelector('.reading-header') as HTMLElement;
       expect(header).not.toBeNull();
       const style = el.querySelector('style')?.textContent ?? '';
-      expect(style).toContain('height: 56px');
+      expect(style).toContain('height: 48px');
     });
 
     it('renders a library button in the header', () => {
@@ -79,8 +79,8 @@ describe('reading-screen', () => {
 
     it('content area fills remaining viewport height', () => {
       const style = el.querySelector('style')?.textContent ?? '';
-      expect(style).toContain('top: 56px');
-      expect(style).toContain('bottom: 55px');
+      expect(style).toContain('top: 0');
+      expect(style).toContain('bottom: 106px');
     });
 
     it('renders FAB group with Bookmark button', () => {
@@ -88,11 +88,10 @@ describe('reading-screen', () => {
       expect(bookmarkFab).not.toBeNull();
     });
 
-    it('FAB group is fixed bottom-right', () => {
-      const style = el.querySelector('style')?.textContent ?? '';
-      expect(style).toContain('bottom: 68px');
-      expect(style).toContain('right: 16px');
-      expect(style).toContain('position: fixed');
+    it('bookmark button is in the reading header', () => {
+      const header = el.querySelector('.reading-header') as HTMLElement;
+      const bookmarkBtn = header?.querySelector('.fab-bookmark');
+      expect(bookmarkBtn).not.toBeNull();
     });
   });
 
@@ -111,8 +110,8 @@ describe('reading-screen', () => {
 
     it('FAB buttons have min-width and min-height of 44px', () => {
       const style = el.querySelector('style')?.textContent ?? '';
-      expect(style).toMatch(/\.fab[^}]*min-width:\s*44px/s);
-      expect(style).toMatch(/\.fab[^}]*min-height:\s*44px/s);
+      expect(style).toMatch(/\.fab-bookmark[^}]*min-width:\s*44px/s);
+      expect(style).toMatch(/\.fab-bookmark[^}]*min-height:\s*44px/s);
     });
   });
 

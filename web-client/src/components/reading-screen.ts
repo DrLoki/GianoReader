@@ -118,22 +118,24 @@ class ReadingScreen extends HTMLElement {
           height: 1em;
           display: inline-block;
           vertical-align: middle;
-          filter: brightness(0) invert(1);
+          filter: var(--icon-filter, brightness(0) invert(1));
         }
 
         reading-screen .reading-header {
           position: fixed;
-          top: 0;
+          bottom: 55px;
           left: 0;
           width: 100%;
-          height: 56px;
+          height: 48px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           padding: 0 8px;
           box-sizing: border-box;
-          background: var(--header-bg, #1a1a1a);
-          border-bottom: 1px solid var(--border-color, #333);
+          background: color-mix(in srgb, var(--header-bg, #1a1a1a) 85%, transparent);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border-top: 1px solid var(--border-color, #333);
           z-index: 50;
         }
 
@@ -207,14 +209,15 @@ class ReadingScreen extends HTMLElement {
           color: var(--text-color, #e0e0e0);
           background: var(--tab-active-bg, rgba(255, 255, 255, 0.15));
           font-weight: 600;
+          box-shadow: inset 0 -2px 0 var(--accent, #c0392b);
         }
 
         reading-screen .reading-content {
           position: absolute;
-          top: 56px;
+          top: 0;
           left: 0;
           right: 0;
-          bottom: 55px;
+          bottom: 106px;
           overflow: hidden;
         }
 
@@ -230,45 +233,25 @@ class ReadingScreen extends HTMLElement {
           }
         }
 
-        reading-screen .fab-group {
-          position: fixed;
-          bottom: 68px;
-          right: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          z-index: 40;
-        }
-
-        reading-screen .fab {
+        reading-screen .fab-bookmark {
           min-width: 44px;
           min-height: 44px;
-          width: 48px;
-          height: 48px;
+          width: 44px;
+          height: 44px;
           display: flex;
           align-items: center;
           justify-content: center;
           border: none;
-          border-radius: 50%;
-          background: var(--fab-bg, #2a2a2a);
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-          font-size: 1.3rem;
+          background: transparent;
+          font-size: 1.4rem;
           cursor: pointer;
-          transition: transform 0.15s, box-shadow 0.15s;
+          border-radius: 8px;
           color: var(--text-color, #e0e0e0);
         }
 
-        reading-screen .fab:hover,
-        reading-screen .fab:focus-visible {
-          transform: scale(1.08);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-        }
-
-        reading-screen .fab:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-          transform: none;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        reading-screen .fab-bookmark:hover,
+        reading-screen .fab-bookmark:focus-visible {
+          background: var(--hover-bg, rgba(255, 255, 255, 0.1));
         }
 
         reading-screen .chapter-nav {
@@ -281,14 +264,17 @@ class ReadingScreen extends HTMLElement {
           align-items: center;
           justify-content: space-between;
           padding: 0 12px;
-          background: var(--header-bg, #1a1a1a);
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+          background: color-mix(in srgb, var(--header-bg, #1a1a1a) 85%, transparent);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
           border-top: 1px solid var(--border-color, #333);
           z-index: 40;
         }
 
         reading-screen .reading-progress {
           position: fixed;
-          bottom: 52px;
+          bottom: 103px;
           left: 0;
           right: 0;
           height: 3px;
@@ -366,13 +352,6 @@ class ReadingScreen extends HTMLElement {
           content: '⚠ ';
         }
       </style>
-      <header class="reading-header">
-        <button class="fab-library-btn" aria-label="${t('fab.library')}"><img class="icon" src="/icons/book-bookmark.svg" alt="" aria-hidden="true"></button>
-        <div class="tab-group" role="tablist">
-          <button class="tab-btn tab-original active" role="tab" aria-selected="true" aria-label="${t('reading.tabOriginal')}">${t('reading.tabOriginal')}</button>
-          <button class="tab-btn tab-translated" role="tab" aria-selected="false" aria-label="${t('reading.tabTranslated')}">${t('reading.tabTranslated')}</button>
-        </div>
-      </header>
       <div class="reading-content">
         <card-ui></card-ui>
       </div>
@@ -380,14 +359,19 @@ class ReadingScreen extends HTMLElement {
         <div class="reading-progress-fill"></div>
         <span class="reading-progress-label">0%</span>
       </div>
+      <header class="reading-header">
+        <button class="fab-library-btn" aria-label="${t('fab.library')}"><img class="icon" src="/icons/book-bookmark.svg" alt="" aria-hidden="true"></button>
+        <div class="tab-group" role="tablist">
+          <button class="tab-btn tab-original active" role="tab" aria-selected="true" aria-label="${t('reading.tabOriginal')}">${t('reading.tabOriginal')}</button>
+          <button class="tab-btn tab-translated" role="tab" aria-selected="false" aria-label="${t('reading.tabTranslated')}">${t('reading.tabTranslated')}</button>
+        </div>
+        <button class="fab-bookmark" aria-label="${t('fab.bookmark')}"><img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"></button>
+      </header>
       <nav class="chapter-nav">
         <button class="chapter-nav-btn nav-prev" aria-label="${t('reading.prevChapter')}">← ${t('reading.prevChapter')}</button>
         <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}"><img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true"></button>
         <button class="chapter-nav-btn nav-next" aria-label="${t('reading.nextChapter')}">${t('reading.nextChapter')} →</button>
       </nav>
-      <div class="fab-group">
-        <button class="fab fab-bookmark" aria-label="${t('fab.bookmark')}"><img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"></button>
-      </div>
     `;
   }
 
@@ -823,7 +807,10 @@ class ReadingScreen extends HTMLElement {
             targetLang: this.targetLang,
           }, translated);
         }
-      } catch {
+      } catch (err: any) {
+        if (err?.message === 'OFFLINE_NO_INTERNET') {
+          showToast(t('offline.translationRequiresInternet'), 'error');
+        }
         for (const idx of uncachedIndices) {
           this.showError(translatedSlot, idx);
         }

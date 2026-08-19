@@ -44,6 +44,7 @@
   "bookmarks.addTooltip": "Adicionar marcador",
   "bookmarks.deleteTooltip": "Excluir marcador",
   "bookmarks.defaultLabel": "Capítulo {chapter}",
+  "bookmarks.positionLabel": "Capítulo {chapter} · Par. {paragraph}",
   "bookmarks.empty": "Nenhum marcador salvo",
 
   "fab.bookmark": "Adicionar marcador",
@@ -59,5 +60,17 @@
   "toast.bookmarkDeleted": "Marcador excluído",
   "toast.settingsSaved": "Configurações salvas",
   "toast.errorGeneric": "Algo deu errado. Tente novamente.",
-  "toast.networkError": "Erro de rede. Verifique sua conexão."
+  "toast.networkError": "Erro de rede. Verifique sua conexão.",
+
+  "offline.importing": "Importando livro…",
+  "offline.importError": "Erro de importação: {error}",
+  "offline.retry": "Tentar novamente",
+  "offline.importEpub": "Importar EPUB",
+  "offline.downloadForOffline": "Baixar para uso offline",
+  "offline.removeOffline": "Remover cópia offline",
+  "offline.cached": "Offline",
+  "offline.switchToOffline": "Usar no modo local (offline)",
+  "offline.switchToOnline": "Voltar ao modo servidor (online)",
+  "offline.localMode": "Local (offline)",
+  "offline.translationRequiresInternet": "A tradução requer uma conexão com a internet"
 }

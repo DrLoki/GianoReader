@@ -60,5 +60,17 @@
   "toast.bookmarkDeleted": "Bookmark deleted",
   "toast.settingsSaved": "Settings saved",
   "toast.errorGeneric": "Something went wrong. Please try again.",
-  "toast.networkError": "Network error. Check your connection."
+  "toast.networkError": "Network error. Check your connection.",
+
+  "offline.importing": "Importing book…",
+  "offline.importError": "Import error: {error}",
+  "offline.retry": "Retry",
+  "offline.importEpub": "Import EPUB",
+  "offline.downloadForOffline": "Download for offline use",
+  "offline.removeOffline": "Remove offline copy",
+  "offline.cached": "Offline",
+  "offline.switchToOffline": "Use in local mode (Offline)",
+  "offline.switchToOnline": "Switch back to Server mode (Online)",
+  "offline.localMode": "Local (Offline)",
+  "offline.translationRequiresInternet": "Translation requires an internet connection"
 }
