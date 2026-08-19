@@ -13,22 +13,22 @@ use super::persistence::PersistenceStore;
 /// directory for `.epub` files.
 /// Skips unreadable files with a warning. Returns an empty vec if no books are found.
 pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSummary> {
-    println!("[epub_parser] list_books called, library_path={:?}", library_path);
+    // println!("[epub_parser] list_books called, library_path={:?}", library_path);
 
     // Try to read from the desktop app's library JSON first
     let library_json_path = library_path.parent()
         .unwrap_or(library_path)
         .join("giano-reader-library.json");
 
-    println!("[epub_parser] Looking for library JSON at: {:?}", library_json_path);
-    println!("[epub_parser] JSON file exists: {}", library_json_path.exists());
+    // println!("[epub_parser] Looking for library JSON at: {:?}", library_json_path);
+    // println!("[epub_parser] JSON file exists: {}", library_json_path.exists());
 
     if library_json_path.exists() {
         if let Ok(content) = fs::read_to_string(&library_json_path) {
-            println!("[epub_parser] JSON file read OK, length={} bytes", content.len());
+            // println!("[epub_parser] JSON file read OK, length={} bytes", content.len());
             match serde_json::from_str::<Vec<LibraryEntry>>(&content) {
                 Ok(entries) => {
-                    println!("[epub_parser] Parsed {} library entries from JSON", entries.len());
+                    // println!("[epub_parser] Parsed {} library entries from JSON", entries.len());
                     let mut books = Vec::new();
                     for entry in &entries {
                         let path = PathBuf::from(&entry.file_path);
@@ -46,22 +46,22 @@ pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSumm
                             books.push(book);
                         }
                     }
-                    println!("[epub_parser] Found {} valid books from JSON", books.len());
+                    // println!("[epub_parser] Found {} valid books from JSON", books.len());
                     if !books.is_empty() {
                         return books;
                     }
                 }
-                Err(e) => {
-                    println!("[epub_parser] Failed to parse JSON: {}", e);
+                Err(_e) => {
+                    // println!("[epub_parser] Failed to parse JSON: {}", _e);
                 }
             }
         } else {
-            println!("[epub_parser] Failed to read JSON file");
+            // println!("[epub_parser] Failed to read JSON file");
         }
     }
 
     // Fallback: scan library_path directory for .epub files
-    println!("[epub_parser] Falling back to directory scan of {:?}", library_path);
+    // println!("[epub_parser] Falling back to directory scan of {:?}", library_path);
     list_books_from_directory(library_path, store)
 }
 
@@ -87,8 +87,8 @@ fn book_summary_from_path(path: &Path, store: &PersistenceStore, status: Option<
 
     let doc = match EpubDoc::new(path) {
         Ok(doc) => doc,
-        Err(e) => {
-            eprintln!("[epub_parser] Skipping {:?}: failed to open epub: {}", path, e);
+        Err(_e) => {
+            // eprintln!("[epub_parser] Skipping {:?}: failed to open epub: {}", path, _e);
             return None;
         }
     };
@@ -126,8 +126,8 @@ fn book_summary_from_path(path: &Path, store: &PersistenceStore, status: Option<
 fn list_books_from_directory(library_path: &Path, store: &PersistenceStore) -> Vec<BookSummary> {
     let entries = match fs::read_dir(library_path) {
         Ok(entries) => entries,
-        Err(e) => {
-            eprintln!("[epub_parser] Cannot read library directory {:?}: {}", library_path, e);
+        Err(_e) => {
+            // eprintln!("[epub_parser] Cannot read library directory {:?}: {}", library_path, _e);
             return Vec::new();
         }
     };
@@ -137,8 +137,8 @@ fn list_books_from_directory(library_path: &Path, store: &PersistenceStore) -> V
     for entry in entries {
         let entry = match entry {
             Ok(e) => e,
-            Err(e) => {
-                eprintln!("[epub_parser] Error reading directory entry: {}", e);
+            Err(_e) => {
+                // eprintln!("[epub_parser] Error reading directory entry: {}", _e);
                 continue;
             }
         };
@@ -234,18 +234,64 @@ pub fn get_toc(library_path: &Path, book_id: &str) -> Result<Vec<TocEntry>, Stri
     let doc = EpubDoc::new(&epub_path)
         .map_err(|e| format!("Failed to open epub: {}", e))?;
 
-    let entries: Vec<TocEntry> = doc
-        .toc
-        .iter()
-        .enumerate()
-        .map(|(i, nav_point)| TocEntry {
-            index: i as u32,
-            title: nav_point.label.clone(),
-            href: nav_point.content.to_string_lossy().to_string(),
-        })
-        .collect();
+    let mut entries: Vec<TocEntry> = Vec::new();
+    let mut counter: u32 = 0;
+    flatten_toc(&doc.toc, 0, &mut entries, &mut counter, &doc);
 
     Ok(entries)
+}
+
+/// Recursively flattens the hierarchical NavPoint tree into a flat list
+/// with a `level` field indicating nesting depth and `spine_index` for navigation.
+fn flatten_toc<R: std::io::Read + std::io::Seek>(
+    nav_points: &[epub::doc::NavPoint],
+    level: u32,
+    entries: &mut Vec<TocEntry>,
+    counter: &mut u32,
+    doc: &EpubDoc<R>,
+) {
+    for nav_point in nav_points {
+        // Strip fragment identifier for spine lookup
+        let content_path = nav_point.content.to_string_lossy();
+        let path_without_fragment = content_path.split('#').next().unwrap_or("");
+
+        // Find the spine index by matching the NavPoint content path to spine items
+        let spine_index = find_spine_index_for_path(doc, path_without_fragment);
+
+        entries.push(TocEntry {
+            index: *counter,
+            title: nav_point.label.clone(),
+            href: nav_point.content.to_string_lossy().to_string(),
+            level,
+            spine_index,
+        });
+        *counter += 1;
+        if !nav_point.children.is_empty() {
+            flatten_toc(&nav_point.children, level + 1, entries, counter, doc);
+        }
+    }
+}
+
+/// Finds the spine index for a given content path by matching against the
+/// resource paths referenced in the spine.
+fn find_spine_index_for_path<R: std::io::Read + std::io::Seek>(
+    doc: &EpubDoc<R>,
+    path: &str,
+) -> Option<u32> {
+    for (i, spine_item) in doc.spine.iter().enumerate() {
+        // Look up the resource by the spine item's idref
+        if let Some(resource) = doc.resources.get(&spine_item.idref) {
+            let resource_path = resource.path.to_string_lossy();
+            // Compare paths — may need to strip prefixes
+            if resource_path == path
+                || resource_path.ends_with(path)
+                || path.ends_with(&*resource_path)
+            {
+                return Some(i as u32);
+            }
+        }
+    }
+    None
 }
 
 /// Returns the cover image bytes and MIME type for the book matching `book_id`.

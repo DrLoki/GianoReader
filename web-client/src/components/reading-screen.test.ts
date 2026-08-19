@@ -80,7 +80,7 @@ describe('reading-screen', () => {
     it('content area fills remaining viewport height', () => {
       const style = el.querySelector('style')?.textContent ?? '';
       expect(style).toContain('top: 0');
-      expect(style).toContain('bottom: 106px');
+      expect(style).toContain('bottom: 99px');
     });
 
     it('renders FAB group with Bookmark button', () => {
@@ -98,8 +98,9 @@ describe('reading-screen', () => {
   describe('Touch targets', () => {
     it('settings button has min-width and min-height of 44px', () => {
       const style = el.querySelector('style')?.textContent ?? '';
-      expect(style).toMatch(/\.settings-btn[^}]*min-width:\s*44px/s);
-      expect(style).toMatch(/\.settings-btn[^}]*min-height:\s*44px/s);
+      // settings-btn is styled via the .nav-icon-btn selector group
+      expect(style).toMatch(/\.nav-icon-btn[^}]*min-width:\s*44px/s);
+      expect(style).toMatch(/\.nav-icon-btn[^}]*min-height:\s*44px/s);
     });
 
     it('tab buttons have min-width and min-height of 44px', () => {

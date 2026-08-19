@@ -7,7 +7,7 @@
 
   "library.title": "Aklatan",
   "library.loading": "Naglo-load ng mga libro…",
-  "library.empty": "Walang available na libro sa server. Magdagdag ng mga libro sa pamamagitan ng GianoReader desktop app.",
+  "library.empty": "Walang available na libro sa server. Magdagdag ng mga libro sa online mode.",
   "library.error": "Hindi ma-load ang aklatan. Pakisuri ang iyong koneksyon.",
   "library.retry": "Subukang muli",
   "library.progress": "{progress}% nabasa",

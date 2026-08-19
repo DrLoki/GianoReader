@@ -7,7 +7,7 @@
 
   "library.title": "Biblioteka",
   "library.loading": "Duke ngarkuar librat…",
-  "library.empty": "Nuk ka libra të disponueshme në server. Shtoni libra përmes aplikacionit desktop GianoReader.",
+  "library.empty": "Nuk ka libra të disponueshme në server. Shtoni libra në modalitetin online.",
   "library.error": "Nuk u ngarkua biblioteka. Kontrolloni lidhjen tuaj.",
   "library.retry": "Riprovo",
   "library.progress": "{progress}% lexuar",

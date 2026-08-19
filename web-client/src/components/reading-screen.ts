@@ -9,6 +9,7 @@ import * as translationCache from '../cache/translation-cache';
 import type { CacheKey, ChapterResponse, Paragraph, ReadingState } from '../types';
 import { isOfflineMode, isLocalId, getLocalChapter } from '../api/local-db';
 import './card-ui';
+import './toc-sheet';
 
 /**
  * <reading-screen> — Main reading view with header, card area, and FAB group.
@@ -123,7 +124,7 @@ class ReadingScreen extends HTMLElement {
 
         reading-screen .reading-header {
           position: fixed;
-          bottom: 55px;
+          bottom: 48px;
           left: 0;
           width: 100%;
           height: 48px;
@@ -139,7 +140,10 @@ class ReadingScreen extends HTMLElement {
           z-index: 50;
         }
 
-        reading-screen .fab-library-btn {
+        reading-screen .toc-btn,
+        reading-screen .fab-library-btn,
+        reading-screen .fab-bookmark,
+        reading-screen .nav-icon-btn {
           min-width: 44px;
           min-height: 44px;
           width: 44px;
@@ -149,36 +153,31 @@ class ReadingScreen extends HTMLElement {
           justify-content: center;
           border: none;
           background: transparent;
-          font-size: 1.4rem;
+          font-size: 1.25rem;
           cursor: pointer;
           border-radius: 8px;
           color: var(--text-color, #e0e0e0);
+          transition: background 0.15s;
         }
 
+        reading-screen .toc-btn:hover,
+        reading-screen .toc-btn:focus-visible,
         reading-screen .fab-library-btn:hover,
-        reading-screen .fab-library-btn:focus-visible {
+        reading-screen .fab-library-btn:focus-visible,
+        reading-screen .fab-bookmark:hover,
+        reading-screen .fab-bookmark:focus-visible,
+        reading-screen .nav-icon-btn:hover,
+        reading-screen .nav-icon-btn:focus-visible {
           background: var(--hover-bg, rgba(255, 255, 255, 0.1));
         }
 
-        reading-screen .settings-btn {
-          min-width: 44px;
-          min-height: 44px;
-          width: 44px;
-          height: 44px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: none;
+        reading-screen .nav-icon-btn:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+        }
+
+        reading-screen .nav-icon-btn:disabled:hover {
           background: transparent;
-          font-size: 1.4rem;
-          cursor: pointer;
-          border-radius: 8px;
-          color: var(--text-color, #e0e0e0);
-        }
-
-        reading-screen .settings-btn:hover,
-        reading-screen .settings-btn:focus-visible {
-          background: var(--hover-bg, rgba(255, 255, 255, 0.1));
         }
 
         reading-screen .tab-group {
@@ -217,7 +216,7 @@ class ReadingScreen extends HTMLElement {
           top: 0;
           left: 0;
           right: 0;
-          bottom: 106px;
+          bottom: 99px;
           overflow: hidden;
         }
 
@@ -233,37 +232,16 @@ class ReadingScreen extends HTMLElement {
           }
         }
 
-        reading-screen .fab-bookmark {
-          min-width: 44px;
-          min-height: 44px;
-          width: 44px;
-          height: 44px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: none;
-          background: transparent;
-          font-size: 1.4rem;
-          cursor: pointer;
-          border-radius: 8px;
-          color: var(--text-color, #e0e0e0);
-        }
-
-        reading-screen .fab-bookmark:hover,
-        reading-screen .fab-bookmark:focus-visible {
-          background: var(--hover-bg, rgba(255, 255, 255, 0.1));
-        }
-
         reading-screen .chapter-nav {
           position: fixed;
           bottom: 0;
           left: 0;
           right: 0;
-          height: 52px;
+          height: 48px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 0 12px;
+          padding: 0 4px;
           padding-bottom: env(safe-area-inset-bottom, 0px);
           background: color-mix(in srgb, var(--header-bg, #1a1a1a) 85%, transparent);
           backdrop-filter: blur(10px);
@@ -272,9 +250,16 @@ class ReadingScreen extends HTMLElement {
           z-index: 40;
         }
 
+        reading-screen .chapter-nav-left,
+        reading-screen .chapter-nav-right {
+          display: flex;
+          align-items: center;
+          gap: 0;
+        }
+
         reading-screen .reading-progress {
           position: fixed;
-          bottom: 103px;
+          bottom: 96px;
           left: 0;
           right: 0;
           height: 3px;
@@ -297,34 +282,6 @@ class ReadingScreen extends HTMLElement {
           font-size: 0.6rem;
           color: var(--text-muted, #999);
           pointer-events: none;
-        }
-
-        reading-screen .chapter-nav-btn {
-          min-width: 44px;
-          min-height: 44px;
-          padding: 8px 16px;
-          border: none;
-          background: transparent;
-          color: var(--text-color, #e0e0e0);
-          font-size: 0.9rem;
-          font-weight: 500;
-          cursor: pointer;
-          border-radius: 6px;
-          transition: background 0.15s;
-        }
-
-        reading-screen .chapter-nav-btn:hover,
-        reading-screen .chapter-nav-btn:focus-visible {
-          background: var(--hover-bg, rgba(255, 255, 255, 0.1));
-        }
-
-        reading-screen .chapter-nav-btn:disabled {
-          opacity: 0.3;
-          cursor: not-allowed;
-        }
-
-        reading-screen .chapter-nav-btn:disabled:hover {
-          background: transparent;
         }
 
         reading-screen .translation-placeholder {
@@ -360,7 +317,7 @@ class ReadingScreen extends HTMLElement {
         <span class="reading-progress-label">0%</span>
       </div>
       <header class="reading-header">
-        <button class="fab-library-btn" aria-label="${t('fab.library')}"><img class="icon" src="/icons/book-bookmark.svg" alt="" aria-hidden="true"></button>
+        <button class="toc-btn" aria-label="${t('reading.toc')}"><img class="icon" src="/icons/list.svg" alt="" aria-hidden="true"></button>
         <div class="tab-group" role="tablist">
           <button class="tab-btn tab-original active" role="tab" aria-selected="true" aria-label="${t('reading.tabOriginal')}">${t('reading.tabOriginal')}</button>
           <button class="tab-btn tab-translated" role="tab" aria-selected="false" aria-label="${t('reading.tabTranslated')}">${t('reading.tabTranslated')}</button>
@@ -368,9 +325,14 @@ class ReadingScreen extends HTMLElement {
         <button class="fab-bookmark" aria-label="${t('fab.bookmark')}"><img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"></button>
       </header>
       <nav class="chapter-nav">
-        <button class="chapter-nav-btn nav-prev" aria-label="${t('reading.prevChapter')}">← ${t('reading.prevChapter')}</button>
-        <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}"><img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true"></button>
-        <button class="chapter-nav-btn nav-next" aria-label="${t('reading.nextChapter')}">${t('reading.nextChapter')} →</button>
+        <div class="chapter-nav-left">
+          <button class="nav-icon-btn fab-library-btn" aria-label="${t('fab.library')}"><img class="icon" src="/icons/house.svg" alt="" aria-hidden="true"></button>
+          <button class="nav-icon-btn settings-btn" aria-label="${t('reading.settingsTooltip')}"><img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true"></button>
+        </div>
+        <div class="chapter-nav-right">
+          <button class="nav-icon-btn nav-prev" aria-label="${t('reading.prevChapter')}"><img class="icon" src="/icons/chevron-left.svg" alt="" aria-hidden="true"></button>
+          <button class="nav-icon-btn nav-next" aria-label="${t('reading.nextChapter')}"><img class="icon" src="/icons/chevron-right.svg" alt="" aria-hidden="true"></button>
+        </div>
       </nav>
     `;
   }
@@ -446,6 +408,12 @@ class ReadingScreen extends HTMLElement {
     nextBtn?.addEventListener('click', () => {
       this.loadChapter(this.currentChapter + 1);
     });
+
+    // TOC button: open the TOC/Bookmarks sheet
+    const tocBtn = this.querySelector('.toc-btn') as HTMLButtonElement;
+    tocBtn?.addEventListener('click', () => {
+      this.openTocSheet();
+    });
   }
 
   private activateTab(
@@ -459,6 +427,37 @@ class ReadingScreen extends HTMLElement {
     inactiveBtn.classList.remove('active');
     inactiveBtn.setAttribute('aria-selected', 'false');
     cardUi?.switchTo(card);
+  }
+
+  /**
+   * Opens the TOC/Bookmarks bottom sheet.
+   */
+  private openTocSheet(): void {
+    // Avoid opening multiple sheets
+    if (document.querySelector('toc-sheet')) return;
+
+    const sheet = document.createElement('toc-sheet') as HTMLElement & {
+      bookId: string;
+      currentChapter: number;
+    };
+    sheet.bookId = this.bookId;
+    sheet.currentChapter = this.currentChapter;
+    document.body.appendChild(sheet);
+
+    // Listen for chapter navigation from the TOC sheet
+    sheet.addEventListener('navigate-chapter', ((e: CustomEvent<{ chapterIndex: number }>) => {
+      this.loadChapter(e.detail.chapterIndex);
+    }) as EventListener);
+
+    // Listen for bookmark navigation from the TOC sheet
+    sheet.addEventListener('navigate-bookmark', ((e: CustomEvent<{ chapterIndex: number; paragraphId: string }>) => {
+      this.initialState = {
+        ...this.initialState,
+        currentChapter: e.detail.chapterIndex,
+        paragraphId: e.detail.paragraphId,
+      };
+      this.loadChapter(e.detail.chapterIndex);
+    }) as EventListener);
   }
 
   /**

@@ -21,6 +21,8 @@ pub struct TocEntry {
     pub index: u32,
     pub title: String,
     pub href: String,
+    pub level: u32,
+    pub spine_index: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -7,7 +7,7 @@
 
   "library.title": "Biblioteca",
   "library.loading": "Cargando libros…",
-  "library.empty": "No hay libros disponibles en el servidor. Añada libros a través de la aplicación de escritorio GianoReader.",
+  "library.empty": "No hay libros disponibles en el servidor. Añada libros en modo online.",
   "library.error": "No se pudo cargar la biblioteca. Compruebe su conexión.",
   "library.retry": "Reintentar",
   "library.progress": "{progress}% leído",

@@ -7,7 +7,7 @@
 
   "library.title": "المكتبة",
   "library.loading": "جارٍ تحميل الكتب…",
-  "library.empty": "لا توجد كتب متاحة على الخادم. أضف كتبًا من خلال تطبيق GianoReader لسطح المكتب.",
+  "library.empty": "لا توجد كتب متاحة على الخادم. أضف كتبًا في وضع الاتصال.",
   "library.error": "تعذّر تحميل المكتبة. يرجى التحقق من الاتصال.",
   "library.retry": "إعادة المحاولة",
   "library.progress": "تمت قراءة {progress}%",

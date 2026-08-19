@@ -7,7 +7,7 @@
 
   "library.title": "ライブラリ",
   "library.loading": "書籍を読み込み中…",
-  "library.empty": "サーバーに書籍がありません。GianoReader デスクトップアプリから書籍を追加してください。",
+  "library.empty": "サーバーに書籍がありません。オンラインモードで書籍を追加してください。",
   "library.error": "ライブラリを読み込めませんでした。接続を確認してください。",
   "library.retry": "再試行",
   "library.progress": "{progress}% 既読",

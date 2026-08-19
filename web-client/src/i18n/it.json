@@ -7,7 +7,7 @@
 
   "library.title": "Libreria",
   "library.loading": "Caricamento libri…",
-  "library.empty": "Nessun libro disponibile sul server. Aggiungi libri tramite l'app desktop GianoReader.",
+  "library.empty": "Nessun libro disponibile sul server. Aggiungi libri in modalità online.",
   "library.error": "Impossibile caricare la libreria. Controlla la connessione.",
   "library.retry": "Riprova",
   "library.progress": "{progress}% letto",
@@ -24,6 +24,8 @@
   "reading.translationError": "Traduzione fallita — tocca per riprovare",
   "reading.prevChapter": "Capitolo precedente",
   "reading.nextChapter": "Capitolo successivo",
+  "reading.toc": "Indice",
+  "reading.tocEmpty": "Nessun capitolo disponibile",
 
   "card.originalLabel": "Testo originale",
   "card.translatedLabel": "Testo tradotto",
@@ -72,5 +74,7 @@
   "offline.switchToOffline": "Usa in modalità locale (Offline)",
   "offline.switchToOnline": "Torna alla modalità Server (Online)",
   "offline.localMode": "Locale (Offline)",
-  "offline.translationRequiresInternet": "La traduzione richiede una connessione internet"
+  "offline.translationRequiresInternet": "La traduzione richiede una connessione internet",
+  "offline.deleteBook": "Elimina libro",
+  "offline.bookDeleted": "Libro eliminato"
 }

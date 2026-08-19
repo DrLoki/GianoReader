@@ -13,6 +13,8 @@ export interface TocEntry {
   index: number;
   title: string;
   href: string;
+  level: number;
+  spineIndex: number | null;
 }
 
 export interface ChapterResponse {

@@ -7,7 +7,7 @@
 
   "library.title": "书库",
   "library.loading": "正在加载书籍…",
-  "library.empty": "服务器上没有可用的书籍。请通过 GianoReader 桌面应用添加书籍。",
+  "library.empty": "服务器上没有可用的书籍。请在在线模式下添加书籍。",
   "library.error": "无法加载书库。请检查您的连接。",
   "library.retry": "重试",
   "library.progress": "已读 {progress}%",

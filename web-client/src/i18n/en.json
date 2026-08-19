@@ -7,7 +7,7 @@
 
   "library.title": "Library",
   "library.loading": "Loading books…",
-  "library.empty": "No books available on the server. Add books through the GianoReader desktop app.",
+  "library.empty": "No books available on the server. Add books in online mode.",
   "library.error": "Could not load library. Please check your connection.",
   "library.retry": "Retry",
   "library.progress": "{progress}% read",
@@ -24,6 +24,8 @@
   "reading.translationError": "Translation failed — tap to retry",
   "reading.prevChapter": "Previous chapter",
   "reading.nextChapter": "Next chapter",
+  "reading.toc": "Contents",
+  "reading.tocEmpty": "No chapters available",
 
   "card.originalLabel": "Original text",
   "card.translatedLabel": "Translated text",
@@ -72,5 +74,7 @@
   "offline.switchToOffline": "Use in local mode (Offline)",
   "offline.switchToOnline": "Switch back to Server mode (Online)",
   "offline.localMode": "Local (Offline)",
-  "offline.translationRequiresInternet": "Translation requires an internet connection"
+  "offline.translationRequiresInternet": "Translation requires an internet connection",
+  "offline.deleteBook": "Delete book",
+  "offline.bookDeleted": "Book deleted"
 }

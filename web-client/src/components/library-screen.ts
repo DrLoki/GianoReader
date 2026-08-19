@@ -11,6 +11,7 @@ import {
   getOfflineCachedIds,
   downloadBookForOffline,
   removeOfflineBook,
+  deleteLocalBook,
 } from '../api/local-db';
 
 
@@ -308,6 +309,8 @@ class LibraryScreen extends HTMLElement {
           this.handleDownloadOffline(bookId);
         } else if (action === 'remove') {
           this.handleRemoveOffline(bookId);
+        } else if (action === 'delete-local') {
+          this.handleDeleteLocalBook(bookId);
         }
       });
     });
@@ -353,6 +356,19 @@ class LibraryScreen extends HTMLElement {
       console.error('Failed to remove offline copy:', err);
     } finally {
       this.refreshCardControl(bookId);
+    }
+  }
+
+  /** Handles the delete button for locally imported books: removes from IndexedDB and refreshes. */
+  private async handleDeleteLocalBook(bookId: string): Promise<void> {
+    try {
+      await deleteLocalBook(bookId);
+      this.books = this.books.filter((b) => b.id !== bookId);
+      this.applyFilters();
+      showToast(t('offline.bookDeleted'), 'success');
+    } catch (err) {
+      console.error('Failed to delete local book:', err);
+      showToast(t('toast.errorGeneric'), 'error');
     }
   }
 
@@ -529,6 +545,7 @@ class LibraryScreen extends HTMLElement {
       : '';
 
     const offlineControl = (!isOfflineMode() && !isLocalId(book.id)) ? this.renderOfflineControl(book.id) : '';
+    const deleteControl = isLocalId(book.id) ? `<button class="offline-btn offline-btn--delete" data-book-id="${book.id}" data-action="delete-local" aria-label="${t('offline.deleteBook')}"><img class="icon delete-icon" src="/icons/trash-solid.svg" alt="" aria-hidden="true"> ${t('offline.deleteBook')}</button>` : '';
 
     return `
       <div class="book-card" role="listitem" tabindex="0" data-book-id="${book.id}"
@@ -542,6 +559,7 @@ class LibraryScreen extends HTMLElement {
           <p class="book-author">${escapeHtml(book.author)}</p>
           <p class="book-progress">${escapeHtml(progressText)}</p>
           ${offlineControl}
+          ${deleteControl}
         </div>
       </div>
     `;
@@ -973,6 +991,26 @@ class LibraryScreen extends HTMLElement {
 
     .offline-btn--cached:hover {
       background: rgba(46, 125, 50, 0.15);
+    }
+
+    .offline-btn--delete {
+      border-color: #c62828;
+      color: #e53935;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .offline-btn--delete:hover {
+      background: rgba(198, 40, 40, 0.15);
+    }
+
+    .offline-btn--delete .delete-icon {
+      width: 0.85em;
+      height: 0.85em;
+      filter: none;
+      opacity: 0.8;
     }
 
     .offline-control--progress {
