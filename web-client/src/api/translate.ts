@@ -49,7 +49,7 @@ function getWorkerUrl(): string {
   return 'https://translate.googleapis.com/translate_a/single';
 }
 
-async function translateChunkOffline(text: string, targetLang: string): Promise<string> {
+async function translateChunkOffline(text: string, sourceLang: string, targetLang: string): Promise<string> {
   const baseUrl = getWorkerUrl();
   // If we're falling back to translate.googleapis.com while truly offline,
   // navigator.onLine === false gives us a quick hint to fail fast with a
@@ -57,7 +57,8 @@ async function translateChunkOffline(text: string, targetLang: string): Promise<
   if (!navigator.onLine && baseUrl.includes('translate.googleapis.com')) {
     throw new Error('OFFLINE_NO_INTERNET');
   }
-  const url = `${baseUrl}?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+  const sl = sourceLang || 'auto';
+  const url = `${baseUrl}?client=gtx&sl=${sl}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Translation proxy error: ${res.status}`);
   const data = await res.json();
@@ -66,6 +67,7 @@ async function translateChunkOffline(text: string, targetLang: string): Promise<
 
 async function postTranslateOffline(
   paragraphs: string[],
+  sourceLang: string,
   targetLang: string
 ): Promise<string[]> {
   const results = new Array(paragraphs.length).fill('');
@@ -89,7 +91,7 @@ async function postTranslateOffline(
   }
 
   for (const batch of batches) {
-    const translated = await translateChunkOffline(batch.text, targetLang);
+    const translated = await translateChunkOffline(batch.text, sourceLang, targetLang);
     const parts = translated.split(/\n\n+/);
     const count = batch.end - batch.start;
 
@@ -104,7 +106,7 @@ async function postTranslateOffline(
       // this batch individually to avoid losing/misaligning text.
       for (let j = 0; j < count; j++) {
         const idx = batch.start + j;
-        const single = await translateChunkOffline(paragraphs[idx], targetLang);
+        const single = await translateChunkOffline(paragraphs[idx], sourceLang, targetLang);
         results[idx] = single.trim();
       }
     }
@@ -127,7 +129,7 @@ export async function postTranslate(
   targetLang: string,
 ): Promise<string[]> {
   if (isOfflineMode()) {
-    return postTranslateOffline(texts, targetLang);
+    return postTranslateOffline(texts, sourceLang, targetLang);
   }
 
   const response = await apiFetch('/api/translate', {

@@ -371,6 +371,20 @@ export async function deleteLocalBookmark(bookmarkId: string): Promise<void> {
 
 // ── Client-side EPUB Parser & Import ──────────────────────────────────────────
 
+/**
+ * Generates a paragraph ID matching the Rust backend's `generate_paragraph_id`:
+ * SHA-256(bookId + chapterIndex + paragraphIndex) → first 8 bytes → 16 hex chars.
+ */
+export async function generateParagraphId(bookId: string, chapterIndex: number, paragraphIndex: number): Promise<string> {
+  const input = `${bookId}${chapterIndex}${paragraphIndex}`;
+  const encoded = new TextEncoder().encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  const hashArray = new Uint8Array(hashBuffer);
+  return Array.from(hashArray.slice(0, 8))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 function safeInnerHtml(el: HTMLElement): string {
   const clone = el.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('script, style').forEach((n) => n.remove());
@@ -389,6 +403,38 @@ function safeInnerHtml(el: HTMLElement): string {
   return clone.innerHTML;
 }
 
+/**
+ * Checks if an HTML tag string is in the allowed set: em, strong, a, span
+ * (opening and closing variants, with optional attributes for a and span).
+ */
+function isAllowedTag(tag: string): boolean {
+  return /^<\/?(em|strong|a|span)(\s[^>]*)?>$/i.test(tag);
+}
+
+/**
+ * Strips all HTML tags except em, strong, a, span (and their closing variants),
+ * preserving text content. Matches the Rust backend's `strip_disallowed_tags` behavior.
+ */
+export function stripDisallowedTags(html: string): string {
+  let result = '';
+  let pos = 0;
+  while (pos < html.length) {
+    if (html[pos] === '<') {
+      const tagEnd = html.indexOf('>', pos);
+      if (tagEnd === -1) { result += html[pos]; pos++; continue; }
+      const tag = html.slice(pos, tagEnd + 1);
+      if (isAllowedTag(tag)) {
+        result += tag;
+      }
+      pos = tagEnd + 1;
+    } else {
+      result += html[pos];
+      pos++;
+    }
+  }
+  return result;
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -397,7 +443,7 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function extractParagraphs(body: HTMLElement): any[] {
+async function extractParagraphs(body: HTMLElement, bookId: string, chapterIndex: number): Promise<any[]> {
   const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
   const rawBlocks = body.querySelectorAll?.(selectors.join(', '));
   // Un <blockquote> che contiene a sua volta p/h*/li/blockquote (blocchi già
@@ -412,43 +458,38 @@ function extractParagraphs(body: HTMLElement): any[] {
     : rawBlocks;
   if (blocks && blocks.length > 0) {
     const r: any[] = [];
-    const seenIds = new Set<string>();
-    blocks.forEach((el, index) => {
+    let paragraphIndex = 0;
+    for (let index = 0; index < blocks.length; index++) {
+      const el = blocks[index];
       const text = (el.textContent || '').trim();
-      if (!text) return;
-      let id = el.id || null;
-      if (!id) {
-        let parent = el.parentElement;
-        while (parent && parent !== body) {
-          if (parent.id) {
-            id = parent.id;
-            break;
-          }
-          parent = parent.parentElement;
-        }
-      }
-      if (id && seenIds.has(id)) id = null;
-      if (id) seenIds.add(id);
+      if (!text) continue;
+      const id = await generateParagraphId(bookId, chapterIndex, paragraphIndex);
+      paragraphIndex++;
       r.push({
         text,
-        html: safeInnerHtml(el as HTMLElement),
-        id: id || `p-${index}`,
+        html: stripDisallowedTags(safeInnerHtml(el as HTMLElement)),
+        id,
         index,
       });
-    });
+    }
     if (r.length) return r;
   }
   // Fallback: split per newline
-  return (body.textContent || '')
+  const lines = (body.textContent || '')
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l.length > 2)
-    .map((text, index) => ({
-      text,
-      html: escapeHtml(text),
-      id: `p-fallback-${index}`,
+    .filter((l) => l.length > 2);
+  const fallbackResult: any[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const id = await generateParagraphId(bookId, chapterIndex, index);
+    fallbackResult.push({
+      text: lines[index],
+      html: escapeHtml(lines[index]),
+      id,
       index,
-    }));
+    });
+  }
+  return fallbackResult;
 }
 
 export async function parseAndSaveEpub(file: File): Promise<string> {
@@ -503,7 +544,7 @@ export async function parseAndSaveEpub(file: File): Promise<string> {
         if (doc) {
           const body = doc.body || doc.querySelector('body');
           if (body) {
-            const paragraphs = extractParagraphs(body);
+            const paragraphs = await extractParagraphs(body, bookId, i);
             chapters.push({
               chapterIndex: i,
               paragraphs,
