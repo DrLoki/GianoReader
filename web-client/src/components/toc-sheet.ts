@@ -375,8 +375,9 @@ class TocSheet extends HTMLElement {
     content.innerHTML = `<ul class="toc-list">${this.tocEntries.map((entry) => {
       const isActive = entry.spineIndex === this._currentChapter;
       const indent = (entry.level ?? 0) * 16;
+      const fragment = entry.href?.includes('#') ? entry.href.split('#')[1] : '';
       return `
-        <li class="toc-item${isActive ? ' toc-item--active' : ''}" tabindex="0" data-chapter="${entry.spineIndex ?? entry.index}" style="padding-left: ${8 + indent}px">
+        <li class="toc-item${isActive ? ' toc-item--active' : ''}" tabindex="0" data-chapter="${entry.spineIndex ?? entry.index}" data-fragment="${escapeHtml(fragment)}" style="padding-left: ${8 + indent}px">
           <span class="toc-item-title">${escapeHtml(entry.title || `Chapter ${entry.index + 1}`)}</span>
         </li>`;
     }).join('')}</ul>`;
@@ -384,9 +385,10 @@ class TocSheet extends HTMLElement {
     content.querySelectorAll<HTMLElement>('.toc-item').forEach((item) => {
       item.addEventListener('click', () => {
         const chapterIndex = parseInt(item.dataset.chapter || '0', 10);
+        const fragment = item.dataset.fragment || '';
         this.dispatchEvent(new CustomEvent('navigate-chapter', {
           bubbles: true, composed: true,
-          detail: { chapterIndex },
+          detail: { chapterIndex, fragment },
         }));
         this.close();
       });

@@ -445,7 +445,13 @@ class ReadingScreen extends HTMLElement {
     document.body.appendChild(sheet);
 
     // Listen for chapter navigation from the TOC sheet
-    sheet.addEventListener('navigate-chapter', ((e: CustomEvent<{ chapterIndex: number }>) => {
+    sheet.addEventListener('navigate-chapter', ((e: CustomEvent<{ chapterIndex: number; fragment?: string }>) => {
+      // Se c'è un anchor fragment (es. #c5), impostalo come target di scroll
+      this.initialState = {
+        ...this.initialState,
+        currentChapter: e.detail.chapterIndex,
+        paragraphId: e.detail.fragment || null,
+      };
       this.loadChapter(e.detail.chapterIndex);
     }) as EventListener);
 
@@ -594,14 +600,24 @@ class ReadingScreen extends HTMLElement {
   /**
    * Restores scroll position from the initial reading state.
    * Prioritises paragraphId; falls back to scrollOffset.
+   * Also handles EPUB native anchors ([id=...]) for TOC fragment navigation.
    */
   private restoreScrollPosition(slot: HTMLElement): void {
     if (this.initialState.paragraphId) {
+      // 1. Cerca per data-id (bookmark / paragrafo estratto)
       const target = slot.querySelector<HTMLElement>(
         `[data-id="${this.initialState.paragraphId}"]`
       );
       if (target) {
         target.scrollIntoView({ block: 'start' });
+        return;
+      }
+      // 2. Fallback: cerca per id nativo EPUB (anchor TOC come #c5 su <div>/<section>)
+      const nativeTarget = slot.querySelector<HTMLElement>(
+        `[id="${this.initialState.paragraphId}"]`
+      );
+      if (nativeTarget) {
+        nativeTarget.scrollIntoView({ block: 'start' });
         return;
       }
     }

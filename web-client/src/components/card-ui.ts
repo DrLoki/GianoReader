@@ -309,6 +309,14 @@ class CardUI extends HTMLElement {
           line-height: 1.7;
           color: var(--text-color, #e0e0e0);
         }
+
+        card-ui .card-content p {
+          margin: 0 0 1.3em 0;
+        }
+
+        card-ui .card-content p:last-child {
+          margin-bottom: 0;
+        }
       </style>
       <div class="card-panel card-original" aria-label="${t('card.originalLabel')}">
         <div class="card-label">${t('card.originalLabel')}</div>

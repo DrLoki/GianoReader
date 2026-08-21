@@ -11,6 +11,7 @@ let book = null;                    // istanza epubjs corrente
 let currentSpineItems = [];         // lista capitoli spine EPUB
 let currentSpineIndex = 0;          // indice capitolo corrente
 let currentChapterParagraphs = [];  // paragrafi del capitolo corrente
+let currentChapterBody = null;      // body DOM del capitolo corrente (per navigazione anchor)
 let chapterLengths = [];            // lunghezza testo per capitolo (in caratteri)
 let chapterCumulativePct = [];      // posizione % cumulativa di ogni capitolo (0–100)
 let syncingScroll = false;          // lock per evitare loop nello scroll sincronizzato
@@ -2257,13 +2258,54 @@ function scrollToAnchor(anchor) {
 // Scrolla all'elemento con id corrispondente nel pannello testo originale
 function scrollToTocAnchor(anchor) {
   if (!anchor) return;
-  // Look for the element in the text panel first
+
+  // 1. Cerca direttamente nel viewer (id già propagato da extractParagraphs)
   const target = originalViewer.querySelector(`[id="${anchor}"]`);
   if (target) {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
-  // If in native/original view mode, try the iframe
+
+  // 2. Fallback: usa il DOM del capitolo originale per mappare la posizione
+  //    dell'ancora al paragrafo più vicino nel viewer.
+  if (currentChapterBody && currentViewMode !== 'original') {
+    const anchorEl = currentChapterBody.querySelector(`[id="${anchor}"], [name="${anchor}"]`);
+    if (anchorEl) {
+      // Raccogli tutti i blocchi estratti nel documento originale (stesso selettore di extractParagraphs)
+      const blockSelectors = 'p, h1, h2, h3, h4, h5, h6, li, blockquote';
+      const allBlocks = Array.from(currentChapterBody.querySelectorAll(blockSelectors))
+        .filter(el => (el.textContent || '').trim());
+      if (allBlocks.length) {
+        // Trova il blocco immediatamente dopo (o che contiene) l'ancora
+        let bestIdx = 0;
+        for (let i = 0; i < allBlocks.length; i++) {
+          // Confronto posizione DOM: se il blocco viene dopo l'ancora, fermati
+          const pos = anchorEl.compareDocumentPosition(allBlocks[i]);
+          if (pos & Node.DOCUMENT_POSITION_FOLLOWING) {
+            bestIdx = i;
+            break;
+          }
+          // Se l'ancora è dentro il blocco o prima, questo è il candidato
+          if (pos & Node.DOCUMENT_POSITION_CONTAINED_BY || pos === 0) {
+            bestIdx = i;
+            break;
+          }
+          bestIdx = i; // aggiorna continuamente (prende l'ultimo "precedente")
+        }
+        // Mappa l'indice blocco → paragrafo nel viewer
+        const viewerParagraphs = originalViewer.querySelectorAll('p[data-idx]');
+        if (viewerParagraphs.length > bestIdx) {
+          viewerParagraphs[bestIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        } else if (viewerParagraphs.length > 0) {
+          viewerParagraphs[viewerParagraphs.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+      }
+    }
+  }
+
+  // 3. Se in native/original view mode, prova l'iframe
   if (currentViewMode === 'original') {
     scrollToAnchor(anchor);
   }
@@ -2729,6 +2771,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
     chapterLengths = [];
     chapterCumulativePct = [];
     currentChapterParagraphs = [];
+    currentChapterBody = null;
     currentFilePath = null;
   }
   // Clear PDF state when loading EPUB
@@ -3170,6 +3213,7 @@ async function displayChapter(index, scrollPct = 0) {
     if (currentSpineIndex !== myIndex) return;
     if (!body) throw new Error('documento capitolo null');
 
+    currentChapterBody = body;
     currentChapterParagraphs = extractParagraphs(body);
     if (currentSpineIndex !== myIndex) return;
     updateProgress();
@@ -3306,33 +3350,44 @@ function renderToc(items, parent = tocList) {
       }
     });
 
-    const handleTranslateTooltip = async () => {
+    let tooltipDebounceTimer = null;
+    const handleTranslateTooltip = () => {
       const currentLang = langSelect.value;
       const originalText = a.textContent.trim();
 
+      // Già tradotto per questa lingua → mostra subito
       if (a.dataset.translatedLang === currentLang && a.dataset.translatedTitle) {
         a.title = a.dataset.translatedTitle;
         return;
       }
 
-      if (a.dataset.translating === 'true') return;
-      a.dataset.translating = 'true';
-      a.title = t(currentLang, 'loading') || '...';
+      // Debounce: aspetta che l'utente si fermi sulla voce prima di chiamare l'API
+      clearTimeout(tooltipDebounceTimer);
+      tooltipDebounceTimer = setTimeout(async () => {
+        if (a.dataset.translating === 'true') return;
+        a.dataset.translating = 'true';
 
-      try {
-        const translated = await translateParagraphs([originalText], currentLang);
-        if (translated && translated[0]) {
-          a.dataset.translatedTitle = translated[0];
-          a.dataset.translatedLang = currentLang;
-          a.title = translated[0];
+        try {
+          const translated = await translateParagraphs([originalText], currentLang);
+          if (translated && translated[0]) {
+            a.dataset.translatedTitle = translated[0];
+            a.dataset.translatedLang = currentLang;
+            a.title = translated[0];
+          }
+        } catch (err) {
+          // 429 = rate limit: gestisci silenziosamente, riprova al prossimo hover
+          if (err?.message?.includes('429')) {
+            a.title = originalText;
+          } else {
+            console.warn('Error translating chapter title:', err);
+            a.title = originalText;
+          }
+        } finally {
+          a.dataset.translating = 'false';
         }
-      } catch (err) {
-        console.error('Error translating chapter title:', err);
-        a.title = originalText;
-      } finally {
-        a.dataset.translating = 'false';
-      }
+      }, 400);
     };
+    a.addEventListener('mouseleave', () => clearTimeout(tooltipDebounceTimer));
     a.addEventListener('mouseenter', handleTranslateTooltip);
     a.addEventListener('focus', handleTranslateTooltip);
 
