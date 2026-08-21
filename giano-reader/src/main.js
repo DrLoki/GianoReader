@@ -3940,7 +3940,8 @@ async function addEntries(newEntries) {
 async function removeEntry(id) {
   const lib = await loadLibrary();
   await saveLibrary(lib.filter(e => e.id !== id));
-  await renderLibraryGrid();
+  const { query, status } = getLibFilters();
+  await renderLibraryGrid(query, status);
 }
 
 async function readDirRecursive(dirPath, maxDepth = 3) {
