@@ -465,11 +465,13 @@ async function extractParagraphs(body: HTMLElement, bookId: string, chapterIndex
       if (!text) continue;
       const id = await generateParagraphId(bookId, chapterIndex, paragraphIndex);
       paragraphIndex++;
+      const nativeId = (el as HTMLElement).id || undefined;
       r.push({
         text,
         html: stripDisallowedTags(safeInnerHtml(el as HTMLElement)),
         id,
         index,
+        ...(nativeId ? { nativeId } : {}),
       });
     }
     if (r.length) return r;

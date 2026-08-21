@@ -40,6 +40,8 @@ pub struct Paragraph {
     pub index: u32,
     pub html: String,  // sanitised inner HTML (em/strong/a/span only)
     pub text: String,  // plain text, all tags stripped
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_id: Option<String>, // original EPUB id attribute from the block-level tag
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

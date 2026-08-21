@@ -28,6 +28,7 @@ export interface Paragraph {
   index: number;
   html: string;
   text: string;
+  nativeId?: string;
 }
 
 export interface ReadingState {

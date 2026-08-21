@@ -284,6 +284,11 @@ class ReadingScreen extends HTMLElement {
           pointer-events: none;
         }
 
+        reading-screen .translation-pending {
+          color: var(--text-muted, #999);
+          opacity: 0.5;
+        }
+
         reading-screen .translation-placeholder {
           background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
           background-size: 200% 100%;
@@ -555,11 +560,11 @@ class ReadingScreen extends HTMLElement {
 
     // Render paragraphs into both slots
     originalSlot.innerHTML = chapter.paragraphs.map(p =>
-      `<p data-index="${p.index}" data-id="${p.id}">${p.html}</p>`
+      `<p data-index="${p.index}" data-id="${p.id}"${p.nativeId ? ` id="${p.nativeId}"` : ''}>${p.html}</p>`
     ).join('');
 
     translatedSlot.innerHTML = chapter.paragraphs.map(p =>
-      `<p data-index="${p.index}" data-id="${p.id}" class="translation-placeholder"></p>`
+      `<p data-index="${p.index}" data-id="${p.id}" class="translation-pending">${p.text}</p>`
     ).join('');
 
     // Scroll to saved position after rendering, then set up observer
@@ -869,8 +874,9 @@ class ReadingScreen extends HTMLElement {
   private showPlaceholder(translatedSlot: HTMLElement, index: number): void {
     const el = translatedSlot.querySelector<HTMLElement>(`[data-index="${index}"]`);
     if (el) {
-      el.className = 'translation-placeholder';
-      el.textContent = '';
+      el.className = 'translation-pending';
+      const paragraph = this.paragraphData[index];
+      el.textContent = paragraph?.text || '';
     }
   }
 

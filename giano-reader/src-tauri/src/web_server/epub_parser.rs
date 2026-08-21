@@ -466,11 +466,16 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
         let index = paragraphs.len() as u32;
         let id = generate_paragraph_id(book_id, chapter_index, index);
 
+        // Extract native id attribute from the opening block tag
+        let opening_tag = &content[tag_start..tag_end];
+        let native_id = extract_id_attribute(opening_tag);
+
         paragraphs.push(Paragraph {
             id,
             index,
             html: html.trim().to_string(),
             text: trimmed_text.to_string(),
+            native_id,
         });
 
         search_from = skip_past_closing_tag(content, close_tag);
@@ -662,6 +667,38 @@ fn strip_all_tags(html: &str) -> String {
     }
 
     result
+}
+
+/// Extracts the value of the `id` attribute from an opening HTML tag string.
+/// E.g. `<h2 id="chapter5" class="x">` → Some("chapter5")
+/// Returns None if no id attribute is found.
+fn extract_id_attribute(tag: &str) -> Option<String> {
+    // Look for id= (case-insensitive) preceded by whitespace
+    let lower = tag.to_ascii_lowercase();
+    let id_pos = lower.find(" id=")?;
+    let after_eq = id_pos + 4; // skip " id="
+    let rest = &tag[after_eq..];
+    let rest = rest.trim_start();
+
+    if rest.starts_with('"') {
+        // id="value"
+        let value_start = 1;
+        let value_end = rest[value_start..].find('"')?;
+        let value = &rest[value_start..value_start + value_end];
+        if value.is_empty() { None } else { Some(value.to_string()) }
+    } else if rest.starts_with('\'') {
+        // id='value'
+        let value_start = 1;
+        let value_end = rest[value_start..].find('\'')?;
+        let value = &rest[value_start..value_start + value_end];
+        if value.is_empty() { None } else { Some(value.to_string()) }
+    } else {
+        // id=value (unquoted, ends at whitespace or >)
+        let value_end = rest.find(|c: char| c.is_whitespace() || c == '>' || c == '/')
+            .unwrap_or(rest.len());
+        let value = &rest[..value_end];
+        if value.is_empty() { None } else { Some(value.to_string()) }
+    }
 }
 
 #[cfg(test)]
