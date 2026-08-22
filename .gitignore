@@ -3,6 +3,7 @@
 .kilo/
 .vscode/
 .antigravity/
+.sample_ebooks/
 package-lock.json
 !web-client/package-lock.json
 web-client/node_modules/

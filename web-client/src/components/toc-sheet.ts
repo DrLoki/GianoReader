@@ -376,8 +376,10 @@ class TocSheet extends HTMLElement {
       const isActive = entry.spineIndex === this._currentChapter;
       const indent = (entry.level ?? 0) * 16;
       const fragment = entry.href?.includes('#') ? entry.href.split('#')[1] : '';
+      // Use spineIndex when available; fall back to 0 (not entry.index which is a TOC-list ordinal, not a spine position)
+      const chapter = entry.spineIndex ?? 0;
       return `
-        <li class="toc-item${isActive ? ' toc-item--active' : ''}" tabindex="0" data-chapter="${entry.spineIndex ?? entry.index}" data-fragment="${escapeHtml(fragment)}" style="padding-left: ${8 + indent}px">
+        <li class="toc-item${isActive ? ' toc-item--active' : ''}" tabindex="0" data-chapter="${chapter}" data-fragment="${escapeHtml(fragment)}" style="padding-left: ${8 + indent}px">
           <span class="toc-item-title">${escapeHtml(entry.title || `Chapter ${entry.index + 1}`)}</span>
         </li>`;
     }).join('')}</ul>`;

@@ -459,13 +459,20 @@ async function extractParagraphs(body: HTMLElement, bookId: string, chapterIndex
   if (blocks && blocks.length > 0) {
     const r: any[] = [];
     let paragraphIndex = 0;
+    let pendingNativeId: string | undefined;
     for (let index = 0; index < blocks.length; index++) {
       const el = blocks[index];
       const text = (el.textContent || '').trim();
-      if (!text) continue;
+      if (!text) {
+        // Preserve the id from empty anchor paragraphs for the next non-empty one
+        const elId = (el as HTMLElement).id;
+        if (elId) pendingNativeId = elId;
+        continue;
+      }
       const id = await generateParagraphId(bookId, chapterIndex, paragraphIndex);
       paragraphIndex++;
-      const nativeId = (el as HTMLElement).id || undefined;
+      const nativeId = (el as HTMLElement).id || pendingNativeId || undefined;
+      if (nativeId) pendingNativeId = undefined;
       r.push({
         text,
         html: stripDisallowedTags(safeInnerHtml(el as HTMLElement)),
@@ -530,11 +537,30 @@ export async function parseAndSaveEpub(file: File): Promise<string> {
 
     // Get table of contents
     const nav = await book.loaded.navigation;
-    const toc: TocEntry[] = (nav.toc || []).map((item: any, i: number) => ({
-      index: i,
-      title: (item.label || '').trim(),
-      href: item.href || '',
-    }));
+    const toc: TocEntry[] = (nav.toc || []).map((item: any, i: number) => {
+      const href = item.href || '';
+      // Strip fragment to find the matching spine item
+      const pathPart = href.split('#')[0];
+      let spineIndex: number | null = null;
+      if (pathPart) {
+        const pathBase = pathPart.split('/').pop() || pathPart;
+        for (let si = 0; si < spineItems.length; si++) {
+          const spineHref = spineItems[si].href || '';
+          const spineBase = spineHref.split('/').pop() || spineHref;
+          if (spineHref === pathPart || spineBase === pathBase) {
+            spineIndex = si;
+            break;
+          }
+        }
+      }
+      return {
+        index: i,
+        title: (item.label || '').trim(),
+        href,
+        level: 0,
+        spineIndex,
+      };
+    });
 
     // Parse chapters
     const chapters: { chapterIndex: number; paragraphs: any[] }[] = [];

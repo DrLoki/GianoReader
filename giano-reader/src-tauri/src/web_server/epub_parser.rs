@@ -231,14 +231,189 @@ pub fn get_toc(library_path: &Path, book_id: &str) -> Result<Vec<TocEntry>, Stri
     let epub_path = find_epub_by_id(library_path, book_id)
         .ok_or_else(|| format!("Book not found: {}", book_id))?;
 
-    let doc = EpubDoc::new(&epub_path)
+    let mut doc = EpubDoc::new(&epub_path)
         .map_err(|e| format!("Failed to open epub: {}", e))?;
 
+    // Try custom NCX parser first (preserves document order, handles duplicate playOrder)
+    if let Some(entries) = parse_ncx_document_order(&mut doc) {
+        if !entries.is_empty() {
+            return Ok(entries);
+        }
+    }
+
+    // Fallback: use the crate's parsed TOC (sorted by playOrder)
     let mut entries: Vec<TocEntry> = Vec::new();
     let mut counter: u32 = 0;
     flatten_toc(&doc.toc, 0, &mut entries, &mut counter, &doc);
 
     Ok(entries)
+}
+
+/// Parses the NCX file directly from the EPUB archive, preserving document order.
+/// This avoids the `epub` crate's sort-by-playOrder behavior which can break TOCs
+/// with duplicate playOrder values (common in Calibre-converted EPUBs).
+///
+/// Returns `None` if the NCX cannot be found or parsed.
+fn parse_ncx_document_order<R: std::io::Read + std::io::Seek>(
+    doc: &mut EpubDoc<R>,
+) -> Option<Vec<TocEntry>> {
+    // Find the NCX resource by MIME type
+    let ncx_path = doc.resources.iter()
+        .find(|(_, res)| res.mime == "application/x-dtbncx+xml")
+        .map(|(_, res)| res.path.clone())?;
+
+    let ncx_content = doc.get_resource_str_by_path(&ncx_path)?;
+
+    // Parse navPoints in document order using simple string scanning
+    let mut entries = Vec::new();
+    parse_navpoints_recursive(&ncx_content, &mut entries, 0, doc);
+
+    Some(entries)
+}
+
+/// Recursively parses `<navPoint>` elements from NCX XML content in document order.
+/// Handles nested navPoints by tracking nesting depth.
+fn parse_navpoints_recursive<R: std::io::Read + std::io::Seek>(
+    xml: &str,
+    entries: &mut Vec<TocEntry>,
+    level: u32,
+    doc: &EpubDoc<R>,
+) {
+    // Find each <navPoint ...> in order
+    let mut search_from = 0;
+    while let Some(nav_start) = xml[search_from..].find("<navPoint") {
+        let abs_start = search_from + nav_start;
+
+        // Find the end of the opening tag
+        let tag_end = match xml[abs_start..].find('>') {
+            Some(pos) => abs_start + pos + 1,
+            None => break,
+        };
+
+        // Find the matching </navPoint> (handle nesting)
+        let close_pos = match find_matching_close_tag(&xml[tag_end..], "navPoint") {
+            Some(pos) => tag_end + pos,
+            None => break,
+        };
+
+        let inner = &xml[tag_end..close_pos];
+
+        // Extract label text from <navLabel><text>...</text></navLabel>
+        let label = extract_ncx_label(inner).unwrap_or_default();
+
+        // Extract content src from <content src="..."/>
+        let src = extract_ncx_content_src(inner).unwrap_or_default();
+
+        // Strip fragment for spine lookup
+        let path_without_fragment = src.split('#').next().unwrap_or("");
+        let spine_index = find_spine_index_for_path(doc, path_without_fragment);
+
+        let index = entries.len() as u32;
+        entries.push(TocEntry {
+            index,
+            title: label,
+            href: src,
+            level,
+            spine_index,
+        });
+
+        // Recurse into child navPoints (content after the first </navLabel>...<content.../> block)
+        // Children are nested <navPoint> elements inside this one
+        let children_start = find_after_first_content_tag(inner);
+        if children_start < inner.len() {
+            let children_xml = &inner[children_start..];
+            if children_xml.contains("<navPoint") {
+                parse_navpoints_recursive(children_xml, entries, level + 1, doc);
+            }
+        }
+
+        // Move past this navPoint's closing tag
+        let close_tag_end = match xml[close_pos..].find('>') {
+            Some(pos) => close_pos + pos + 1,
+            None => close_pos + 11, // len("</navPoint>")
+        };
+        search_from = close_tag_end;
+    }
+}
+
+/// Finds the position of the matching `</tagName>` for a tag, handling nested occurrences.
+fn find_matching_close_tag(content: &str, tag_name: &str) -> Option<usize> {
+    let open_tag = format!("<{}", tag_name);
+    let close_tag = format!("</{}>", tag_name);
+    let mut depth = 1;
+    let mut pos = 0;
+
+    while depth > 0 && pos < content.len() {
+        let next_open = content[pos..].find(&open_tag[..]);
+        let next_close = content[pos..].find(&close_tag[..]);
+
+        match (next_open, next_close) {
+            (Some(o), Some(c)) if o < c => {
+                depth += 1;
+                pos += o + open_tag.len();
+            }
+            (_, Some(c)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(pos + c);
+                }
+                pos += c + close_tag.len();
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+/// Extracts the text content from <navLabel><text>...</text></navLabel>
+fn extract_ncx_label(inner: &str) -> Option<String> {
+    let label_start = inner.find("<navLabel")?;
+    let label_end = inner[label_start..].find("</navLabel>")?;
+    let label_block = &inner[label_start..label_start + label_end];
+
+    // Find <text>...</text> within the navLabel
+    let text_start = label_block.find("<text")?;
+    let text_tag_end = label_block[text_start..].find('>')?;
+    let text_content_start = text_start + text_tag_end + 1;
+    let text_end = label_block[text_content_start..].find("</text>")?;
+
+    let text = &label_block[text_content_start..text_content_start + text_end];
+    Some(text.trim().to_string())
+}
+
+/// Extracts the src attribute from <content src="..."/>
+fn extract_ncx_content_src(inner: &str) -> Option<String> {
+    let content_start = inner.find("<content ")?;
+    let content_block = &inner[content_start..];
+
+    // Find src="..." or src='...'
+    let src_pos = content_block.find("src=")?;
+    let after_src = &content_block[src_pos + 4..];
+    let after_src = after_src.trim_start();
+
+    if after_src.starts_with('"') {
+        let end = after_src[1..].find('"')?;
+        Some(after_src[1..1 + end].to_string())
+    } else if after_src.starts_with('\'') {
+        let end = after_src[1..].find('\'')?;
+        Some(after_src[1..1 + end].to_string())
+    } else {
+        let end = after_src.find(|c: char| c.is_whitespace() || c == '/' || c == '>')
+            .unwrap_or(after_src.len());
+        Some(after_src[..end].to_string())
+    }
+}
+
+/// Finds the position after the first <content .../> tag in a navPoint's inner content.
+/// Child navPoints start after the content element.
+fn find_after_first_content_tag(inner: &str) -> usize {
+    if let Some(content_start) = inner.find("<content ") {
+        // Find the end of this tag (either /> or >)
+        if let Some(end) = inner[content_start..].find('>') {
+            return content_start + end + 1;
+        }
+    }
+    inner.len()
 }
 
 /// Recursively flattens the hierarchical NavPoint tree into a flat list
@@ -278,15 +453,29 @@ fn find_spine_index_for_path<R: std::io::Read + std::io::Seek>(
     doc: &EpubDoc<R>,
     path: &str,
 ) -> Option<u32> {
+    // Normalise the lookup path: trim, convert backslashes, strip leading "./"
+    let normalised = path.trim().replace('\\', "/");
+    let normalised = normalised.strip_prefix("./").unwrap_or(&normalised);
+
     for (i, spine_item) in doc.spine.iter().enumerate() {
         // Look up the resource by the spine item's idref
         if let Some(resource) = doc.resources.get(&spine_item.idref) {
-            let resource_path = resource.path.to_string_lossy();
-            // Compare paths — may need to strip prefixes
-            if resource_path == path
-                || resource_path.ends_with(path)
-                || path.ends_with(&*resource_path)
-            {
+            let raw_resource_path = resource.path.to_string_lossy();
+            let resource_path = raw_resource_path.replace('\\', "/");
+            let resource_path = resource_path.strip_prefix("./").unwrap_or(&resource_path);
+
+            // Exact match
+            if resource_path == normalised {
+                return Some(i as u32);
+            }
+            // Suffix/prefix matching (handles OEBPS/ or other container prefixes)
+            if resource_path.ends_with(normalised) || normalised.ends_with(resource_path) {
+                return Some(i as u32);
+            }
+            // Basename matching (last path component only)
+            let resource_base = resource_path.rsplit('/').next().unwrap_or(resource_path);
+            let path_base = normalised.rsplit('/').next().unwrap_or(normalised);
+            if !resource_base.is_empty() && resource_base == path_base {
                 return Some(i as u32);
             }
         }
@@ -426,6 +615,8 @@ fn skip_past_closing_tag(content: &str, close_pos: usize) -> usize {
 /// Generates stable paragraph IDs using sha256(book_id + chapter_index + paragraph_index).
 fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<Paragraph> {
     let mut paragraphs = Vec::new();
+    // When an empty block has a native id, carry it forward to the next non-empty paragraph.
+    let mut pending_native_id: Option<String> = None;
 
     let mut search_from = 0;
     while let Some((tag_start, tag_name)) = find_next_block_tag(content, search_from) {
@@ -454,10 +645,14 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
             continue;
         }
 
-        // Skip empty paragraphs
+        // Skip empty paragraphs — but preserve their native id for the next paragraph
         let text = strip_all_tags(inner_html);
         let trimmed_text = text.trim();
         if trimmed_text.is_empty() {
+            let opening_tag = &content[tag_start..tag_end];
+            if let Some(id_val) = extract_id_attribute(opening_tag) {
+                pending_native_id = Some(id_val);
+            }
             search_from = skip_past_closing_tag(content, close_tag);
             continue;
         }
@@ -468,7 +663,12 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
 
         // Extract native id attribute from the opening block tag
         let opening_tag = &content[tag_start..tag_end];
-        let native_id = extract_id_attribute(opening_tag);
+        let native_id = extract_id_attribute(opening_tag)
+            .or_else(|| pending_native_id.take());
+        // Clear pending even if we used the tag's own id
+        if native_id.is_some() {
+            pending_native_id = None;
+        }
 
         paragraphs.push(Paragraph {
             id,
