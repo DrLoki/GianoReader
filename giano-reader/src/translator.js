@@ -96,19 +96,13 @@ CRITICAL: Return ONLY the translated text, preserving the exact paragraph count 
 
 /**
  * Traduce un singolo blocco di testo verso la lingua target.
+ * Chiama direttamente Google Translate (nessun proxy Worker necessario in Tauri/desktop).
  * @param {string} text       - Testo da tradurre (già suddiviso in chunk).
  * @param {string} targetLang - Codice lingua BCP-47 (es. "it", "en", "fr").
  * @returns {Promise<string>} Testo tradotto.
  */
 async function translateChunk(text, targetLang) {
-  const settings = loadSettings();
-  let subdomain = (settings.cloudflareWorkerSubdomain || '').trim();
-  subdomain = subdomain.replace(/^https?:\/\//, '').replace(/^giano-translate-proxy\./, '').replace(/\.workers\.dev.*$/, '').trim();
-
-  const baseUrl = subdomain
-    ? `https://giano-translate-proxy.${subdomain}.workers.dev`
-    : 'https://translate.googleapis.com/translate_a/single';
-  const url = `${baseUrl}?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
 
   console.log(`[GianoReader FREE] Starting translation request...`);
   console.log(`[GianoReader FREE] Target Language: ${targetLang}`);

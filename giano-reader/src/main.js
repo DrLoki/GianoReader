@@ -103,7 +103,6 @@ const viewerWrapper = document.getElementById('viewer-wrapper');
 const toggleTranslationModeBtn = document.getElementById('toggle-translation-mode-btn');
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
-const cloudflareWorkerSubdomainInput = document.getElementById('cloudflare-worker-subdomain');
 
 // Web Server Mode
 const webServerSettings = document.getElementById('web-server-settings');
@@ -514,8 +513,6 @@ function applyUiLang(lang) {
   if (orModelLabel) orModelLabel.textContent = t(lang, 'openrouterModelPro');
   const orModelPlaceholder = document.getElementById('openrouter-model-placeholder');
   if (orModelPlaceholder) orModelPlaceholder.textContent = t(lang, 'openrouterSelectModel');
-  const cfSubdomainLabel = document.getElementById('cloudflare-worker-subdomain-label');
-  if (cfSubdomainLabel) cfSubdomainLabel.textContent = t(lang, 'cloudflareWorkerSubdomain');
   if (toggleTranslationModeBtn) {
     toggleTranslationModeBtn.title = t(lang, 'toggleTranslationMode');
     toggleTranslationModeBtn.setAttribute('aria-label', t(lang, 'toggleTranslationMode'));
@@ -618,6 +615,18 @@ function applyUiLang(lang) {
   if (_warnLabel) _warnLabel.textContent = t(lang, 'warnFileSizeMB');
   if (optimalLimitBtn) optimalLimitBtn.title = t(lang,
     (window.__TAURI__ || window.__TAURI_INTERNALS__) ? 'determineOptimalValue' : 'ramAdvisorBrowserOnly');
+  // Settings tab labels
+  const _tabGeneral = document.getElementById('settings-tab-general');
+  const _tabLibrary = document.getElementById('settings-tab-library');
+  const _tabPro = document.getElementById('settings-tab-pro');
+  const _tabWebserver = document.getElementById('settings-tab-webserver');
+  if (_tabGeneral) _tabGeneral.textContent = t(lang, 'settingsTabGeneral');
+  if (_tabLibrary) _tabLibrary.textContent = t(lang, 'settingsTabLibrary');
+  if (_tabPro) _tabPro.textContent = t(lang, 'settingsTabPro');
+  if (_tabWebserver) _tabWebserver.textContent = t(lang, 'settingsTabWebServer');
+  // Cloudflare subdomain label
+  const _cfLabel = document.getElementById('cloudflare-subdomain-label');
+  if (_cfLabel) _cfLabel.textContent = t(lang, 'cloudflareWorkerSubdomain');
 }
 
 function updateTranslationModeVisibility() {
@@ -1344,8 +1353,6 @@ ttsController._onProgressChange = (pct) => {
   const openrouterApiKey = s.openrouterApiKey || '';
   if (openrouterKeyInput) openrouterKeyInput.value = openrouterApiKey;
 
-  const cloudflareWorkerSubdomain = s.cloudflareWorkerSubdomain || '';
-  if (cloudflareWorkerSubdomainInput) cloudflareWorkerSubdomainInput.value = cloudflareWorkerSubdomain;
 
   const translationMode = s.translationMode || 'free';
   if (toggleTranslationModeBtn) {
@@ -1464,16 +1471,6 @@ if (openrouterModelSelect) {
   });
 }
 
-if (cloudflareWorkerSubdomainInput) {
-  const handleSubdomainUpdate = () => {
-    const s = loadSettings();
-    s.cloudflareWorkerSubdomain = cloudflareWorkerSubdomainInput.value.trim();
-    saveSettings(s);
-  };
-  cloudflareWorkerSubdomainInput.addEventListener('change', handleSubdomainUpdate);
-  cloudflareWorkerSubdomainInput.addEventListener('input', handleSubdomainUpdate);
-}
-
 const openrouterFetchBtn = document.getElementById('openrouter-fetch-btn');
 const openrouterStatusMsg = document.getElementById('openrouter-status-msg');
 if (openrouterFetchBtn) {
@@ -1575,6 +1572,34 @@ if (toggleTranslationModeBtn) {
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.add('hidden'); });
+
+// ── Settings Tabs ──────────────────────────────────────────────────────────
+(function initSettingsTabs() {
+  const tabs = settingsModal.querySelectorAll('.settings-tab');
+  const panels = settingsModal.querySelectorAll('.settings-panel');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      panels.forEach(p => { p.classList.remove('active'); p.hidden = true; });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      const panel = document.getElementById(tab.getAttribute('aria-controls'));
+      if (panel) { panel.classList.add('active'); panel.hidden = false; }
+    });
+  });
+})();
+
+// ── Cloudflare Worker Subdomain ────────────────────────────────────────────
+const cloudflareSubdomainInput = document.getElementById('cloudflare-subdomain-input');
+if (cloudflareSubdomainInput) {
+  const s = loadSettings();
+  if (s.cloudflareWorkerSubdomain) cloudflareSubdomainInput.value = s.cloudflareWorkerSubdomain;
+  cloudflareSubdomainInput.addEventListener('change', () => {
+    const settings = loadSettings();
+    settings.cloudflareWorkerSubdomain = cloudflareSubdomainInput.value.trim();
+    saveSettings(settings);
+  });
+}
 
 // ── Web Server Mode ────────────────────────────────────────────────────────
 (function initWebServerMode() {

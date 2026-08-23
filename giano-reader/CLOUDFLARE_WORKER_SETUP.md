@@ -1,6 +1,8 @@
-# 🌐 Cloudflare Worker CORS Proxy Setup for Giano Reader
+# 🌐 Cloudflare Worker CORS Proxy Setup for Giano Reader (PWA Offline Mode)
 
 This guide explains how to create and deploy, for free, a **Cloudflare Worker** dedicated to bypassing CORS restrictions for translation requests sent to Google Translate.
+
+> **Important:** This Worker is used **only** by the PWA web client in **offline mode** (when disconnected from the Giano Reader desktop server). The desktop app (Tauri) calls Google Translate directly without needing a CORS proxy.
 
 For security reasons, the proposed code is configured to forward requests **exclusively to Google Translate**, preventing third parties from abusing your worker as a generic proxy for any website.
 
@@ -46,7 +48,30 @@ export default {
         },
       });
 
+      const contentType = response.headers.get('Content-Type') || '';
       const body = await response.text();
+
+      // Detect captcha/rate-limit: Google returns HTML instead of JSON when
+      // it suspects automated traffic from this IP.
+      const isCaptcha =
+        contentType.includes('text/html') ||
+        response.status === 429 ||
+        body.includes('unusual traffic') ||
+        body.includes('captcha');
+
+      if (isCaptcha) {
+        return new Response(JSON.stringify({
+          error: 'CAPTCHA_REQUIRED',
+          message: 'Google has detected unusual traffic and requires human verification.',
+          verifyUrl: 'https://translate.google.com/',
+        }), {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+        });
+      }
 
       return new Response(body, {
         status: response.status,
@@ -88,10 +113,27 @@ Your proxy will be reachable at an address similar to this:
 
 ## ⚙️ 3. How to Configure It in Giano Reader
 
-There is no need to modify the application's source code:
+The Cloudflare Worker subdomain is configured **in the PWA web client settings** (not in the desktop app):
 
-1. Open **Settings** by clicking the gear icon in Giano Reader's sidebar.
-2. Find the **Cloudflare Worker Subdomain** field.
-3. Enter your Cloudflare subdomain (for example `happy-reader` if your worker's URL is `https://giano-translate-proxy.happy-reader.workers.dev`).
-4. The value is automatically saved locally: FREE translation requests will be dynamically routed to `https://giano-translate-proxy.<your-subdomain>.workers.dev`.
-5. *Note:* If you leave the field empty, the application will use the default endpoint `https://translate.googleapis.com/translate_a/single` directly.
+1. Open the PWA web client on your mobile device.
+2. Open **Settings** (bottom sheet).
+3. Find the **Cloudflare Worker Subdomain** field.
+4. Enter your Cloudflare subdomain (for example `happy-reader` if your worker's URL is `https://giano-translate-proxy.happy-reader.workers.dev`).
+5. The value is saved locally. When the PWA is in offline mode (disconnected from the desktop server), FREE translation requests will be routed through your Cloudflare Worker to bypass CORS.
+6. *Note:* If you leave the field empty and the PWA is offline, translation will not work (direct calls to `translate.googleapis.com` are blocked by CORS in the browser).
+
+---
+
+## ⚠️ 4. Captcha / Rate Limiting
+
+Google may detect the Worker's IP as generating automated traffic and respond with a captcha challenge instead of a translation. When this happens:
+
+- The Worker detects the captcha response (HTML body, status 429) and returns a structured JSON error: `{ "error": "CAPTCHA_REQUIRED" }`.
+- The PWA client shows a notification asking the user to wait a few minutes before retrying.
+- Since the Worker's IP is a shared Cloudflare data center IP, solving the captcha in the user's browser does **not** unblock the Worker. The rate limit typically expires after a few minutes of inactivity.
+
+**Mitigation strategies:**
+
+- Keep translation volume low (the free tier is for personal use).
+- Use the PRO translation mode (OpenRouter) if you hit rate limits frequently.
+- When connected to the desktop server (online mode), translations go through the Rust backend directly — no Worker needed, no CORS issue.

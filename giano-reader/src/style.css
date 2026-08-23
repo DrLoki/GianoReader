@@ -709,7 +709,63 @@ body.theme-sepia {
 
 /* ── Modal settings ── */
 .modal-box--settings {
-  max-width: 380px; width: 92%;
+  max-width: 420px; width: 92%;
+}
+
+/* ── Settings Tabs ── */
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.settings-tab {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.settings-tab:hover {
+  color: var(--text);
+}
+.settings-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.settings-panel {
+  display: none;
+}
+.settings-panel.active {
+  display: block;
+}
+
+/* Hint text for inputs */
+.settings-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.settings-hint em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+/* Cloudflare subdomain text input */
+.settings-row input[type="text"] {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--bg); color: var(--text);
+  font-size: 0.88rem; cursor: text;
+  box-sizing: border-box;
 }
 .settings-row {
   display: flex; flex-direction: column; gap: 6px;

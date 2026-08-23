@@ -274,128 +274,162 @@
         <button id="settings-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon"
             alt="" /></button>
       </div>
-      <div class="settings-row">
-        <label for="ui-lang-select">Interface language</label>
-        <select id="ui-lang-select">
-          <option value="en">🇬🇧 English</option>
-          <option value="zh">🇨🇳 中文</option>
-          <option value="hi">🇮🇳 Hindi</option>
-          <option value="es">🇪🇸 Español</option>
-          <option value="fr">🇫🇷 Français</option>
-          <option value="bn">🇧🇩 Bengali</option>
-          <option value="pt">🇵🇹 Português</option>
-          <option value="ru">🇷🇺 Русский</option>
-          <option value="ja">🇯🇵 日本語</option>
-          <option value="id">🇮🇩 Indonesian</option>
-          <option value="de">🇩🇪 Deutsch</option>
-          <option value="ko">🇰🇷 Korean</option>
-          <option value="it">🇮🇹 Italiano</option>
-          <option value="th">🇹🇭 Thai</option>
-          <option value="fil">🇵🇭 Filipino</option>
-          <option value="ar">🇸🇦 العربية</option>
-          <option value="sq">🇦🇱 Shqip</option>
-          <option value="sv">Svenska</option>
-          <option value="uk">Українська</option>
-          <option value="sl">Slovenščina</option>
-        </select>
+
+      <!-- Tab bar -->
+      <div class="settings-tabs" role="tablist">
+        <button class="settings-tab active" role="tab" aria-selected="true" aria-controls="settings-panel-general"
+          data-tab="general" id="settings-tab-general">General</button>
+        <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-library"
+          data-tab="library" id="settings-tab-library">Library</button>
+        <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-pro"
+          data-tab="pro" id="settings-tab-pro">PRO</button>
+        <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-webserver"
+          data-tab="webserver" id="settings-tab-webserver">Web Server</button>
       </div>
-      <div class="settings-row">
-        <label for="theme-select">Theme</label>
-        <select id="theme-select">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="monokai">Monokai</option>
-          <option value="solarized-dark">Solarized Dark</option>
-          <option value="nord">Nord</option>
-          <option value="sepia">Sepia</option>
-        </select>
-      </div>
-      <div class="settings-row">
-        <label for="font-family-select">Font</label>
-        <select id="font-family-select">
-          <option value="Georgia, serif">Georgia</option>
-          <option value="'Times New Roman', Times, serif">Times New Roman</option>
-          <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
-          <option value="'Book Antiqua', Palatino, serif">Book Antiqua</option>
-          <option value="Garamond, serif">Garamond</option>
-          <option value="Arial, sans-serif">Arial</option>
-          <option value="'Segoe UI', Tahoma, sans-serif">Segoe UI</option>
-          <option value="Verdana, sans-serif">Verdana</option>
-          <option value="'Courier New', Courier, monospace">Courier New</option>
-        </select>
-      </div>
-      <div class="settings-row-inline">
-        <label for="font-size-range">Font size</label>
-        <input type="range" id="font-size-range" min="12" max="28" step="1" value="16" />
-        <span class="settings-value" id="font-size-value">16px</span>
-      </div>
-      <div class="settings-row">
-        <label for="search-depth-input" id="search-depth-label">Search depth</label>
-        <input type="number" id="search-depth-input" min="1" max="10" step="1" value="3" />
-      </div>
-      <div class="settings-row">
-        <label for="max-file-size-mb" id="max-file-size-mb-label">Max file size (MB)</label>
-        <div class="settings-input-group">
-          <input type="number" id="max-file-size-mb" min="10" max="2000" step="1" value="150" />
-          <button id="optimal-limit-btn" type="button" title="">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
-          </button>
+
+      <!-- Panel: General -->
+      <div class="settings-panel active" id="settings-panel-general" role="tabpanel"
+        aria-labelledby="settings-tab-general">
+        <div class="settings-row">
+          <label for="ui-lang-select">Interface language</label>
+          <select id="ui-lang-select">
+            <option value="en">🇬🇧 English</option>
+            <option value="zh">🇨🇳 中文</option>
+            <option value="hi">🇮🇳 Hindi</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="bn">🇧🇩 Bengali</option>
+            <option value="pt">🇵🇹 Português</option>
+            <option value="ru">🇷🇺 Русский</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="id">🇮🇩 Indonesian</option>
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="ko">🇰🇷 Korean</option>
+            <option value="it">🇮🇹 Italiano</option>
+            <option value="th">🇹🇭 Thai</option>
+            <option value="fil">🇵🇭 Filipino</option>
+            <option value="ar">🇸🇦 العربية</option>
+            <option value="sq">🇦🇱 Shqip</option>
+            <option value="sv">Svenska</option>
+            <option value="uk">Українська</option>
+            <option value="sl">Slovenščina</option>
+          </select>
         </div>
-        <span id="ram-advisor-error" class="settings-error hidden"></span>
-      </div>
-      <div class="settings-row">
-        <label for="warn-file-size-mb" id="warn-file-size-mb-label">Warn file size (MB)</label>
-        <input type="number" id="warn-file-size-mb" min="10" max="2000" step="1" value="50" />
-      </div>
-      <div class="settings-row">
-        <label for="openrouter-key-input">OpenRouter API Key</label>
-        <div class="settings-input-group">
-          <input type="password" id="openrouter-key-input" placeholder="sk-or-..." autocomplete="off" />
-          <button id="openrouter-fetch-btn" type="button" title="Fetch models">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-              <path d="M16 16h5v5" />
-            </svg>
-          </button>
+        <div class="settings-row">
+          <label for="theme-select">Theme</label>
+          <select id="theme-select">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="monokai">Monokai</option>
+            <option value="solarized-dark">Solarized Dark</option>
+            <option value="nord">Nord</option>
+            <option value="sepia">Sepia</option>
+          </select>
         </div>
-        <span id="openrouter-status-msg" class="settings-status-msg hidden"></span>
+        <div class="settings-row">
+          <label for="font-family-select">Font</label>
+          <select id="font-family-select">
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Times New Roman', Times, serif">Times New Roman</option>
+            <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
+            <option value="'Book Antiqua', Palatino, serif">Book Antiqua</option>
+            <option value="Garamond, serif">Garamond</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="'Segoe UI', Tahoma, sans-serif">Segoe UI</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="'Courier New', Courier, monospace">Courier New</option>
+          </select>
+        </div>
+        <div class="settings-row-inline">
+          <label for="font-size-range">Font size</label>
+          <input type="range" id="font-size-range" min="12" max="28" step="1" value="16" />
+          <span class="settings-value" id="font-size-value">16px</span>
+        </div>
       </div>
-      <div class="settings-row">
-        <label for="openrouter-model-select">OpenRouter Model (PRO)</label>
-        <select id="openrouter-model-select">
-          <option value="" id="openrouter-model-placeholder">Select a model...</option>
-        </select>
-      </div>
-      <div class="settings-row">
-        <label for="cloudflare-worker-subdomain" id="cloudflare-worker-subdomain-label">Cloudflare Worker
-          Subdomain</label>
-        <input type="text" id="cloudflare-worker-subdomain" placeholder="e.g. happy-reader" autocomplete="off" />
-      </div>
-      <!-- Web Server Mode (Tauri only) -->
-      <div id="web-server-settings" class="settings-row hidden">
-        <label>Web Server Mode</label>
-        <div class="web-server-controls">
-          <div class="web-server-toggle-row">
-            <label class="switch" for="web-server-toggle">
-              <input type="checkbox" id="web-server-toggle" />
-              <span class="switch-slider"></span>
-            </label>
-            <input type="number" id="web-server-port" value="8888" min="1024" max="65535" placeholder="Port"
-              title="Server port" />
+
+      <!-- Panel: Library -->
+      <div class="settings-panel" id="settings-panel-library" role="tabpanel"
+        aria-labelledby="settings-tab-library" hidden>
+        <div class="settings-row">
+          <label for="search-depth-input" id="search-depth-label">Search depth</label>
+          <input type="number" id="search-depth-input" min="1" max="10" step="1" value="3" />
+        </div>
+        <div class="settings-row">
+          <label for="max-file-size-mb" id="max-file-size-mb-label">Max file size (MB)</label>
+          <div class="settings-input-group">
+            <input type="number" id="max-file-size-mb" min="10" max="2000" step="1" value="150" />
+            <button id="optimal-limit-btn" type="button" title="">
+              <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+            </button>
           </div>
-          <p id="web-server-error" class="settings-error hidden"></p>
-          <div id="web-server-info" class="hidden">
-            <p id="web-server-url" class="web-server-url"></p>
-            <img id="web-server-qr" class="web-server-qr" alt="QR Code" />
+          <span id="ram-advisor-error" class="settings-error hidden"></span>
+        </div>
+        <div class="settings-row">
+          <label for="warn-file-size-mb" id="warn-file-size-mb-label">Warn file size (MB)</label>
+          <input type="number" id="warn-file-size-mb" min="10" max="2000" step="1" value="50" />
+        </div>
+      </div>
+
+      <!-- Panel: PRO -->
+      <div class="settings-panel" id="settings-panel-pro" role="tabpanel"
+        aria-labelledby="settings-tab-pro" hidden>
+        <div class="settings-row">
+          <label for="openrouter-key-input">OpenRouter API Key</label>
+          <div class="settings-input-group">
+            <input type="password" id="openrouter-key-input" placeholder="sk-or-..." autocomplete="off" />
+            <button id="openrouter-fetch-btn" type="button" title="Fetch models">
+              <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 16h5v5" />
+              </svg>
+            </button>
           </div>
-          <p id="web-server-warning" class="settings-error hidden">⚠ Server only reachable from this device (no LAN IP
-            found)</p>
+          <span id="openrouter-status-msg" class="settings-status-msg hidden"></span>
+        </div>
+        <div class="settings-row">
+          <label for="openrouter-model-select">OpenRouter Model (PRO)</label>
+          <select id="openrouter-model-select">
+            <option value="" id="openrouter-model-placeholder">Select a model...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Panel: Web Server -->
+      <div class="settings-panel" id="settings-panel-webserver" role="tabpanel"
+        aria-labelledby="settings-tab-webserver" hidden>
+        <div class="settings-row">
+          <label for="cloudflare-subdomain-input" id="cloudflare-subdomain-label">Cloudflare Worker Subdomain</label>
+          <input type="text" id="cloudflare-subdomain-input" placeholder="my-giano"
+            autocomplete="off" />
+        </div>
+        <!-- Web Server Mode (Tauri only) -->
+        <div id="web-server-settings" class="settings-row hidden">
+          <label>Web Server Mode</label>
+          <div class="web-server-controls">
+            <div class="web-server-toggle-row">
+              <label class="switch" for="web-server-toggle">
+                <input type="checkbox" id="web-server-toggle" />
+                <span class="switch-slider"></span>
+              </label>
+              <input type="number" id="web-server-port" value="8888" min="1024" max="65535" placeholder="Port"
+                title="Server port" />
+            </div>
+            <p id="web-server-error" class="settings-error hidden"></p>
+            <div id="web-server-info" class="hidden">
+              <p id="web-server-url" class="web-server-url"></p>
+              <img id="web-server-qr" class="web-server-qr" alt="QR Code" />
+            </div>
+            <p id="web-server-warning" class="settings-error hidden">⚠ Server only reachable from this device (no LAN
+              IP found)</p>
+          </div>
         </div>
       </div>
 

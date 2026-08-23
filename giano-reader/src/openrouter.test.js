@@ -179,11 +179,11 @@ describe('OpenRouter Premium Translations Feature', () => {
     await expect(translateParagraphs(['Hello'], 'it')).rejects.toThrow();
   });
 
-  // ── 6. Routing: Cloudflare Worker Subdomain in FREE Mode ──
-  it('routes to Cloudflare Worker proxy when cloudflareWorkerSubdomain is configured', async () => {
+  // ── 6. FREE Mode always uses translate.googleapis.com directly ──
+  it('routes to translate.googleapis.com directly in FREE mode (no Worker proxy)', async () => {
     const settings = {
       translationMode: 'free',
-      cloudflareWorkerSubdomain: 'dott-loki'
+      cloudflareWorkerSubdomain: 'dott-loki' // ignored in desktop
     };
     global.localStorage.setItem('giano-reader-settings', JSON.stringify(settings));
 
@@ -204,34 +204,7 @@ describe('OpenRouter Premium Translations Feature', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const fetchUrl = global.fetch.mock.calls[0][0];
-    expect(fetchUrl).toContain('https://giano-translate-proxy.dott-loki.workers.dev');
-  });
-
-  it('sanitizes cloudflareWorkerSubdomain if full url/host was entered', async () => {
-    const settings = {
-      translationMode: 'free',
-      cloudflareWorkerSubdomain: 'https://giano-translate-proxy.custom-proxy.workers.dev'
-    };
-    global.localStorage.setItem('giano-reader-settings', JSON.stringify(settings));
-
-    const mockGoogleResponse = [
-      [
-        ['Testo tradotto.', 'Translated text.']
-      ]
-    ];
-
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockGoogleResponse
-    });
-
-    const results = await translateParagraphs(['Translated text.'], 'it');
-    expect(results).toHaveLength(1);
-    expect(results[0]).toBe('Testo tradotto.');
-
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const fetchUrl = global.fetch.mock.calls[0][0];
-    expect(fetchUrl).toContain('https://giano-translate-proxy.custom-proxy.workers.dev');
+    expect(fetchUrl).toContain('https://translate.googleapis.com/translate_a/single');
   });
 
   // ── 7. Regression: short dialogue lines merged by the translation engine ──
