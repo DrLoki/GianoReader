@@ -25,6 +25,7 @@ const STATIC_LANGUAGES = [
 ];
 
 const CHAR_LIMIT = 4500;
+const CHAR_LIMIT_BASIC = 25000;
 
 function getWorkerUrl(): string {
   try {
@@ -70,6 +71,12 @@ async function postTranslateOffline(
   sourceLang: string,
   targetLang: string
 ): Promise<string[]> {
+  // Check if Basic mode is configured — route to v3 directly
+  const prefs = getLocalPreferences();
+  if (prefs.translationMode === 'basic') {
+    return postTranslateBasicOffline(paragraphs, sourceLang, targetLang);
+  }
+
   const results = new Array(paragraphs.length).fill('');
   const batches: { start: number; end: number; text: string }[] = [];
   let batchStart = 0;
@@ -116,6 +123,106 @@ async function postTranslateOffline(
 }
 
 /**
+ * Sends a batch of paragraphs to Google Cloud Translation API v3 directly.
+ * Used in offline/standalone mode when Basic mode is configured.
+ */
+async function translateChunkBasicOffline(
+  paragraphs: string[],
+  sourceLang: string,
+  targetLang: string,
+  projectId: string,
+  apiKey: string,
+  model: string | undefined
+): Promise<string[]> {
+  const url = `https://translate.googleapis.com/v3/projects/${projectId}/locations/global:translateText?key=${apiKey}`;
+
+  const body: Record<string, unknown> = {
+    contents: paragraphs,
+    targetLanguageCode: targetLang,
+    mimeType: 'text/plain'
+  };
+
+  if (sourceLang && sourceLang !== 'auto') {
+    body.sourceLanguageCode = sourceLang;
+  }
+
+  if (model === 'tllm') {
+    body.model = `projects/${projectId}/locations/global/models/general/translation-llm`;
+  } else if (model === 'nmt') {
+    body.model = `projects/${projectId}/locations/global/models/general/nmt`;
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    let message = `Google Cloud Translation error (${res.status})`;
+    try {
+      const parsed = JSON.parse(errText);
+      if (parsed.error?.message) message += `: ${parsed.error.message}`;
+    } catch {
+      if (errText) message += `: ${errText.substring(0, 200)}`;
+    }
+    throw new Error(message);
+  }
+
+  const data = await res.json();
+  const translations: { translatedText: string }[] = data.translations || [];
+  return translations.map(t => (t.translatedText || '').trim());
+}
+
+/**
+ * Offline Basic mode: batches paragraphs by total char length (~25000)
+ * and calls Cloud Translation v3 directly from the browser.
+ */
+async function postTranslateBasicOffline(
+  paragraphs: string[],
+  sourceLang: string,
+  targetLang: string
+): Promise<string[]> {
+  const prefs = getLocalPreferences();
+  const projectId = (prefs.gcloudProjectId || '').trim();
+  const apiKey = (prefs.gcloudApiKey || '').trim();
+  const model = prefs.gcloudModel;
+
+  if (!projectId) throw new Error('Google Cloud Project ID not configured');
+  if (!apiKey) throw new Error('Google Cloud API Key not configured');
+
+  const results = new Array(paragraphs.length).fill('');
+  const batches: { start: number; end: number }[] = [];
+  let batchStart = 0;
+  let batchLen = 0;
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const paraLen = paragraphs[i].length;
+    if (batchLen > 0 && (batchLen + paraLen) > CHAR_LIMIT_BASIC) {
+      batches.push({ start: batchStart, end: i });
+      batchStart = i;
+      batchLen = paraLen;
+    } else {
+      batchLen += paraLen;
+    }
+  }
+  if (batchStart < paragraphs.length) {
+    batches.push({ start: batchStart, end: paragraphs.length });
+  }
+
+  for (const batch of batches) {
+    const slice = paragraphs.slice(batch.start, batch.end);
+    const translated = await translateChunkBasicOffline(slice, sourceLang, targetLang, projectId, apiKey, model);
+    for (let j = 0; j < translated.length; j++) {
+      results[batch.start + j] = translated[j];
+    }
+  }
+
+  return results;
+}
+
+/**
  * Sends texts to the translation endpoint.
  *
  * @param texts - Array of strings to translate
@@ -132,10 +239,13 @@ export async function postTranslate(
     return postTranslateOffline(texts, sourceLang, targetLang);
   }
 
+  const prefs = getLocalPreferences();
+  const mode = prefs.translationMode || 'free';
+
   const response = await apiFetch('/api/translate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ texts, sourceLang, targetLang }),
+    body: JSON.stringify({ texts, sourceLang, targetLang, mode }),
   });
 
   const data = await response.json();

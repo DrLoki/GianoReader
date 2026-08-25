@@ -5,10 +5,14 @@
 //! Suitable for personal use only.
 
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Maximum characters per single translation request (~5000 is Google's limit).
 const CHAR_LIMIT: usize = 4500;
+
+/// Maximum characters per batch for Cloud Translation v3 (official limit: 30k codepoints).
+const CHAR_LIMIT_V3: usize = 25000;
 
 /// Errors returned by the translation engine.
 #[derive(Debug)]
@@ -18,6 +22,10 @@ pub enum TranslateError {
     /// The translation engine is not configured or unavailable.
     #[allow(dead_code)]
     NotConfigured,
+    /// Invalid API credentials (403).
+    InvalidCredentials(String),
+    /// Rate limit / quota exceeded (429).
+    RateLimited,
 }
 
 impl std::fmt::Display for TranslateError {
@@ -25,6 +33,8 @@ impl std::fmt::Display for TranslateError {
         match self {
             TranslateError::NetworkFailure(msg) => write!(f, "Translation network failure: {}", msg),
             TranslateError::NotConfigured => write!(f, "Translation engine not configured"),
+            TranslateError::InvalidCredentials(msg) => write!(f, "Invalid credentials: {}", msg),
+            TranslateError::RateLimited => write!(f, "Translation quota exceeded (rate limited)"),
         }
     }
 }
@@ -96,6 +106,202 @@ pub async fn translate(
     }
 
     Ok(results)
+}
+
+// ── Cloud Translation API v3 (Basic mode) ─────────────────────────────────────
+
+/// Request body for Cloud Translation API v3.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TranslateV3Request {
+    contents: Vec<String>,
+    target_language_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_language_code: Option<String>,
+    mime_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+}
+
+/// A single translation entry in the v3 response.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TranslationEntry {
+    translated_text: String,
+}
+
+/// Response body from Cloud Translation API v3.
+#[derive(Deserialize)]
+struct TranslateV3Response {
+    translations: Vec<TranslationEntry>,
+}
+
+/// A batch of consecutive paragraph indices for v3 (no joined text needed).
+struct BatchV3 {
+    start: usize,
+    end: usize,
+}
+
+/// Translates an array of text strings using Google Cloud Translation API v3.
+///
+/// Uses the `contents[]` array natively — no `\n\n` join/split workaround needed.
+/// Batches by total character length up to [`CHAR_LIMIT_V3`].
+///
+/// # Arguments
+/// * `texts` — The paragraphs to translate (order is preserved).
+/// * `source_lang` — BCP-47 source language code (e.g. `"en"`, `"auto"`).
+/// * `target_lang` — BCP-47 target language code (e.g. `"it"`).
+/// * `project_id` — Google Cloud project ID.
+/// * `api_key` — Google Cloud API key.
+/// * `model` — Optional model: `Some("nmt")`, `Some("tllm")`, or `None` for default.
+pub async fn translate_v3(
+    texts: Vec<String>,
+    source_lang: &str,
+    target_lang: &str,
+    project_id: &str,
+    api_key: &str,
+    model: Option<&str>,
+) -> Result<Vec<String>, TranslateError> {
+    if texts.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let client = Client::new();
+    let mut results: Vec<String> = vec![String::new(); texts.len()];
+
+    // Build batches respecting CHAR_LIMIT_V3 (sum of text lengths)
+    let batches = build_batches_v3(&texts);
+
+    for batch in &batches {
+        let slice: Vec<String> = texts[batch.start..batch.end].to_vec();
+        let translated = translate_chunk_v3(
+            &client, slice, source_lang, target_lang, project_id, api_key, model,
+        )
+        .await?;
+
+        for (j, text) in translated.into_iter().enumerate() {
+            results[batch.start + j] = text;
+        }
+    }
+
+    Ok(results)
+}
+
+/// Groups paragraphs into batches where the sum of text lengths ≤ [`CHAR_LIMIT_V3`].
+fn build_batches_v3(texts: &[String]) -> Vec<BatchV3> {
+    let mut batches = Vec::new();
+    let mut batch_start: usize = 0;
+    let mut batch_len: usize = 0;
+
+    for (i, para) in texts.iter().enumerate() {
+        let para_len = para.len();
+        if batch_len > 0 && (batch_len + para_len) > CHAR_LIMIT_V3 {
+            batches.push(BatchV3 {
+                start: batch_start,
+                end: i,
+            });
+            batch_start = i;
+            batch_len = para_len;
+        } else {
+            batch_len += para_len;
+        }
+    }
+
+    if batch_start < texts.len() {
+        batches.push(BatchV3 {
+            start: batch_start,
+            end: texts.len(),
+        });
+    }
+
+    batches
+}
+
+/// Sends a batch to the Cloud Translation API v3 and returns translated texts.
+async fn translate_chunk_v3(
+    client: &Client,
+    contents: Vec<String>,
+    source_lang: &str,
+    target_lang: &str,
+    project_id: &str,
+    api_key: &str,
+    model: Option<&str>,
+) -> Result<Vec<String>, TranslateError> {
+    let url = format!(
+        "https://translate.googleapis.com/v3/projects/{}/locations/global:translateText?key={}",
+        project_id, api_key,
+    );
+
+    let model_path = match model {
+        Some("tllm") => Some(format!(
+            "projects/{}/locations/global/models/general/translation-llm",
+            project_id
+        )),
+        Some("nmt") => Some(format!(
+            "projects/{}/locations/global/models/general/nmt",
+            project_id
+        )),
+        _ => None,
+    };
+
+    let source_code = if source_lang == "auto" {
+        None
+    } else {
+        Some(source_lang.to_string())
+    };
+
+    let body = TranslateV3Request {
+        contents,
+        target_language_code: target_lang.to_string(),
+        source_language_code: source_code,
+        mime_type: "text/plain".to_string(),
+        model: model_path,
+    };
+
+    let response = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| TranslateError::NetworkFailure(e.to_string()))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let err_text = response.text().await.unwrap_or_default();
+        if status.as_u16() == 403 {
+            return Err(TranslateError::InvalidCredentials(format!(
+                "HTTP 403: {}",
+                truncate_error(&err_text, 200)
+            )));
+        }
+        if status.as_u16() == 429 {
+            return Err(TranslateError::RateLimited);
+        }
+        return Err(TranslateError::NetworkFailure(format!(
+            "Cloud Translation v3 error: HTTP {} — {}",
+            status.as_u16(),
+            truncate_error(&err_text, 200)
+        )));
+    }
+
+    let data: TranslateV3Response = response.json().await.map_err(|e| {
+        TranslateError::NetworkFailure(format!("Failed to parse v3 response: {}", e))
+    })?;
+
+    Ok(data
+        .translations
+        .into_iter()
+        .map(|t| t.translated_text.trim().to_string())
+        .collect())
+}
+
+/// Truncates an error string for display.
+fn truncate_error(s: &str, max_len: usize) -> &str {
+    if s.len() <= max_len {
+        s
+    } else {
+        &s[..max_len]
+    }
 }
 
 /// Attempts to split `translated` back into `count` pieces using the `"\n\n"`
@@ -350,5 +556,54 @@ mod tests {
     fn test_realign_batch_single_paragraph() {
         let result = realign_batch("Ciao mondo", 1);
         assert_eq!(result, Some(vec!["Ciao mondo".to_string()]));
+    }
+
+    // ── Cloud Translation v3 batching tests ──────────────────────────────
+
+    #[test]
+    fn test_build_batches_v3_empty() {
+        let texts: Vec<String> = vec![];
+        let batches = build_batches_v3(&texts);
+        assert!(batches.is_empty());
+    }
+
+    #[test]
+    fn test_build_batches_v3_single() {
+        let texts = vec!["Hello".to_string()];
+        let batches = build_batches_v3(&texts);
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].start, 0);
+        assert_eq!(batches[0].end, 1);
+    }
+
+    #[test]
+    fn test_build_batches_v3_all_fit() {
+        let texts: Vec<String> = (0..100).map(|i| format!("Paragraph {}", i)).collect();
+        let batches = build_batches_v3(&texts);
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].start, 0);
+        assert_eq!(batches[0].end, 100);
+    }
+
+    #[test]
+    fn test_build_batches_v3_split_on_limit() {
+        // Each paragraph is 10000 chars → 3 paragraphs = 30000 > 25000 limit
+        let long_para = "x".repeat(10000);
+        let texts = vec![long_para.clone(), long_para.clone(), long_para.clone()];
+        let batches = build_batches_v3(&texts);
+        // First batch: para 0 + para 1 = 20000 ≤ 25000 → fits
+        // Adding para 2: 20000 + 10000 = 30000 > 25000 → flush
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].start, 0);
+        assert_eq!(batches[0].end, 2);
+        assert_eq!(batches[1].start, 2);
+        assert_eq!(batches[1].end, 3);
+    }
+
+    #[tokio::test]
+    async fn test_translate_v3_empty_input() {
+        let result = translate_v3(vec![], "en", "it", "proj", "key", None).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
     }
 }

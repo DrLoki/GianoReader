@@ -108,8 +108,10 @@
         <div id="reader-header-right">
           <span id="translation-lang-label">Translation</span>
           <div class="header-divider"></div>
-          <button id="toggle-translation-mode-btn" class="view-toggle-btn" aria-pressed="false" title=""
-            aria-label="">FREE</button>
+          <select id="translation-mode-select" class="translation-mode-select hidden"
+            aria-label="" title="">
+            <option value="free">FREE</option>
+          </select>
           <button id="toggle-pairing-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -281,6 +283,8 @@
           data-tab="general" id="settings-tab-general">General</button>
         <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-library"
           data-tab="library" id="settings-tab-library">Library</button>
+        <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-basic"
+          data-tab="basic" id="settings-tab-basic">Basic</button>
         <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-pro"
           data-tab="pro" id="settings-tab-pro">PRO</button>
         <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-webserver"
@@ -371,6 +375,26 @@
         <div class="settings-row">
           <label for="warn-file-size-mb" id="warn-file-size-mb-label">Warn file size (MB)</label>
           <input type="number" id="warn-file-size-mb" min="10" max="2000" step="1" value="50" />
+        </div>
+      </div>
+
+      <!-- Panel: Basic (Google Cloud Translation v3) -->
+      <div class="settings-panel" id="settings-panel-basic" role="tabpanel"
+        aria-labelledby="settings-tab-basic" hidden>
+        <div class="settings-row">
+          <label for="gcloud-project-id-input" id="gcloud-project-id-label">Google Cloud Project ID</label>
+          <input type="text" id="gcloud-project-id-input" placeholder="my-project-123456" autocomplete="off" />
+        </div>
+        <div class="settings-row">
+          <label for="gcloud-api-key-input" id="gcloud-api-key-label">Google Cloud API Key</label>
+          <input type="password" id="gcloud-api-key-input" placeholder="AIza..." autocomplete="off" />
+        </div>
+        <div class="settings-row">
+          <label for="gcloud-model-select" id="gcloud-model-label">Translation Model</label>
+          <select id="gcloud-model-select">
+            <option value="nmt">NMT (Standard)</option>
+            <option value="tllm">Translation LLM (Literary)</option>
+          </select>
         </div>
       </div>
 

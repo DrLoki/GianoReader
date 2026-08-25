@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::web_server::models::ApiError;
-use crate::web_server::translator::{translate, TranslateError};
+use crate::web_server::translator::{translate, translate_v3, TranslateError};
 
 use super::books::AppState;
 
@@ -23,6 +23,7 @@ pub struct TranslateRequest {
     pub source_lang: Option<String>,
     #[serde(alias = "target_lang", rename = "targetLang")]
     pub target_lang: Option<String>,
+    pub mode: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -151,8 +152,60 @@ pub async fn post_translate(
             .into_response();
     }
 
-    // Call the translation engine
-    match translate(texts, &source_lang, &target_lang).await {
+    // Call the translation engine based on mode
+    let mode = body.mode.as_deref().unwrap_or("free");
+
+    let result = if mode == "basic" {
+        // Load Google Cloud credentials from preferences
+        let prefs = match _state.store.get_preferences() {
+            Ok(p) => p,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError {
+                        error: "Failed to load preferences".to_string(),
+                    }),
+                )
+                    .into_response();
+            }
+        };
+
+        let project_id = match prefs.gcloud_project_id {
+            Some(ref id) if !id.is_empty() => id.clone(),
+            _ => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiError {
+                        error: "Google Cloud Project ID not configured. Set it in preferences."
+                            .to_string(),
+                    }),
+                )
+                    .into_response();
+            }
+        };
+
+        let api_key = match prefs.gcloud_api_key {
+            Some(ref key) if !key.is_empty() => key.clone(),
+            _ => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiError {
+                        error: "Google Cloud API Key not configured. Set it in preferences."
+                            .to_string(),
+                    }),
+                )
+                    .into_response();
+            }
+        };
+
+        let gcloud_model = prefs.gcloud_model.as_deref();
+
+        translate_v3(texts, &source_lang, &target_lang, &project_id, &api_key, gcloud_model).await
+    } else {
+        translate(texts, &source_lang, &target_lang).await
+    };
+
+    match result {
         Ok(translations) => (
             StatusCode::OK,
             Json(TranslateResponse { translations }),
@@ -169,6 +222,20 @@ pub async fn post_translate(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
                 error: "Translation engine not initialised".to_string(),
+            }),
+        )
+            .into_response(),
+        Err(TranslateError::InvalidCredentials(msg)) => (
+            StatusCode::FORBIDDEN,
+            Json(ApiError {
+                error: format!("Invalid Google Cloud credentials: {}", msg),
+            }),
+        )
+            .into_response(),
+        Err(TranslateError::RateLimited) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ApiError {
+                error: "Google Cloud Translation quota exceeded. Try again later.".to_string(),
             }),
         )
             .into_response(),

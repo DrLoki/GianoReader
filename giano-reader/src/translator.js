@@ -136,6 +136,7 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
   const results = new Array(paragraphs.length).fill('');
   const settings = loadSettings();
   const isPro = settings.translationMode === 'pro';
+  const isBasic = settings.translationMode === 'basic';
   const apiKey = settings.openrouterApiKey;
   const model = settings.openrouterModel;
 
@@ -144,7 +145,46 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
     if (!model) throw new Error('OpenRouter Model not selected');
   }
 
-  // Costruisce i batch rispettando il limite di caratteri per richiesta
+  if (isBasic) {
+    const gcloudProjectId = (settings.gcloudProjectId || '').trim();
+    const gcloudApiKey = (settings.gcloudApiKey || '').trim();
+    const gcloudModel = settings.gcloudModel || 'nmt';
+    if (!gcloudProjectId) throw new Error('Google Cloud Project ID not configured');
+    if (!gcloudApiKey) throw new Error('Google Cloud API Key not configured');
+
+    // Basic mode: batch by total char length (~25000), use contents[] array
+    const batches = [];
+    let batchStart = 0;
+    let batchLen = 0;
+
+    for (let i = 0; i < paragraphs.length; i++) {
+      const paraLen = paragraphs[i].length;
+      if (batchLen > 0 && (batchLen + paraLen) > CHAR_LIMIT_BASIC) {
+        batches.push({ start: batchStart, end: i });
+        batchStart = i;
+        batchLen = paraLen;
+      } else {
+        batchLen += paraLen;
+      }
+    }
+    if (batchStart < paragraphs.length) {
+      batches.push({ start: batchStart, end: paragraphs.length });
+    }
+
+    for (const batch of batches) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const slice = paragraphs.slice(batch.start, batch.end);
+      const translated = await translateChunkBasic(slice, targetLang, gcloudProjectId, gcloudApiKey, gcloudModel, signal);
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      for (let j = 0; j < translated.length; j++) {
+        results[batch.start + j] = translated[j];
+      }
+    }
+
+    return results;
+  }
+
+  // FREE / PRO mode: batch by joined text length (~4500 chars, separated by \n\n)
   const batches = [];
   let batchStart = 0;
   let batchText = '';

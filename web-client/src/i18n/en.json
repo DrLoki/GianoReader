@@ -41,6 +41,12 @@
   "settings.connectionInfo": "Connection",
   "settings.statusConnected": "Connected",
   "settings.statusDisconnected": "Disconnected",
+  "settings.translationMode": "Translation mode",
+  "settings.gcloudProjectId": "Google Cloud Project ID",
+  "settings.gcloudApiKey": "Google Cloud API Key",
+  "settings.gcloudModel": "Translation model",
+  "settings.gcloudModelNmt": "NMT (Standard)",
+  "settings.gcloudModelTllm": "Translation LLM (Literary)",
 
   "bookmarks.title": "Bookmarks",
   "bookmarks.addTooltip": "Add bookmark",

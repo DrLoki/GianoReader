@@ -25,6 +25,9 @@ pub struct PutPreferencesRequest {
     pub ui_language: Option<String>,
     pub translation_lang: Option<String>,
     pub font_size: Option<serde_json::Value>,
+    pub gcloud_project_id: Option<String>,
+    pub gcloud_api_key: Option<String>,
+    pub gcloud_model: Option<String>,
 }
 
 /// GET /api/preferences
@@ -153,6 +156,15 @@ pub async fn put_preferences(
     if let Some(ref font_size_val) = body.font_size {
         // Already validated above, safe to unwrap
         prefs.font_size = font_size_val.as_u64().unwrap() as u8;
+    }
+    if let Some(gcloud_project_id) = body.gcloud_project_id {
+        prefs.gcloud_project_id = if gcloud_project_id.is_empty() { None } else { Some(gcloud_project_id) };
+    }
+    if let Some(gcloud_api_key) = body.gcloud_api_key {
+        prefs.gcloud_api_key = if gcloud_api_key.is_empty() { None } else { Some(gcloud_api_key) };
+    }
+    if let Some(gcloud_model) = body.gcloud_model {
+        prefs.gcloud_model = if gcloud_model.is_empty() { None } else { Some(gcloud_model) };
     }
 
     // Persist

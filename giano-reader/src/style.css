@@ -271,6 +271,26 @@ body {
   display: flex; align-items: center; justify-content: center;
 }
 .view-toggle-btn:hover:not(:disabled) { opacity: 0.8; background: var(--surface); }
+
+/* ── Translation mode dropdown (sidebar) ── */
+.translation-mode-select {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  appearance: auto;
+  -webkit-appearance: auto;
+}
+.translation-mode-select:hover { opacity: 0.8; background: var(--surface); }
+.translation-mode-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .view-toggle-btn.active,
 .view-toggle-btn[aria-pressed="true"] {
   background: var(--accent);

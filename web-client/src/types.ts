@@ -53,6 +53,10 @@ export interface Preferences {
   translationLang: string;
   fontSize: number;
   cloudflareWorkerSubdomain?: string;
+  translationMode?: string;        // 'free' | 'basic' | 'pro'
+  gcloudProjectId?: string;
+  gcloudApiKey?: string;
+  gcloudModel?: string;            // 'nmt' | 'tllm'
 }
 
 export interface CacheKey {
