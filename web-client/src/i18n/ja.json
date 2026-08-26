@@ -73,4 +73,14 @@
   "offline.switchToOnline": "サーバーモードに戻る（オンライン）",
   "offline.localMode": "ローカル（オフライン）",
   "offline.translationRequiresInternet": "翻訳にはインターネット接続が必要です"
+,
+
+  "password.empty": "パスワードを入力してください。",
+  "password.incorrect": "パスワードが正しくありません。もう一度お試しください。",
+  "password.skip": "パスワードなしで続行",
+  "password.title": "パスワードが必要です",
+  "password.placeholder": "パスワード",
+  "password.error": "接続エラー。もう一度お試しください。",
+  "password.message": "このサーバーはパスワードで保護されています。ライブラリとブックマークにアクセスするにはパスワードを入力してください。",
+  "password.submit": "ログイン"
 }

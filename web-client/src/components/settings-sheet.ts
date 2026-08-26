@@ -288,27 +288,7 @@ class SettingsSheet extends HTMLElement {
           <label class="settings-label" for="settings-translation-mode">${t('settings.translationMode')}</label>
           <select id="settings-translation-mode" class="settings-select">
             <option value="free" ${(this.currentPrefs.translationMode || 'free') === 'free' ? 'selected' : ''}>FREE</option>
-            ${this.isBasicConfigured() ? `<option value="basic" ${this.currentPrefs.translationMode === 'basic' ? 'selected' : ''}>BASIC</option>` : ''}
-          </select>
-        </div>
-
-        <div class="settings-section">
-          <label class="settings-label" for="settings-gcloud-project-id">${t('settings.gcloudProjectId')}</label>
-          <input type="text" id="settings-gcloud-project-id" class="settings-input"
-            placeholder="my-project-123456" value="${this.currentPrefs.gcloudProjectId || ''}" autocomplete="off" />
-        </div>
-
-        <div class="settings-section">
-          <label class="settings-label" for="settings-gcloud-api-key">${t('settings.gcloudApiKey')}</label>
-          <input type="password" id="settings-gcloud-api-key" class="settings-input"
-            placeholder="AIza..." value="${this.currentPrefs.gcloudApiKey || ''}" autocomplete="off" />
-        </div>
-
-        <div class="settings-section">
-          <label class="settings-label" for="settings-gcloud-model">${t('settings.gcloudModel')}</label>
-          <select id="settings-gcloud-model" class="settings-select">
-            <option value="nmt" ${(this.currentPrefs.gcloudModel || 'nmt') === 'nmt' ? 'selected' : ''}>${t('settings.gcloudModelNmt')}</option>
-            <option value="tllm" ${this.currentPrefs.gcloudModel === 'tllm' ? 'selected' : ''}>${t('settings.gcloudModelTllm')}</option>
+            ${this.currentPrefs.gcloudApiKey?.trim() ? `<option value="basic" ${this.currentPrefs.translationMode === 'basic' ? 'selected' : ''}>BASIC</option>` : ''}
           </select>
         </div>
 
@@ -337,6 +317,7 @@ class SettingsSheet extends HTMLElement {
             <option value="ar" ${this.currentPrefs.uiLanguage === 'ar' ? 'selected' : ''}>العربية</option>
             <option value="fil" ${this.currentPrefs.uiLanguage === 'fil' ? 'selected' : ''}>Filipino</option>
             <option value="sq" ${this.currentPrefs.uiLanguage === 'sq' ? 'selected' : ''}>Shqip</option>
+            <option value="vi" ${this.currentPrefs.uiLanguage === 'vi' ? 'selected' : ''}>Tiếng Việt</option>
           </select>
         </div>
 
@@ -424,32 +405,6 @@ class SettingsSheet extends HTMLElement {
       this.applyAndPersist({ translationMode });
     });
 
-    // Google Cloud Project ID
-    const gcloudProjectInput = this.querySelector('#settings-gcloud-project-id') as HTMLInputElement;
-    gcloudProjectInput?.addEventListener('change', () => {
-      const gcloudProjectId = gcloudProjectInput.value.trim();
-      this.currentPrefs.gcloudProjectId = gcloudProjectId;
-      this.applyAndPersist({ gcloudProjectId });
-      this.updateModeDropdown();
-    });
-
-    // Google Cloud API Key
-    const gcloudApiKeyInput = this.querySelector('#settings-gcloud-api-key') as HTMLInputElement;
-    gcloudApiKeyInput?.addEventListener('change', () => {
-      const gcloudApiKey = gcloudApiKeyInput.value.trim();
-      this.currentPrefs.gcloudApiKey = gcloudApiKey;
-      this.applyAndPersist({ gcloudApiKey });
-      this.updateModeDropdown();
-    });
-
-    // Google Cloud Model
-    const gcloudModelSelect = this.querySelector('#settings-gcloud-model') as HTMLSelectElement;
-    gcloudModelSelect?.addEventListener('change', () => {
-      const gcloudModel = gcloudModelSelect.value;
-      this.currentPrefs.gcloudModel = gcloudModel;
-      this.applyAndPersist({ gcloudModel });
-    });
-
     // Font size
     const fontRange = this.querySelector('#settings-font-size') as HTMLInputElement;
     const fontValue = this.querySelector('.settings-range-value') as HTMLElement;
@@ -501,32 +456,6 @@ class SettingsSheet extends HTMLElement {
         this.close();
         window.location.reload();
       });
-    }
-  }
-
-  private isBasicConfigured(): boolean {
-    return !!(this.currentPrefs.gcloudProjectId?.trim() && this.currentPrefs.gcloudApiKey?.trim());
-  }
-
-  private updateModeDropdown(): void {
-    const modeSelect = this.querySelector('#settings-translation-mode') as HTMLSelectElement;
-    if (!modeSelect) return;
-
-    const currentMode = modeSelect.value;
-    const hasBasic = this.isBasicConfigured();
-
-    // Rebuild options
-    let html = '<option value="free"' + (currentMode === 'free' ? ' selected' : '') + '>FREE</option>';
-    if (hasBasic) {
-      html += '<option value="basic"' + (currentMode === 'basic' ? ' selected' : '') + '>BASIC</option>';
-    }
-    modeSelect.innerHTML = html;
-
-    // If current mode is no longer available, fallback
-    if (!hasBasic && currentMode === 'basic') {
-      modeSelect.value = 'free';
-      this.currentPrefs.translationMode = 'free';
-      this.applyAndPersist({ translationMode: 'free' });
     }
   }
 

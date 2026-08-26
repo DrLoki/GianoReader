@@ -5,16 +5,16 @@ use std::sync::Arc;
 use crate::web_server::models::ApiError;
 use super::books::AppState;
 
-/// The 12 supported BCP-47 translation language codes.
+/// The supported BCP-47 translation language codes.
 const SUPPORTED_TRANSLATION_LANGS: &[&str] = &[
-    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq",
+    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi",
 ];
 
 /// Valid theme values.
 const VALID_THEMES: &[&str] = &["light", "dark", "sepia"];
 
 /// Valid UI language values.
-const VALID_UI_LANGUAGES: &[&str] = &["it", "en"];
+const VALID_UI_LANGUAGES: &[&str] = &["it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi"];
 
 /// Request body for PUT /api/preferences.
 /// All fields are optional to support partial updates.
@@ -25,9 +25,8 @@ pub struct PutPreferencesRequest {
     pub ui_language: Option<String>,
     pub translation_lang: Option<String>,
     pub font_size: Option<serde_json::Value>,
-    pub gcloud_project_id: Option<String>,
     pub gcloud_api_key: Option<String>,
-    pub gcloud_model: Option<String>,
+    pub password: Option<String>,
 }
 
 /// GET /api/preferences
@@ -37,7 +36,16 @@ pub struct PutPreferencesRequest {
 /// `{ theme: "dark", uiLanguage: "en", translationLang: "it", fontSize: 16 }`
 pub async fn get_preferences(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.store.get_preferences() {
-        Ok(prefs) => (StatusCode::OK, Json(prefs)).into_response(),
+        Ok(prefs) => {
+            // Never expose the raw password to clients; instead return a boolean flag
+            let password_set = prefs.password.is_some();
+            let mut value = serde_json::to_value(&prefs).unwrap();
+            if let Some(obj) = value.as_object_mut() {
+                obj.remove("password");
+                obj.insert("passwordSet".to_string(), serde_json::Value::Bool(password_set));
+            }
+            (StatusCode::OK, Json(value)).into_response()
+        }
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
@@ -157,19 +165,24 @@ pub async fn put_preferences(
         // Already validated above, safe to unwrap
         prefs.font_size = font_size_val.as_u64().unwrap() as u8;
     }
-    if let Some(gcloud_project_id) = body.gcloud_project_id {
-        prefs.gcloud_project_id = if gcloud_project_id.is_empty() { None } else { Some(gcloud_project_id) };
-    }
     if let Some(gcloud_api_key) = body.gcloud_api_key {
         prefs.gcloud_api_key = if gcloud_api_key.is_empty() { None } else { Some(gcloud_api_key) };
     }
-    if let Some(gcloud_model) = body.gcloud_model {
-        prefs.gcloud_model = if gcloud_model.is_empty() { None } else { Some(gcloud_model) };
+    if let Some(password) = body.password {
+        prefs.password = if password.is_empty() { None } else { Some(password) };
     }
 
     // Persist
     match state.store.put_preferences(&prefs) {
-        Ok(()) => (StatusCode::OK, Json(prefs)).into_response(),
+        Ok(()) => {
+            let password_set = prefs.password.is_some();
+            let mut value = serde_json::to_value(&prefs).unwrap();
+            if let Some(obj) = value.as_object_mut() {
+                obj.remove("password");
+                obj.insert("passwordSet".to_string(), serde_json::Value::Bool(password_set));
+            }
+            (StatusCode::OK, Json(value)).into_response()
+        }
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {

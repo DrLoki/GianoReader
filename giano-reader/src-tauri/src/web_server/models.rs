@@ -82,11 +82,11 @@ pub struct Preferences {
     pub translation_lang: String, // one of the 12 BCP-47 codes
     pub font_size: u8,            // 12–32
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub gcloud_project_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gcloud_api_key: Option<String>,
+    /// Optional access password for Web Server Mode.
+    /// When set, protected endpoints require this password via Authorization header.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub gcloud_model: Option<String>, // "nmt" | "tllm"
+    pub password: Option<String>,
 }
 
 impl Default for Preferences {
@@ -96,9 +96,8 @@ impl Default for Preferences {
             ui_language: "en".into(),
             translation_lang: "it".into(),
             font_size: 16,
-            gcloud_project_id: None,
             gcloud_api_key: None,
-            gcloud_model: None,
+            password: None,
         }
     }
 }

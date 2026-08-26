@@ -48,6 +48,7 @@
           <option value="sv">Svenska</option>
           <option value="uk">Українська</option>
           <option value="sl">Slovenščina</option>
+          <option value="vi">Tiếng Việt</option>
         </select>
       </div>
       <div id="book-info" class="hidden">
@@ -317,6 +318,7 @@
             <option value="sv">Svenska</option>
             <option value="uk">Українська</option>
             <option value="sl">Slovenščina</option>
+            <option value="vi">🇻🇳 Tiếng Việt</option>
           </select>
         </div>
         <div class="settings-row">
@@ -378,23 +380,12 @@
         </div>
       </div>
 
-      <!-- Panel: Basic (Google Cloud Translation v3) -->
+      <!-- Panel: Basic (Google Cloud Translation API v2) -->
       <div class="settings-panel" id="settings-panel-basic" role="tabpanel"
         aria-labelledby="settings-tab-basic" hidden>
         <div class="settings-row">
-          <label for="gcloud-project-id-input" id="gcloud-project-id-label">Google Cloud Project ID</label>
-          <input type="text" id="gcloud-project-id-input" placeholder="my-project-123456" autocomplete="off" />
-        </div>
-        <div class="settings-row">
           <label for="gcloud-api-key-input" id="gcloud-api-key-label">Google Cloud API Key</label>
           <input type="password" id="gcloud-api-key-input" placeholder="AIza..." autocomplete="off" />
-        </div>
-        <div class="settings-row">
-          <label for="gcloud-model-select" id="gcloud-model-label">Translation Model</label>
-          <select id="gcloud-model-select">
-            <option value="nmt">NMT (Standard)</option>
-            <option value="tllm">Translation LLM (Literary)</option>
-          </select>
         </div>
       </div>
 
@@ -432,6 +423,11 @@
         <div class="settings-row">
           <label for="cloudflare-subdomain-input" id="cloudflare-subdomain-label">Cloudflare Worker Subdomain</label>
           <input type="text" id="cloudflare-subdomain-input" placeholder="my-giano"
+            autocomplete="off" />
+        </div>
+        <div class="settings-row">
+          <label for="web-server-password-input" id="web-server-password-label">Password</label>
+          <input type="password" id="web-server-password-input" placeholder=""
             autocomplete="off" />
         </div>
         <!-- Web Server Mode (Tauri only) -->

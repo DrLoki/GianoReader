@@ -8,12 +8,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::web_server::models::ApiError;
-use crate::web_server::translator::{translate, translate_v3, TranslateError};
+use crate::web_server::translator::{translate, translate_v2, TranslateError};
 
 use super::books::AppState;
 
 const SUPPORTED_LANGS: &[&str] = &[
-    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq",
+    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi",
 ];
 
 #[derive(Deserialize)]
@@ -156,7 +156,7 @@ pub async fn post_translate(
     let mode = body.mode.as_deref().unwrap_or("free");
 
     let result = if mode == "basic" {
-        // Load Google Cloud credentials from preferences
+        // Load Google Cloud API key from preferences
         let prefs = match _state.store.get_preferences() {
             Ok(p) => p,
             Err(_) => {
@@ -164,20 +164,6 @@ pub async fn post_translate(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ApiError {
                         error: "Failed to load preferences".to_string(),
-                    }),
-                )
-                    .into_response();
-            }
-        };
-
-        let project_id = match prefs.gcloud_project_id {
-            Some(ref id) if !id.is_empty() => id.clone(),
-            _ => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(ApiError {
-                        error: "Google Cloud Project ID not configured. Set it in preferences."
-                            .to_string(),
                     }),
                 )
                     .into_response();
@@ -198,9 +184,7 @@ pub async fn post_translate(
             }
         };
 
-        let gcloud_model = prefs.gcloud_model.as_deref();
-
-        translate_v3(texts, &source_lang, &target_lang, &project_id, &api_key, gcloud_model).await
+        translate_v2(texts, &source_lang, &target_lang, &api_key).await
     } else {
         translate(texts, &source_lang, &target_lang).await
     };
@@ -259,6 +243,7 @@ pub async fn get_languages() -> impl IntoResponse {
         Language { code: "ar".to_string(), name: "Arabic".to_string() },
         Language { code: "fil".to_string(), name: "Filipino".to_string() },
         Language { code: "sq".to_string(), name: "Albanian".to_string() },
+        Language { code: "vi".to_string(), name: "Vietnamese".to_string() },
     ];
 
     (StatusCode::OK, Json(languages))

@@ -122,6 +122,76 @@ async function translateChunk(text, targetLang) {
   return result;
 }
 
+/** Limite di caratteri per batch nella modalità Basic (Cloud Translation v2). */
+const CHAR_LIMIT_BASIC = 25000;
+
+/** Limite massimo di stringhe per singola richiesta v2. */
+const MAX_SEGMENTS_BASIC = 128;
+
+/**
+ * Traduce un array di paragrafi tramite Google Cloud Translation API v2 (BASIC).
+ * Usa l'array nativo `q[]` dell'API — nessun join con \n\n necessario.
+ * Max 128 stringhe per richiesta.
+ *
+ * @param {string[]} paragraphs  - Array di testi da tradurre (un elemento per paragrafo, max 128).
+ * @param {string}   targetLang  - Codice lingua BCP-47 target.
+ * @param {string}   apiKey      - Google Cloud API Key.
+ * @param {AbortSignal} [signal] - Segnale di abort.
+ * @returns {Promise<string[]>}  Array di testi tradotti (stessa lunghezza dell'input).
+ */
+async function translateChunkBasic(paragraphs, targetLang, apiKey, signal) {
+  const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+
+  console.log(`[GianoReader BASIC] Starting translation request...`);
+  console.log(`[GianoReader BASIC] Target Language: ${targetLang}`);
+  console.log(`[GianoReader BASIC] Paragraphs: ${paragraphs.length}, Total chars: ${paragraphs.reduce((a, p) => a + p.length, 0)}`);
+
+  const body = {
+    q: paragraphs,
+    target: targetLang,
+    format: 'text'
+  };
+
+  const startTime = performance.now();
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal
+  });
+
+  const duration = (performance.now() - startTime) / 1000;
+  console.log(`[GianoReader BASIC] HTTP response received in ${duration.toFixed(2)}s with status ${res.status}`);
+
+  if (!res.ok) {
+    const errText = await res.text();
+    let message = `Google Cloud Translation error (${res.status})`;
+    try {
+      const parsed = JSON.parse(errText);
+      if (parsed.error?.message) {
+        message += `: ${parsed.error.message}`;
+      }
+    } catch {
+      if (errText) message += `: ${errText.substring(0, 200)}`;
+    }
+    if (res.status === 403) message = `Invalid Google Cloud API Key: ${message}`;
+    if (res.status === 429) message = `Google Cloud Translation quota exceeded: ${message}`;
+    throw new Error(message);
+  }
+
+  const data = await res.json();
+  const translations = (data.data && data.data.translations) || [];
+
+  if (translations.length !== paragraphs.length) {
+    console.warn(`[GianoReader BASIC] Response count mismatch: expected ${paragraphs.length}, got ${translations.length}`);
+  }
+
+  const result = translations.map(t => (t.translatedText || '').trim());
+  console.log(`[GianoReader BASIC] Chunk translation complete! ${result.length} paragraphs translated`);
+  return result;
+}
+
 /**
  * Traduce un array di paragrafi raggruppandoli in batch da ~CHAR_LIMIT caratteri.
  * I paragrafi vengono separati da `\n\n` all'interno di ogni batch e il risultato
@@ -146,20 +216,18 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
   }
 
   if (isBasic) {
-    const gcloudProjectId = (settings.gcloudProjectId || '').trim();
     const gcloudApiKey = (settings.gcloudApiKey || '').trim();
-    const gcloudModel = settings.gcloudModel || 'nmt';
-    if (!gcloudProjectId) throw new Error('Google Cloud Project ID not configured');
     if (!gcloudApiKey) throw new Error('Google Cloud API Key not configured');
 
-    // Basic mode: batch by total char length (~25000), use contents[] array
+    // Basic mode: batch by total char length (~25000) AND max 128 segments per request
     const batches = [];
     let batchStart = 0;
     let batchLen = 0;
 
     for (let i = 0; i < paragraphs.length; i++) {
       const paraLen = paragraphs[i].length;
-      if (batchLen > 0 && (batchLen + paraLen) > CHAR_LIMIT_BASIC) {
+      const batchCount = i - batchStart;
+      if (batchLen > 0 && ((batchLen + paraLen) > CHAR_LIMIT_BASIC || batchCount >= MAX_SEGMENTS_BASIC)) {
         batches.push({ start: batchStart, end: i });
         batchStart = i;
         batchLen = paraLen;
@@ -174,7 +242,7 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
     for (const batch of batches) {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       const slice = paragraphs.slice(batch.start, batch.end);
-      const translated = await translateChunkBasic(slice, targetLang, gcloudProjectId, gcloudApiKey, gcloudModel, signal);
+      const translated = await translateChunkBasic(slice, targetLang, gcloudApiKey, signal);
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       for (let j = 0; j < translated.length; j++) {
         results[batch.start + j] = translated[j];

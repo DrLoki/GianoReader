@@ -135,25 +135,38 @@ pub async fn stop(server_state: &ServerState) -> Result<(), String> {
 /// - All REST API handlers are mounted under `/api/`
 /// - CORS middleware allows cross-origin requests from any LAN device (Requirement 18.6)
 /// - Static file service serves the embedded web client at `/` with SPA fallback (Requirement 18.5)
+/// - Protected routes (books, bookmarks, state, chapters) require password if configured
+/// - Public routes (preferences, translate) are always accessible
 pub fn build_router(state: Arc<AppState>) -> Router {
-    let api_routes = Router::new()
+    // Protected routes: require password when configured
+    let protected_routes = Router::new()
         // Books
         .route("/books", get(handlers::books::list_books))
-        .route("/books/{id}/cover", get(handlers::books::get_cover))
         .route("/books/{id}/toc", get(handlers::books::get_toc))
         // Chapters
         .route("/books/{id}/chapter/{chapterIndex}", get(handlers::chapters::get_chapter))
-        // Translate
-        .route("/translate", post(handlers::translate::post_translate))
-        .route("/translate/languages", get(handlers::translate::get_languages))
         // Reading state
         .route("/books/{id}/state", get(handlers::state::get_reading_state).put(handlers::state::put_reading_state))
         // Bookmarks
         .route("/books/{id}/bookmarks", get(handlers::bookmarks::list_bookmarks).post(handlers::bookmarks::create_bookmark))
         .route("/books/{id}/bookmarks/{bookmarkId}", delete(handlers::bookmarks::delete_bookmark))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::require_password))
+        .with_state(state.clone());
+
+    // Public routes: always accessible (no password needed)
+    let public_routes = Router::new()
+        // Book covers (loaded via <img> tags which cannot send Authorization headers)
+        .route("/books/{id}/cover", get(handlers::books::get_cover))
+        // Translate
+        .route("/translate", post(handlers::translate::post_translate))
+        .route("/translate/languages", get(handlers::translate::get_languages))
         // Preferences
         .route("/preferences", get(handlers::prefs::get_preferences).put(handlers::prefs::put_preferences))
         .with_state(state);
+
+    let api_routes = Router::new()
+        .merge(protected_routes)
+        .merge(public_routes);
 
     Router::new()
         .nest("/api", api_routes)

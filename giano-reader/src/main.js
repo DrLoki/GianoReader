@@ -103,9 +103,7 @@ const viewerWrapper = document.getElementById('viewer-wrapper');
 const translationModeSelect = document.getElementById('translation-mode-select');
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
-const gcloudProjectIdInput = document.getElementById('gcloud-project-id-input');
 const gcloudApiKeyInput = document.getElementById('gcloud-api-key-input');
-const gcloudModelSelect = document.getElementById('gcloud-model-select');
 
 // Web Server Mode
 const webServerSettings = document.getElementById('web-server-settings');
@@ -226,6 +224,7 @@ const FLAG_MAP = {
   pt: 'pt', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
   fil: 'ph', sq: 'al', hi: 'in', ko: 'kr', th: 'th',
   bn: 'in', id: 'id', sv: 'se', uk: 'ua', sl: 'si',
+  vi: 'vn',
 };
 
 function createFlagSelect(selectEl) {
@@ -630,24 +629,14 @@ function applyUiLang(lang) {
   if (_tabPro) _tabPro.textContent = t(lang, 'settingsTabPro');
   if (_tabWebserver) _tabWebserver.textContent = t(lang, 'settingsTabWebServer');
   // Google Cloud labels
-  const _gcProjectLabel = document.getElementById('gcloud-project-id-label');
   const _gcApiKeyLabel = document.getElementById('gcloud-api-key-label');
-  const _gcModelLabel = document.getElementById('gcloud-model-label');
-  if (_gcProjectLabel) _gcProjectLabel.textContent = t(lang, 'gcloudProjectId');
   if (_gcApiKeyLabel) _gcApiKeyLabel.textContent = t(lang, 'gcloudApiKey');
-  if (_gcModelLabel) _gcModelLabel.textContent = t(lang, 'gcloudModel');
-  // Update gcloud model select options text
-  const _gcModelSelect = document.getElementById('gcloud-model-select');
-  if (_gcModelSelect) {
-    const opts = _gcModelSelect.options;
-    for (let i = 0; i < opts.length; i++) {
-      if (opts[i].value === 'nmt') opts[i].textContent = t(lang, 'gcloudModelNmt');
-      if (opts[i].value === 'tllm') opts[i].textContent = t(lang, 'gcloudModelTllm');
-    }
-  }
   // Cloudflare subdomain label
   const _cfLabel = document.getElementById('cloudflare-subdomain-label');
   if (_cfLabel) _cfLabel.textContent = t(lang, 'cloudflareWorkerSubdomain');
+  // Web Server password label
+  const _pwLabel = document.getElementById('web-server-password-label');
+  if (_pwLabel) _pwLabel.textContent = t(lang, 'webServerPassword');
 }
 
 function updateTranslationModeSelect() {
@@ -655,7 +644,7 @@ function updateTranslationModeSelect() {
   const s = loadSettings();
 
   // Determine which modes are available
-  const hasBasic = !!(s.gcloudProjectId && s.gcloudProjectId.trim() && s.gcloudApiKey && s.gcloudApiKey.trim());
+  const hasBasic = !!(s.gcloudApiKey && s.gcloudApiKey.trim());
   const hasProKey = (s.openrouterApiKey || '').trim();
   const hasPro = hasProKey.startsWith('sk-or-') && hasProKey.length > 6 && !!(s.openrouterModel);
 
@@ -1403,9 +1392,7 @@ ttsController._onProgressChange = (pct) => {
   if (openrouterKeyInput) openrouterKeyInput.value = openrouterApiKey;
 
   // Google Cloud (Basic mode) settings init
-  if (gcloudProjectIdInput) gcloudProjectIdInput.value = s.gcloudProjectId || '';
   if (gcloudApiKeyInput) gcloudApiKeyInput.value = s.gcloudApiKey || '';
-  if (gcloudModelSelect) gcloudModelSelect.value = s.gcloudModel || 'nmt';
 
 
   const translationMode = s.translationMode || 'free';
@@ -1524,32 +1511,17 @@ if (openrouterModelSelect) {
 }
 
 // Google Cloud (Basic mode) settings persistence
-if (gcloudProjectIdInput) {
-  const handleGcloudProjectUpdate = () => {
-    const s = loadSettings();
-    s.gcloudProjectId = gcloudProjectIdInput.value.trim();
-    saveSettings(s);
-    updateTranslationModeSelect();
-  };
-  gcloudProjectIdInput.addEventListener('change', handleGcloudProjectUpdate);
-  gcloudProjectIdInput.addEventListener('input', handleGcloudProjectUpdate);
-}
 if (gcloudApiKeyInput) {
   const handleGcloudKeyUpdate = () => {
     const s = loadSettings();
     s.gcloudApiKey = gcloudApiKeyInput.value.trim();
     saveSettings(s);
     updateTranslationModeSelect();
+    // Sync to web server if running
+    if (window._syncApiKeysToServer) window._syncApiKeysToServer();
   };
   gcloudApiKeyInput.addEventListener('change', handleGcloudKeyUpdate);
   gcloudApiKeyInput.addEventListener('input', handleGcloudKeyUpdate);
-}
-if (gcloudModelSelect) {
-  gcloudModelSelect.addEventListener('change', () => {
-    const s = loadSettings();
-    s.gcloudModel = gcloudModelSelect.value;
-    saveSettings(s);
-  });
 }
 
 const openrouterFetchBtn = document.getElementById('openrouter-fetch-btn');
@@ -1665,6 +1637,20 @@ if (cloudflareSubdomainInput) {
   });
 }
 
+// ── Web Server Password ────────────────────────────────────────────────────
+const webServerPasswordInput = document.getElementById('web-server-password-input');
+if (webServerPasswordInput) {
+  const s = loadSettings();
+  if (s.webServerPassword) webServerPasswordInput.value = s.webServerPassword;
+  webServerPasswordInput.addEventListener('change', () => {
+    const settings = loadSettings();
+    settings.webServerPassword = webServerPasswordInput.value;
+    saveSettings(settings);
+    // Sync password to running server if active
+    if (window._syncPasswordToServer) window._syncPasswordToServer();
+  });
+}
+
 // ── Web Server Mode ────────────────────────────────────────────────────────
 (function initWebServerMode() {
   // Show web server settings only in Tauri
@@ -1680,6 +1666,39 @@ if (cloudflareSubdomainInput) {
   function hideWebServerError() {
     if (webServerError) webServerError.classList.add('hidden');
   }
+
+  /** Sync API keys from desktop localStorage to the embedded web server preferences. */
+  function syncApiKeysToServer() {
+    if (!webServerToggle || !webServerToggle.checked) return;
+    const s = loadSettings();
+    const port = s.webServerPort || 8888;
+    const body = {};
+    if (s.gcloudApiKey) body.gcloudApiKey = s.gcloudApiKey;
+    // Only send if there's something to sync
+    if (Object.keys(body).length === 0) return;
+    fetch(`http://127.0.0.1:${port}/api/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).catch(() => { /* ignore sync errors silently */ });
+  }
+  // Expose globally so settings handlers can call it
+  window._syncApiKeysToServer = syncApiKeysToServer;
+
+  /** Sync password from desktop localStorage to the embedded web server preferences. */
+  function syncPasswordToServer() {
+    if (!webServerToggle || !webServerToggle.checked) return;
+    const s = loadSettings();
+    const port = s.webServerPort || 8888;
+    const body = { password: s.webServerPassword || '' };
+    fetch(`http://127.0.0.1:${port}/api/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).catch(() => { /* ignore sync errors silently */ });
+  }
+  // Expose globally so password input handler can call it
+  window._syncPasswordToServer = syncPasswordToServer;
 
   function updateWebServerUI(active, info) {
     if (!webServerToggle) return;
@@ -1738,6 +1757,10 @@ if (cloudflareSubdomainInput) {
           const settings = loadSettings();
           settings.webServerPort = port;
           saveSettings(settings);
+          // Sync API keys to the server's preference store
+          syncApiKeysToServer();
+          // Sync password to the server
+          syncPasswordToServer();
         } catch (err) {
           const msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to start server');
           showWebServerError(msg);
@@ -4534,6 +4557,7 @@ async function openBookDetail(entryId) {
     entry.pubdate = document.getElementById('detail-pubdate').value.trim();
     entry.language = document.getElementById('detail-language').value.trim();
     entry.status = document.getElementById('detail-status').value;
+    entry.description = document.getElementById('detail-description').value.trim();
     entry.notes = document.getElementById('detail-notes').value.trim();
     const idx = lib.findIndex(e => e.id === entryId);
     if (idx >= 0) { lib[idx] = entry; await saveLibrary(lib); }

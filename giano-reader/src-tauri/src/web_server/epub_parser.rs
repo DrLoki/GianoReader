@@ -42,7 +42,13 @@ pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSumm
                         if !path.exists() {
                             continue;
                         }
-                        if let Some(book) = book_summary_from_path(&path, store, entry.status.clone()) {
+                        if let Some(book) = book_summary_from_path(
+                            &path,
+                            store,
+                            entry.status.clone(),
+                            entry.title.clone(),
+                            entry.author.clone(),
+                        ) {
                             books.push(book);
                         }
                     }
@@ -70,10 +76,8 @@ pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSumm
 #[serde(rename_all = "camelCase")]
 struct LibraryEntry {
     file_path: String,
-    #[allow(dead_code)]
     #[serde(default)]
     title: Option<String>,
-    #[allow(dead_code)]
     #[serde(default)]
     author: Option<String>,
     #[serde(default)]
@@ -81,7 +85,17 @@ struct LibraryEntry {
 }
 
 /// Creates a BookSummary from an epub file path.
-fn book_summary_from_path(path: &Path, store: &PersistenceStore, status: Option<String>) -> Option<BookSummary> {
+///
+/// `title_override` and `author_override` come from the desktop library JSON
+/// (user-editable). When present and non-empty, they take precedence over the
+/// metadata parsed from the EPUB file itself.
+fn book_summary_from_path(
+    path: &Path,
+    store: &PersistenceStore,
+    status: Option<String>,
+    title_override: Option<String>,
+    author_override: Option<String>,
+) -> Option<BookSummary> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let id = generate_book_id(&canonical);
 
@@ -93,16 +107,21 @@ fn book_summary_from_path(path: &Path, store: &PersistenceStore, status: Option<
         }
     };
 
-    let title = doc.get_title().unwrap_or_else(|| {
-        path.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Untitled")
-            .to_string()
-    });
+    // Prefer the user-edited title from the desktop library, fall back to EPUB metadata.
+    let title = title_override
+        .filter(|t| !t.trim().is_empty())
+        .or_else(|| doc.get_title())
+        .unwrap_or_else(|| {
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Untitled")
+                .to_string()
+        });
 
-    let author = doc
-        .mdata("creator")
-        .map(|item| item.value.clone())
+    // Prefer the user-edited author from the desktop library, fall back to EPUB metadata.
+    let author = author_override
+        .filter(|a| !a.trim().is_empty())
+        .or_else(|| doc.mdata("creator").map(|item| item.value.clone()))
         .unwrap_or_else(|| "Unknown".to_string());
 
     let cover_url = Some(format!("/api/books/{}/cover", id));
@@ -151,7 +170,7 @@ fn list_books_from_directory(library_path: &Path, store: &PersistenceStore) -> V
             _ => continue,
         }
 
-        if let Some(book) = book_summary_from_path(&path, store, None) {
+        if let Some(book) = book_summary_from_path(&path, store, None, None, None) {
             books.push(book);
         }
     }

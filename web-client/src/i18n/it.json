@@ -82,5 +82,14 @@
   "offline.localMode": "Locale (Offline)",
   "offline.translationRequiresInternet": "La traduzione richiede una connessione internet",
   "offline.deleteBook": "Elimina libro",
-  "offline.bookDeleted": "Libro eliminato"
+  "offline.bookDeleted": "Libro eliminato",
+
+  "password.title": "Password richiesta",
+  "password.message": "Questo server è protetto da password. Inserisci la password per accedere alla libreria e ai segnalibri.",
+  "password.placeholder": "Password",
+  "password.submit": "Accedi",
+  "password.skip": "Continua senza password",
+  "password.incorrect": "Password errata. Riprova.",
+  "password.empty": "Inserisci una password.",
+  "password.error": "Errore di connessione. Riprova."
 }

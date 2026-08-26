@@ -54,9 +54,8 @@ export interface Preferences {
   fontSize: number;
   cloudflareWorkerSubdomain?: string;
   translationMode?: string;        // 'free' | 'basic' | 'pro'
-  gcloudProjectId?: string;
-  gcloudApiKey?: string;
-  gcloudModel?: string;            // 'nmt' | 'tllm'
+  gcloudApiKey?: string;           // read from server, not editable in PWA
+  passwordSet?: boolean;           // true if server has a password configured
 }
 
 export interface CacheKey {

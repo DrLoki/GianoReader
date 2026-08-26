@@ -137,9 +137,9 @@ To make comparative reading natural and highly efficient, Giano Reader features 
 
 ## Translation
 
-### Dual Translation Mode (FREE / PRO)
+### Dual Translation Mode (FREE / BASIC / PRO)
 
-Giano Reader supports a dual translation architecture to meet both simplicity and literary excellence:
+Giano Reader supports a three-tier translation architecture to meet different needs — from zero-config simplicity to commercial-grade quality to AI-powered literary excellence:
 
 #### 1. FREE Mode (Google Translate)
 
@@ -149,11 +149,21 @@ The basic translation uses the unofficial public endpoint of Google Translate (`
 - As you scroll down, subsequent blocks are automatically translated.
 - Previous blocks (above the initial position) are translated in the background.
 
-#### 2. PRO Mode (OpenRouter API)
+#### 2. BASIC Mode (Google Cloud Translation API v3)
+
+For higher-quality translations without requiring an LLM, you can activate **BASIC** mode which uses the official Google Cloud Translation API v2:
+
+- **Activation:** Configure your Google Cloud API Key in **Settings → Basic** tab. Once configured, the **BASIC** option appears in the translation mode dropdown in the sidebar.
+- **Advantages over FREE:** The official API provides more accurate NMT translations, is not subject to CORS restrictions or aggressive rate limiting of the free endpoint, and uses native array-based translation (no paragraph joining/splitting workaround), supporting batches of up to ~25,000 characters and 128 paragraphs per request.
+- **Cost:** Approximately $0.01–0.02 per average novel. Free tier includes 500,000 characters/month. See the [Google Cloud Setup Guide](GOOGLE_CLOUD_SETUP.md) for detailed pricing.
+
+> **Setup:** See [`GOOGLE_CLOUD_SETUP.md`](GOOGLE_CLOUD_SETUP.md) for a complete step-by-step guide on creating a Google Cloud project, enabling the API, and obtaining an API key.
+
+#### 3. PRO Mode (OpenRouter API)
 
 For a premium, context-aware translation that preserves literary style, nuances, and vocabulary consistency, you can activate the **PRO** mode based on the **OpenRouter** API:
 
-- **Activation:** Paste a valid API Key in **Settings**. As soon as it is entered, the **FREE / PRO** switch will appear in the sidebar.
+- **Activation:** Paste a valid API Key in **Settings → PRO** tab. As soon as it is entered and a model is selected, the **PRO** option will appear in the translation mode dropdown in the sidebar.
 - **Model Selection:** You can load the list of available models directly from OpenRouter servers and select your preferred one. Fast and efficient models are highly recommended (such as `google/gemini-2.5-flash` or `meta-llama/llama-3-8b-instruct`) to reduce response times to just a few seconds.
 - **Timing & Network:** When using PRO mode, OpenRouter uses *Chunked Transfer Encoding*. Consequently, the translation is generated in the background and rendered as soon as it is finished; paragraphs currently being translated remain grayed out until the process completes.
 
@@ -287,13 +297,31 @@ Use the **import** and **export** buttons in the bookmarks modal to save or load
 5. A QR code and URL are displayed (e.g. `http://192.168.1.42:8888`).
 6. Scan the QR code or type the URL on your mobile device's browser.
 
+### Password Protection
+
+You can optionally protect access to your library and bookmarks with a password:
+
+1. Open **Settings → Web Server** tab.
+2. Enter a password in the **Password** field (below the Cloudflare Worker Subdomain).
+3. The password is synced to the running server automatically.
+
+When a password is set:
+
+- The web client shows a login prompt on first access.
+- Entering the correct password grants full access to the library, bookmarks, reading state, and chapters.
+- Entering an incorrect password (or leaving the field empty and clicking "Sign in") enters **Guest Mode**: the user can still load a local EPUB file and read/translate it, but cannot browse the server library or bookmarks.
+- **Translation in Guest Mode**: if a Google Cloud API Key has been configured on the server, BASIC translation mode is available even in guest mode (the `/api/translate` endpoint is public and does not require authentication). The user can select BASIC in the translation mode dropdown in settings.
+- Book covers are always accessible without password (they are loaded via `<img>` tags which cannot send authentication headers).
+
+To remove password protection, clear the Password field in Settings.
+
 ### Web Client Features
 
 The mobile web interface provides:
 
 - **Library grid** — browse all your EPUB books with covers and progress.
 - **Card UI reading** — swipe or tap between Original and Translated text cards.
-- **Lazy translation** — paragraphs are translated on-the-fly as you scroll, using the same Google Translate engine.
+- **Lazy translation** — paragraphs are translated on-the-fly as you scroll, using the same Google Translate engine (FREE mode) or Google Cloud Translation API (BASIC mode).
 - **Bookmarks** — save and navigate bookmarks from your phone.
 - **Settings** — change theme (light/dark/sepia), font size, translation language, and UI language.
 - **Reading progress sync** — your position is saved automatically and restored on reconnect.
@@ -396,15 +424,17 @@ Open Settings by clicking the **gear** icon in the sidebar.
 
 | Setting | Description |
 | --- | ---|
-| **Interface language** | UI text language (20 languages available with automatic i18n alignment) |
+| **Interface language** | UI text language (21 languages available with automatic i18n alignment) |
 | **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
 | **Font** | Font family for reading text |
 | **Font size** | Slider from 12px to 32px |
 | **Search depth** | Subfolder depth level for library scanning (1–10, default 3) |
+| **Google Cloud API Key** | API key for Google Cloud Translation API v2 (for BASIC mode). See [`GOOGLE_CLOUD_SETUP.md`](GOOGLE_CLOUD_SETUP.md) |
 | **OpenRouter API Key** | API Key to enable advanced PRO translation using artificial intelligence models |
 | **Fetch models** | Clicking the button fetches the list of available models from OpenRouter |
 | **OpenRouter Model (PRO)** | Dropdown selector to choose the LLM model to use for PRO translations |
 | **Cloudflare Worker Subdomain** | Cloudflare subdomain prefix for your CORS proxy worker (e.g. `happy-reader` to use `https://giano-translate-proxy.happy-reader.workers.dev`). If empty, direct Google Translate endpoint is used. |
+| **Password** | Optional password to protect the Web Server. When set, accessing the library and bookmarks from the web client requires entering this password. Translation and preferences remain accessible without authentication. |
 | **Web Server Mode** | Toggle to start/stop the embedded HTTP server for mobile access (default port: 8888) |
 
 All settings are saved automatically. In the desktop application (Tauri), the Library and Bookmarks databases are stored in dedicated JSON files directly in the filesystem (`giano-library.json` and `giano-bookmarks.json` in the app's standard data directory), permanently bypassing browser storage quota limitations (`localStorage`) and avoiding "storage quota exceeded" errors when importing large ebook collections.
@@ -417,7 +447,7 @@ All settings are saved automatically. In the desktop application (Tauri), the Li
 Some EPUBs generated by Calibre may take longer than usual to load. Wait up to 20 seconds. If the problem persists, try re-exporting the file from Calibre as an EPUB 2 file.
 
 **The translation doesn't start or shows errors.**
-Check your internet connection. The FREE Google Translate endpoint is unofficial and may be subject to CORS or temporary blocks. You can set up your own Cloudflare Worker CORS proxy (see `CLOUDFLARE_WORKER_SETUP.md`) and enter your subdomain in Settings under **Cloudflare Worker Subdomain**. Alternatively, configure an OpenRouter API key for PRO AI translation.
+Check your internet connection. The FREE Google Translate endpoint is unofficial and may be subject to CORS or temporary blocks. You can set up your own Cloudflare Worker CORS proxy (see `CLOUDFLARE_WORKER_SETUP.md`) and enter your subdomain in Settings under **Cloudflare Worker Subdomain**. Alternatively, configure Google Cloud Translation API for BASIC mode (see [`GOOGLE_CLOUD_SETUP.md`](GOOGLE_CLOUD_SETUP.md)) or an OpenRouter API key for PRO AI translation.
 
 **Bookmarks do not open automatically.**
 Automatic bookmark reopening requires the desktop application (Tauri). In the browser, you will need to open the file manually and navigate to the indicated chapter.
@@ -446,3 +476,9 @@ Chromium browsers require a Secure Context (HTTPS or `localhost`) to register Se
 2. Enter the server origin (e.g. `http://192.168.1.5:8888`).
 3. Set the option to **Enabled** and click **Relaunch**.
 4. Refresh the page to see the **Install** button.
+
+**I set a password but other users can still see book covers.**
+This is by design. Book covers are served publicly because web browsers load `<img>` tags without the ability to send authentication headers. The library listing, bookmarks, reading state, and chapter content remain protected.
+
+**I entered the wrong password on the web client and now I'm in offline mode. How do I retry?**
+Open the settings sheet in the web client and tap "Switch back to Server mode (Online)". This clears the offline flag and reloads the page, showing the password prompt again.
