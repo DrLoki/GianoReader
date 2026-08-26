@@ -96,29 +96,50 @@ CRITICAL: Return ONLY the translated text, preserving the exact paragraph count 
 
 /**
  * Traduce un singolo blocco di testo verso la lingua target.
- * Chiama direttamente Google Translate (nessun proxy Worker necessario in Tauri/desktop).
+ *
+ * In ambiente Tauri (desktop) la richiesta viene delegata al comando Rust
+ * `translate_free`, che usa `reqwest` lato backend: questo evita che la
+ * richiesta sia soggetta alle policy CORS del webview, le quali possono far
+ * apparire come "bloccato da CORS" un errore di rate-limit (HTTP 429) di
+ * Google Translate — la risposta di errore di Google non include l'header
+ * Access-Control-Allow-Origin, quindi il browser/webview la segnala come
+ * violazione CORS anche se il vero problema è il rate limiting.
+ * In browser/PWA (nessun runtime Tauri) si usa `fetch()` diretto come prima.
+ *
  * @param {string} text       - Testo da tradurre (già suddiviso in chunk).
  * @param {string} targetLang - Codice lingua BCP-47 (es. "it", "en", "fr").
  * @returns {Promise<string>} Testo tradotto.
  */
 async function translateChunk(text, targetLang) {
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-
   console.log(`[GianoReader FREE] Starting translation request...`);
   console.log(`[GianoReader FREE] Target Language: ${targetLang}`);
   console.log(`[GianoReader FREE] Text Length: ${text.length} chars`);
 
   const startTime = performance.now();
-  const res = await fetch(url);
+  const isTauri = typeof window !== 'undefined' && (window.__TAURI__ || window.__TAURI_INTERNALS__);
+
+  let result;
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      result = await invoke('translate_free', {
+        text,
+        sourceLang: 'auto',
+        targetLang,
+      });
+    } catch (err) {
+      throw new Error(`Translation error: ${err?.message || err}`);
+    }
+  } else {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Translation error: ${res.status}`);
+    const data = await res.json();
+    result = data[0].map(seg => seg[0]).join('');
+  }
+
   const duration = (performance.now() - startTime) / 1000;
-
-  console.log(`[GianoReader FREE] HTTP response received in ${duration.toFixed(2)}s with status ${res.status}`);
-
-  if (!res.ok) throw new Error(`Translation error: ${res.status}`);
-  const data = await res.json();
-  const result = data[0].map(seg => seg[0]).join('');
-
-  console.log(`[GianoReader FREE] Chunk translation complete! Translated text size: ${result.length} chars`);
+  console.log(`[GianoReader FREE] Chunk translation complete in ${duration.toFixed(2)}s! Translated text size: ${result.length} chars`);
   return result;
 }
 

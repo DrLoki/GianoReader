@@ -334,6 +334,23 @@ fn build_batches(texts: &[String]) -> Vec<Batch> {
     batches
 }
 
+/// Translates a single already-prepared text chunk (which may itself contain
+/// multiple paragraphs joined by `\n\n`) using the free Google Translate
+/// endpoint, without any batching or realignment.
+///
+/// This mirrors the behaviour of the JS `translateChunk()` helper in
+/// `src/translator.js`: the caller is responsible for splitting/joining
+/// paragraphs before calling this function, and for re-splitting the
+/// returned string afterwards if needed.
+pub async fn translate_chunk_raw(
+    text: &str,
+    source_lang: &str,
+    target_lang: &str,
+) -> Result<String, TranslateError> {
+    let client = Client::new();
+    translate_chunk(&client, text, source_lang, target_lang).await
+}
+
 /// Sends a single batch to the Google Translate endpoint and returns the translated text.
 async fn translate_chunk(
     client: &Client,

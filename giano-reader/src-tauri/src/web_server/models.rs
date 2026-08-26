@@ -81,12 +81,18 @@ pub struct Preferences {
     pub ui_language: String,      // "it" | "en"
     pub translation_lang: String, // one of the 12 BCP-47 codes
     pub font_size: u8,            // 12–32
+    #[serde(default = "default_translation_mode")]
+    pub translation_mode: String, // "free" | "basic" | "pro"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gcloud_api_key: Option<String>,
     /// Optional access password for Web Server Mode.
     /// When set, protected endpoints require this password via Authorization header.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+}
+
+fn default_translation_mode() -> String {
+    "free".into()
 }
 
 impl Default for Preferences {
@@ -96,6 +102,7 @@ impl Default for Preferences {
             ui_language: "en".into(),
             translation_lang: "it".into(),
             font_size: 16,
+            translation_mode: default_translation_mode(),
             gcloud_api_key: None,
             password: None,
         }
