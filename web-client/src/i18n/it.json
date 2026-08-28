@@ -83,6 +83,7 @@
   "offline.translationRequiresInternet": "La traduzione richiede una connessione internet",
   "offline.deleteBook": "Elimina libro",
   "offline.bookDeleted": "Libro eliminato",
+  "offline.usingCachedBooks": "Server non raggiungibile — mostro i libri scaricati",
 
   "password.title": "Password richiesta",
   "password.message": "Questo server è protetto da password. Inserisci la password per accedere alla libreria e ai segnalibri.",

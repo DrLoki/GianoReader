@@ -83,6 +83,7 @@
   "offline.translationRequiresInternet": "Translation requires an internet connection",
   "offline.deleteBook": "Delete book",
   "offline.bookDeleted": "Book deleted",
+  "offline.usingCachedBooks": "Server unreachable — showing downloaded books",
 
   "password.title": "Password Required",
   "password.message": "This server is password-protected. Enter the password to access the library and bookmarks.",

@@ -202,6 +202,18 @@ class LibraryScreen extends HTMLElement {
 
     try {
       this.books = await getBooks();
+
+      // getBooks() succeeded — it may have fallen back to local books
+      // after a network failure. If we got results, dismiss any
+      // disconnected overlay so the user can browse their offline library.
+      if (this.books.length > 0) {
+        const overlay = document.querySelector('disconnected-overlay');
+        if (overlay) {
+          overlay.remove();
+          showToast(t('offline.usingCachedBooks'), 'info');
+        }
+      }
+
       if (!isOfflineMode()) {
         try {
           this.offlineCachedIds = await getOfflineCachedIds();
@@ -211,6 +223,7 @@ class LibraryScreen extends HTMLElement {
       }
       this.applyFilters();
     } catch {
+      // getBooks() failed completely (no local books either) — show error UI
       content.innerHTML = `
         <div class="library-error" role="alert" aria-live="assertive">
           <p>${t('library.error')}</p>

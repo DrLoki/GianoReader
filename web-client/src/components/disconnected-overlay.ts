@@ -162,7 +162,15 @@ class DisconnectedOverlay extends HTMLElement {
     offlineBtn?.addEventListener('click', () => {
       localStorage.setItem('giano-offline-mode', 'true');
       this.remove();
-      window.location.reload();
+      // Re-mount the library screen without a full page reload so the user
+      // sees their cached books immediately.
+      document.dispatchEvent(
+        new CustomEvent('navigate', {
+          detail: { screen: 'library' },
+          bubbles: true,
+          composed: true,
+        }),
+      );
     }, { signal });
   }
 

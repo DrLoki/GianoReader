@@ -3,15 +3,43 @@ import type { BookSummary, TocEntry } from '../types';
 import { isOfflineMode, isLocalId, getLocalBooks, getLocalBookToc } from './local-db';
 
 /**
- * Fetches the list of all books in the library.
- * Calls GET /api/books and returns the parsed JSON array.
+ * Fetches the full book list.
+ *
+ * Local books (imported EPUBs + offline-cached copies) are always loaded first
+ * from IndexedDB. When online, server books are fetched and appended — if the
+ * network call fails, the user still sees their local library.
  */
 export async function getBooks(): Promise<BookSummary[]> {
-  if (isOfflineMode()) {
-    return getLocalBooks();
+  // Local books are the stable base — always available
+  let localBooks: BookSummary[] = [];
+  try {
+    localBooks = await getLocalBooks();
+  } catch {
+    // IndexedDB unavailable — proceed with an empty local set
   }
-  const response = await apiFetch('/api/books');
-  return response.json() as Promise<BookSummary[]>;
+
+  if (isOfflineMode()) {
+    return localBooks;
+  }
+
+  // Build a set of server IDs that already have a local offline copy
+  // so we can avoid showing duplicates
+  const offlineMirrorIds = new Set(
+    localBooks
+      .filter((b) => b.id.startsWith('offline-'))
+      .map((b) => b.id.slice('offline-'.length)),
+  );
+
+  try {
+    const response = await apiFetch('/api/books');
+    const serverBooks = await response.json() as BookSummary[];
+    // Exclude server books that the user already downloaded locally
+    const uniqueServerBooks = serverBooks.filter((b) => !offlineMirrorIds.has(b.id));
+    return [...localBooks, ...uniqueServerBooks];
+  } catch {
+    // Network failure — return whatever we have locally
+    return localBooks;
+  }
 }
 
 /**
