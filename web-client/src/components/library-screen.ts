@@ -13,6 +13,7 @@ import {
   removeOfflineBook,
   deleteLocalBook,
 } from '../api/local-db';
+import { iconGear, iconUpload, iconStar, iconXmark, iconTrash } from '../icons';
 
 
 interface BookmarkWithBook extends Bookmark {
@@ -105,11 +106,11 @@ class LibraryScreen extends HTMLElement {
         <header class="library-header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <button class="settings-btn" aria-label="${t('reading.settingsTooltip')}">
-              <img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true">
+              ${iconGear}
             </button>
             ${isOfflineMode() ? `
               <label class="import-btn-label" for="import-epub-file" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; background: transparent; transition: background 0.15s;" title="${t('offline.importEpub')}">
-                <img class="icon" src="/icons/upload.svg" alt="${t('offline.importEpub')}">
+                ${iconUpload}
               </label>
               <input type="file" id="import-epub-file" accept=".epub" style="display: none;">
             ` : ''}
@@ -117,7 +118,7 @@ class LibraryScreen extends HTMLElement {
           <div class="tab-group" role="tablist">
             <button class="tab-btn tab-library active" role="tab" aria-selected="true">${t('library.title')}</button>
             <button class="tab-btn tab-bookmarks" role="tab" aria-selected="false">
-              <img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"> ${t('bookmarks.title')}
+              ${iconStar} ${t('bookmarks.title')}
             </button>
           </div>
         </header>
@@ -352,8 +353,10 @@ class LibraryScreen extends HTMLElement {
         (done, total) => this.updateDownloadProgress(bookId, done, total),
       );
       this.offlineCachedIds.add(bookId);
+      showToast(t('offline.cached'), 'success');
     } catch (err) {
       console.error('Failed to download book for offline use:', err);
+      showToast(t('toast.errorGeneric'), 'error');
     } finally {
       this.downloadingIds.delete(bookId);
       this.refreshCardControl(bookId);
@@ -544,7 +547,7 @@ class LibraryScreen extends HTMLElement {
           <div class="bookmark-label">${escapeHtml(label)}</div>
           <div class="bookmark-date">${date}</div>
         </div>
-        <button class="bookmark-delete-btn" aria-label="${escapeAttr(t('bookmarks.deleteTooltip'))}" data-book-id="${bm.bookId}" data-bookmark-id="${bm.id}"><img class="bm-icon" src="/icons/xmark.svg" alt="" aria-hidden="true"></button>
+        <button class="bookmark-delete-btn" aria-label="${escapeAttr(t('bookmarks.deleteTooltip'))}" data-book-id="${bm.bookId}" data-bookmark-id="${bm.id}">${iconXmark}</button>
       </div>
     `;
   }
@@ -558,7 +561,7 @@ class LibraryScreen extends HTMLElement {
       : '';
 
     const offlineControl = (!isOfflineMode() && !isLocalId(book.id)) ? this.renderOfflineControl(book.id) : '';
-    const deleteControl = isLocalId(book.id) ? `<button class="offline-btn offline-btn--delete" data-book-id="${book.id}" data-action="delete-local" aria-label="${t('offline.deleteBook')}"><img class="icon delete-icon" src="/icons/trash-solid.svg" alt="" aria-hidden="true"> ${t('offline.deleteBook')}</button>` : '';
+    const deleteControl = isLocalId(book.id) ? `<button class="offline-btn offline-btn--delete" data-book-id="${book.id}" data-action="delete-local" aria-label="${t('offline.deleteBook')}">${iconTrash} ${t('offline.deleteBook')}</button>` : '';
 
     return `
       <div class="book-card" role="listitem" tabindex="0" data-book-id="${book.id}"

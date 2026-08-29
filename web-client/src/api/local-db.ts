@@ -1,5 +1,6 @@
 import ePub from 'epubjs';
 import type { BookSummary, TocEntry, ChapterResponse, ReadingState, Bookmark, Preferences } from '../types';
+import { apiFetch } from './client';
 
 const DB_NAME = 'giano_local_db';
 const DB_VERSION = 1;
@@ -101,12 +102,49 @@ function getStore(storeName: string, mode: IDBTransactionMode): Promise<{ store:
 }
 
 export async function getLocalBooks(): Promise<BookSummary[]> {
-  const { store } = await getStore('books', 'readonly');
-  return new Promise((resolve, reject) => {
+  const db = await initDB();
+  const rawBooks = await new Promise<BookSummary[]>((resolve, reject) => {
+    const tx = db.transaction('books', 'readonly');
+    const store = tx.objectStore('books');
     const request = store.getAll();
     request.onsuccess = () => resolve(request.result || []);
     request.onerror = () => reject(request.error);
   });
+
+  // Verify that any offline- cached books actually have chapter 0.
+  // If an offline entry has 0 chapters (corrupted/failed download), clean it up so it can be re-downloaded properly.
+  const validBooks: BookSummary[] = [];
+  const corruptedIds: string[] = [];
+
+  const chaptersTx = db.transaction('chapters', 'readonly');
+  const chaptersStore = chaptersTx.objectStore('chapters');
+
+  await Promise.all(
+    rawBooks.map(async (book) => {
+      if (book.id.startsWith('offline-')) {
+        const hasChapter0 = await new Promise<boolean>((res) => {
+          const req = chaptersStore.get(`${book.id}:0`);
+          req.onsuccess = () => res(!!req.result);
+          req.onerror = () => res(false);
+        });
+        if (hasChapter0) {
+          validBooks.push(book);
+        } else {
+          corruptedIds.push(book.id);
+        }
+      } else {
+        validBooks.push(book);
+      }
+    })
+  );
+
+  if (corruptedIds.length > 0) {
+    for (const corruptId of corruptedIds) {
+      deleteLocalBook(corruptId).catch((err) => console.warn('Cleaned up corrupt offline book:', err));
+    }
+  }
+
+  return validBooks;
 }
 
 export async function saveLocalBook(
@@ -119,11 +157,14 @@ export async function saveLocalBook(
 ): Promise<void> {
   const db = await initDB();
 
-  // Save book summary
   await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction('books', 'readwrite');
-    const store = transaction.objectStore('books');
-    const request = store.put({
+    const transaction = db.transaction(['books', 'tocs', 'chapters'], 'readwrite');
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+
+    const booksStore = transaction.objectStore('books');
+    booksStore.put({
       id,
       title,
       author,
@@ -131,34 +172,20 @@ export async function saveLocalBook(
       progress: 0,
       status: 'to-read',
     });
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
 
-  // Save TOC
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction('tocs', 'readwrite');
-    const store = transaction.objectStore('tocs');
-    const request = store.put({ bookId: id, toc });
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+    const tocsStore = transaction.objectStore('tocs');
+    tocsStore.put({ bookId: id, toc });
 
-  // Save chapters
-  const transaction = db.transaction('chapters', 'readwrite');
-  const store = transaction.objectStore('chapters');
-  for (const ch of chapters) {
-    await new Promise<void>((resolve, reject) => {
-      const request = store.put({
+    const chaptersStore = transaction.objectStore('chapters');
+    for (const ch of chapters) {
+      chaptersStore.put({
         id: `${id}:${ch.chapterIndex}`,
         bookId: id,
         chapterIndex: ch.chapterIndex,
         paragraphs: ch.paragraphs,
       });
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
+    }
+  });
 }
 
 export async function deleteLocalBook(id: string): Promise<void> {
@@ -236,7 +263,13 @@ export async function getLocalBookCover(id: string): Promise<string> {
     const request = store.get(id);
     request.onsuccess = () => {
       const book = request.result as BookSummary | undefined;
-      resolve(book?.coverUrl || '');
+      if (book?.coverUrl) {
+        resolve(book.coverUrl);
+      } else if (!isLocalId(id)) {
+        getLocalBookCover(`offline-${id}`).then(resolve, reject);
+      } else {
+        resolve('');
+      }
     };
     request.onerror = () => reject(request.error);
   });
@@ -248,7 +281,13 @@ export async function getLocalBookToc(id: string): Promise<TocEntry[]> {
     const request = store.get(id);
     request.onsuccess = () => {
       const entry = request.result as { bookId: string; toc: TocEntry[] } | undefined;
-      resolve(entry?.toc || []);
+      if (entry?.toc) {
+        resolve(entry.toc);
+      } else if (!isLocalId(id)) {
+        getLocalBookToc(`offline-${id}`).then(resolve, reject);
+      } else {
+        resolve([]);
+      }
     };
     request.onerror = () => reject(request.error);
   });
@@ -266,6 +305,10 @@ export async function getLocalChapter(bookId: string, chapterIndex: number): Pro
           title: `Chapter ${res.chapterIndex + 1}`,
           paragraphs: res.paragraphs,
         });
+      } else if (!isLocalId(bookId)) {
+        getLocalChapter(`offline-${bookId}`, chapterIndex).then(resolve, () => {
+          reject(new Error(`Local chapter ${bookId}:${chapterIndex} not found`));
+        });
       } else {
         reject(new Error(`Local chapter ${bookId}:${chapterIndex} not found`));
       }
@@ -281,6 +324,8 @@ export async function getLocalReadingState(bookId: string): Promise<ReadingState
     request.onsuccess = () => {
       if (request.result) {
         resolve(request.result.state);
+      } else if (!isLocalId(bookId)) {
+        getLocalReadingState(`offline-${bookId}`).then(resolve, reject);
       } else {
         resolve({
           currentChapter: 0,
@@ -296,12 +341,19 @@ export async function getLocalReadingState(bookId: string): Promise<ReadingState
 
 export async function putLocalReadingState(bookId: string, state: ReadingState): Promise<void> {
   const db = await initDB();
+  let targetId = bookId;
+  if (!isLocalId(bookId)) {
+    const cachedIds = await getOfflineCachedIds();
+    if (cachedIds.has(bookId)) {
+      targetId = `offline-${bookId}`;
+    }
+  }
 
   // Save the state
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction('states', 'readwrite');
     const store = transaction.objectStore('states');
-    const request = store.put({ bookId, state });
+    const request = store.put({ bookId: targetId, state });
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
@@ -310,7 +362,7 @@ export async function putLocalReadingState(bookId: string, state: ReadingState):
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction('books', 'readwrite');
     const store = transaction.objectStore('books');
-    const getReq = store.get(bookId);
+    const getReq = store.get(targetId);
     getReq.onsuccess = () => {
       const book = getReq.result;
       if (book) {
@@ -644,7 +696,7 @@ export async function downloadBookForOffline(
   let coverUrl: string | null = null;
   if (serverCoverUrl) {
     try {
-      const res = await fetch(serverCoverUrl);
+      const res = await apiFetch(serverCoverUrl);
       if (res.ok) {
         const blob = await res.blob();
         coverUrl = await new Promise<string>((resolve, reject) => {
@@ -665,7 +717,7 @@ export async function downloadBookForOffline(
   let i = 0;
   while (i < MAX_CHAPTERS_DOWNLOAD) {
     try {
-      const res = await fetch(`/api/books/${serverBookId}/chapter/${i}`);
+      const res = await apiFetch(`/api/books/${serverBookId}/chapter/${i}`);
       if (!res.ok) break;
       const data: import('../types').ChapterResponse = await res.json();
       if (!data.paragraphs) break; // malformed response guard
@@ -675,6 +727,10 @@ export async function downloadBookForOffline(
     } catch {
       break;
     }
+  }
+
+  if (chapters.length === 0) {
+    throw new Error(`No chapters could be downloaded for book ${serverBookId}`);
   }
 
   await saveLocalBook(localId, title, author, coverUrl, toc, chapters);

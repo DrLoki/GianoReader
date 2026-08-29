@@ -8,6 +8,7 @@ import { showToast } from './toast';
 import * as translationCache from '../cache/translation-cache';
 import type { CacheKey, ChapterResponse, Paragraph, ReadingState } from '../types';
 import { isOfflineMode, isLocalId, getLocalChapter } from '../api/local-db';
+import { iconList, iconStar, iconHouse, iconGear, iconChevronLeft, iconChevronRight } from '../icons';
 import './card-ui';
 import './toc-sheet';
 
@@ -322,21 +323,21 @@ class ReadingScreen extends HTMLElement {
         <span class="reading-progress-label">0%</span>
       </div>
       <header class="reading-header">
-        <button class="toc-btn" aria-label="${t('reading.toc')}"><img class="icon" src="/icons/list.svg" alt="" aria-hidden="true"></button>
+        <button class="toc-btn" aria-label="${t('reading.toc')}">${iconList}</button>
         <div class="tab-group" role="tablist">
           <button class="tab-btn tab-original active" role="tab" aria-selected="true" aria-label="${t('reading.tabOriginal')}">${t('reading.tabOriginal')}</button>
           <button class="tab-btn tab-translated" role="tab" aria-selected="false" aria-label="${t('reading.tabTranslated')}">${t('reading.tabTranslated')}</button>
         </div>
-        <button class="fab-bookmark" aria-label="${t('fab.bookmark')}"><img class="icon" src="/icons/star.svg" alt="" aria-hidden="true"></button>
+        <button class="fab-bookmark" aria-label="${t('fab.bookmark')}">${iconStar}</button>
       </header>
       <nav class="chapter-nav">
         <div class="chapter-nav-left">
-          <button class="nav-icon-btn fab-library-btn" aria-label="${t('fab.library')}"><img class="icon" src="/icons/house.svg" alt="" aria-hidden="true"></button>
-          <button class="nav-icon-btn settings-btn" aria-label="${t('reading.settingsTooltip')}"><img class="icon" src="/icons/gear.svg" alt="" aria-hidden="true"></button>
+          <button class="nav-icon-btn fab-library-btn" aria-label="${t('fab.library')}">${iconHouse}</button>
+          <button class="nav-icon-btn settings-btn" aria-label="${t('reading.settingsTooltip')}">${iconGear}</button>
         </div>
         <div class="chapter-nav-right">
-          <button class="nav-icon-btn nav-prev" aria-label="${t('reading.prevChapter')}"><img class="icon" src="/icons/chevron-left.svg" alt="" aria-hidden="true"></button>
-          <button class="nav-icon-btn nav-next" aria-label="${t('reading.nextChapter')}"><img class="icon" src="/icons/chevron-right.svg" alt="" aria-hidden="true"></button>
+          <button class="nav-icon-btn nav-prev" aria-label="${t('reading.prevChapter')}">${iconChevronLeft}</button>
+          <button class="nav-icon-btn nav-next" aria-label="${t('reading.nextChapter')}">${iconChevronRight}</button>
         </div>
       </nav>
     `;
@@ -517,6 +518,7 @@ class ReadingScreen extends HTMLElement {
         chapter = await getLocalChapter(this.bookId, chapterIndex);
       } catch (e) {
         console.error('Error loading local chapter:', e);
+        showToast(t('toast.errorGeneric'), 'error');
         return;
       }
     } else {

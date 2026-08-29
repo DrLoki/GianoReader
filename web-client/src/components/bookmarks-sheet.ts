@@ -2,6 +2,7 @@ import { getBookmarks, deleteBookmark } from '../api/bookmarks';
 import { showToast } from './toast';
 import { t } from '../i18n/index';
 import type { Bookmark } from '../types';
+import { iconXmark } from '../icons';
 
 const SHEET_STYLES = `
 bookmarks-sheet {
@@ -281,7 +282,7 @@ class BookmarksSheet extends HTMLElement {
           <div class="bookmarks-item-content">
             <div class="bookmarks-item-label">${label}</div>
           </div>
-          <button class="bookmarks-delete-btn" aria-label="${escapeHtml(t('bookmarks.deleteTooltip'))}" data-bookmark-id="${escapeHtml(bm.id)}"><img class="bm-icon" src="/icons/xmark.svg" alt="" aria-hidden="true"></button>
+          <button class="bookmarks-delete-btn" aria-label="${escapeHtml(t('bookmarks.deleteTooltip'))}" data-bookmark-id="${escapeHtml(bm.id)}">${iconXmark}</button>
         </li>`;
         },
       )
