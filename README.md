@@ -33,9 +33,10 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 - Navigable table of contents (TOC)
 - Chapter navigation with progress bar and chapter tick marks
 - Side-by-side translation (original + translated) with synchronized scroll
-- **Dual-Mode Translation (FREE / PRO)**: Toggle between lightweight free translation and premium context-aware AI translation
-  - **FREE Mode**: Direct, instant paragraph translation via Google Translate (no API key required)
-  - **PRO Mode**: Context-aware, natural, literary translations via **OpenRouter** (supports models like `google/gemini-2.5-flash`, `meta-llama/llama-3-8b-instruct`, etc.)
+- **Three-Tier Translation Engine (FREE / BASIC / PRO)**:
+  - **FREE Mode**: Unofficial Google Translate endpoint — no API key required
+  - **BASIC Mode**: Official **Google Cloud Translation API** (NMT or Translation LLM) — requires a Google Cloud Project ID and API Key; cost ~$0.01–0.02 per novel
+  - **PRO Mode**: Context-aware literary translations via **OpenRouter** LLMs (Gemini, Llama, etc.)
 - **Dynamic Model Fetching**: Load and select the newest premium models directly from OpenRouter within Giano Reader Settings
 - **Interactive Paragraph Pairing**: Instantly highlight corresponding paragraphs with matching color codes (using custom 5-color palettes tailored for light and dark themes) to follow complex narratives effortlessly
 - **Word-Level Bidirectional Hover Alignment**: Hovering a word in the original text highlights the corresponding word in the translation (and vice versa) for immediate word-by-word comparison
@@ -48,26 +49,28 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 - 6 themes: Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia
 - Custom font family and font size controls
 - Configurable folder scan depth (1–10 levels)
-- UI language support with RTL (Arabic)
+- UI language support with RTL (Arabic, Persian)
 - SVG icons (Font Awesome 6 Free) instead of emoji
 - Language dropdowns with SVG flag images (compatible with WebView2 on Windows)
 - Window geometry persistence across restarts (Tauri only)
 - **AI Text-to-Speech (TTS)**: Multi-model TTS engine with FREE (browser SpeechSynthesis) and PRO (OpenRouter) modes supporting Orpheus 3B, Kokoro 82M, Gemini Flash TTS, Grok Voice TTS, and Microsoft MAI-Voice-2 — with audio download to WAV/MP3
 - **Resizable Library Modal**: User-resizable library window for comfortable browsing of large collections
 - **Clean Library Tool**: One-click verification of all book file links with removal of broken entries
-- **i18n Developer Automations**: Integrated script in `.antigravity/` to automatically align and synchronize all 20 translation locales instantly
+- **i18n Developer Automations**: Integrated script in `.antigravity/` to automatically align and synchronize all 22 translation locales instantly
+- **In-App Auto-Updater**: On startup, the app checks for new releases and prompts the user with a dismissible install dialog showing real-time download progress
+- **PWA Offline Mode** (web client): Service worker and `IndexedDB`-backed local database let the mobile PWA work fully offline. When disconnected from the desktop server, translation requests are routed through a user-deployed **Cloudflare Worker** CORS proxy with captcha/rate-limit detection
 
 ## 🌍 Supported Languages
 
-Giano Reader supports 20 interface languages:
-English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Filipino, Arabic, Albanian, Swedish, Ukrainian, Slovenian.
+Giano Reader supports 22 interface languages:
+English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Filipino, Arabic, Persian, Vietnamese, Albanian, Swedish, Ukrainian, Slovenian.
 
 ---
 
 ## 📥 Download & Install
 You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and Linux (.AppImage) here:
 
-👉 [Download Giano Reader v0.9.0](https://github.com/DrLoki/GianoReader/releases/tag/v0.9.0)
+👉 [Download Giano Reader v0.9.3](https://github.com/DrLoki/GianoReader/releases/tag/v0.9.3)
 
 > [!IMPORTANT]
 > **Migration Note (from v0.7.x to v0.8.x):**
@@ -116,12 +119,12 @@ giano-reader/
 │   │   └── download.svg
 │   └── flags/              # SVG flag images for language dropdowns
 │       ├── it.svg, gb.svg, fr.svg, de.svg, es.svg, pt.svg
-│       ├── ru.svg, cn.svg, jp.svg, sa.svg, ph.svg, al.svg
+│       ├── ru.svg, cn.svg, jp.svg, sa.svg, ir.svg, vn.svg, ph.svg, al.svg
 ├── src/
 │   ├── main.js             # All frontend logic: reader, UI, bookmarks, library, scroll sync
 │   ├── tts.js              # Text-to-Speech engine (FREE/PRO, multi-model, audio download)
 │   ├── translator.js       # Google Translate integration (chunked, lazy)
-│   ├── i18n.js             # UI translations (20 languages); exports t(lang, key, vars)
+│   ├── i18n.js             # UI translations (22 languages); exports t(lang, key, vars)
 │   ├── settings-utils.js   # Pure utility functions (no DOM); used by main.js and tests
 │   └── style.css           # All styles (dark mode via body.dark)
 └── src-tauri/
@@ -139,12 +142,13 @@ giano-reader/
 
 ## ⚙️ How Translation Works
 
-Giano Reader implements a flexible dual-mode translation engine:
+Giano Reader implements a flexible three-tier translation engine:
 
-*   **FREE Mode**: Uses the unofficial Google Translate public endpoint (`translate.googleapis.com`) — **no API key required**. Text is split into ~4500-character chunks and translated lazily: the visible block first, then subsequent ones as you scroll.
+*   **FREE Mode**: Uses the unofficial Google Translate public endpoint (`translate.googleapis.com`) — **no API key required**. Text is split into ~4500-character chunks and translated lazily: the visible block first, then subsequent ones as you scroll. On the desktop app (Tauri), translation calls are made by the Rust backend via a `translate_free` command to bypass WebView2 CORS restrictions.
+*   **BASIC Mode**: Uses the official **Google Cloud Translation API** (v2/v3) with NMT or Translation LLM model selection. Requires a Google Cloud Project ID and API Key configured in Settings → Basic tab. Provides higher-quality, production-grade translations at predictable cost (~$0.01–0.02 per novel).
 *   **PRO Mode**: Uses **OpenRouter APIs** to query advanced Large Language Models (LLMs) like Gemini and Llama. This provides premium literary-grade, context-aware translations that respect the author's writing style. To activate it, simply paste your OpenRouter API Key into Settings. Once active, Giano will query OpenRouter asynchronously, and the text will be displayed block-by-block.
 
-For both modes, translation is entirely **lazy**: the app begins translating from your current reading position and expands downward as you scroll. When you open a bookmark, translation starts directly from the saved position, saving bandwidth and system load.
+For all modes, translation is entirely **lazy**: the app begins translating from your current reading position and expands downward as you scroll. When you open a bookmark, translation starts directly from the saved position, saving bandwidth and system load.
 
 ---
 

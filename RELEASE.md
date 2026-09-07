@@ -1,10 +1,36 @@
-# 🚀 GianoReader Release v0.9.2
+# 🚀 GianoReader Release v0.9.3
 
-This release adds **Persian (Farsi)** with RTL layout support, an **in-app auto-updater**, a significantly improved **EPUB parser** (headings, lists, blockquotes, native IDs, correct NCX TOC ordering), **translation batch-mismatch fallback**, and a complete **PWA offline mode** for the web client backed by an IndexedDB local database and an optional Cloudflare Worker CORS proxy.
+This release introduces a **three-tier translation engine** (FREE · BASIC · PRO) with official **Google Cloud Translation API** support, **Vietnamese** as the 22nd language, a `translate_free` Tauri command that bypasses WebView2 CORS, and web client improvements for offline bookmarks management and graceful library fallback.
 
 ---
 
-## 📝 Changelog (v0.9.0 → v0.9.2)
+## 📝 Changelog (v0.9.0 → v0.9.3)
+
+### 🌐 Three-Tier Translation Engine (FREE / BASIC / PRO)
+- **Google Cloud Translation Basic tier**: Added support for the official Google Cloud Translation API v2/v3. Replaces the FREE/PRO toggle with a three-way mode selector (FREE · BASIC · PRO).
+  - **FREE**: Unchanged — unofficial Google Translate endpoint, no API key required.
+  - **BASIC**: Official Google Cloud Translation API with NMT or Translation LLM model selection. Requires a Google Cloud Project ID and API Key, stored securely in preferences. Cost ~$0.01–0.02 per novel.
+  - **PRO**: Unchanged — OpenRouter LLMs.
+- **`translate_free` Tauri command**: The Rust backend now exposes a `translate_free` command that calls the Google Translate endpoint server-side, bypassing WebView2 CORS restrictions. The frontend retains full control of chunking and paragraph realignment.
+- **`translation_mode` preference**: New field in the preferences schema (`"free"` / `"basic"` / `"pro"`). Validated on read/write and persisted across sessions. Includes a regression test ensuring the value survives round-trips.
+- **Google Cloud credentials UI**: New "Basic" tab in Settings with Project ID and API Key inputs, translation model selector, and secure storage via the preferences API.
+- **`GOOGLE_CLOUD_SETUP.MD`**: New setup guide with configuration steps, pricing breakdown, troubleshooting, and documentation of the three-tier architecture.
+- **CSP update**: `tauri.conf.json` updated to allow local server connections required by the new translation backend.
+
+### 🇻🇳 Vietnamese Language Support
+- **Vietnamese (`vi`)**: Added as the 22nd supported language for both translation target and UI language. Fully localized across all UI strings.
+- **`vn.svg` flag**: Added Vietnam flag to the language selector dropdown.
+- **`password-prompt` component** (web client): New secure credential entry component used by the BASIC tier settings flow.
+
+### 📱 Web Client — Offline & Bookmarks Improvements
+- **Graceful offline fallback**: `getBooks()` now always loads local (IndexedDB) books first, merges server books on top, and deduplicates. `getBookmarks()` returns an empty array instead of throwing on network failure. The disconnected overlay is dismissed automatically when cached books load successfully.
+- **Offline toast**: Shows an informational toast when the library falls back to the local cache, with new i18n keys (`offlineFallback`) in English and Italian.
+- **Navigation fix**: Replaced full page reload with a navigation event when toggling offline mode, avoiding unnecessary state loss.
+- **Bookmarks local database** (`local-db.ts`): Expanded IndexedDB layer with full bookmark CRUD support — create, list, delete, and navigate — mirroring the server API for complete offline operation. Includes a dedicated unit test suite (`local-db.test.ts`).
+- **Icon registry** (`icons.ts`): New centralized icon registry module used across web client components.
+
+### 🧪 Testing
+- **`openrouterSelectModel` i18n key**: Added missing translation key for the OpenRouter model dropdown placeholder.
 
 ### 🌐 Persian (Farsi) Support
 - **New language — `fa`**: Persian is the 21st supported language for both translation target and UI language. Fully localized across all ~130 UI strings.
