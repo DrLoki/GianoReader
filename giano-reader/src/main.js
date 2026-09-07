@@ -223,6 +223,7 @@ const FLAG_MAP = {
   pt: 'pt', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
   fil: 'ph', sq: 'al', hi: 'in', ko: 'kr', th: 'th',
   bn: 'in', id: 'id', sv: 'se', uk: 'ua', sl: 'si',
+  fa: 'ir',
 };
 
 function createFlagSelect(selectEl) {

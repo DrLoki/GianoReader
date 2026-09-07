@@ -1,3 +1,53 @@
+# 🚀 GianoReader Release v0.9.2
+
+This release adds **Persian (Farsi)** with RTL layout support, an **in-app auto-updater**, a significantly improved **EPUB parser** (headings, lists, blockquotes, native IDs, correct NCX TOC ordering), **translation batch-mismatch fallback**, and a complete **PWA offline mode** for the web client backed by an IndexedDB local database and an optional Cloudflare Worker CORS proxy.
+
+---
+
+## 📝 Changelog (v0.9.0 → v0.9.2)
+
+### 🌐 Persian (Farsi) Support
+- **New language — `fa`**: Persian is the 21st supported language for both translation target and UI language. Fully localized across all ~130 UI strings.
+- **RTL layout**: Persian joins Arabic in `RTL_LANGS`. Selecting Persian as the UI language activates the `html.rtl` class, flipping the sidebar, panels, toolbar, modals, and text direction right-to-left. No CSS changes needed — all existing `html.rtl` selectors apply automatically.
+- **Iran flag**: Added `ir.svg` flag icon for the language selector dropdown.
+
+### 🔄 In-App Updater
+- **Auto-Update**: Integrated Tauri's built-in updater (`tauri-plugin-updater`). The app checks for new releases on startup and prompts the user with a dismissible dialog showing the version number and install/later options. Download progress is shown in real time.
+- **Updater UI strings**: All update-related strings (`updateAvailable`, `updateMsg`, `updateInstall`, `updateLater`, `updateDownloading`, `updateError`) localized across all 21 supported languages.
+
+### 📚 EPUB Parser Improvements
+- **Headings, lists, and blockquotes**: Paragraph extraction now captures `<h1>`–`<h6>`, `<li>`, and `<blockquote>` elements in addition to `<p>`. Nested blockquotes are handled recursively; leaf blockquotes are parsed directly.
+- **Native element IDs preserved**: `id` attributes on block-level elements are extracted and stored in a `native_id` field on the `Paragraph` model, enabling precise cross-reference and anchor navigation within EPUB documents.
+- **NCX document-order TOC**: Replaced playOrder-based sorting with a custom NCX parser that preserves the original document order and handles nested `navPoint` entries recursively. Fixes corrupted TOC structure common in Calibre-converted EPUBs. Falls back to the crate's default parser if the custom one returns empty results.
+- **TOC hierarchy in web client**: Recursive TOC flattening with level-based indentation for the new `TocSheet` component.
+
+### 🌍 Translation Reliability
+- **Batch mismatch fallback** (`translator.js` + Rust backend): When the translation engine strips or modifies `\n\n` separators (e.g. when merging short dialogue lines), the realigned split count is verified against the expected paragraph count. On mismatch, each paragraph in the batch is retranslated individually to prevent text loss and misalignment.
+- **Empty translation guard** (web client): Empty or whitespace-only translation results are no longer cached or silently accepted. Cached empty entries are ignored on retrieval to force retranslation; the reading screen surfaces an error with a retry option.
+
+### 📱 Web Client — TOC Sheet & Navigation
+- **`TocSheet` component**: New slide-up sheet displaying the hierarchical table of contents with level-based indentation. Supports direct chapter navigation via spine index lookup.
+- **Navigation icons**: Five new SVG icons added (`chevron-left`, `chevron-right`, `house`, `list`, `trash-solid`) for navigation controls and UI actions.
+- **Library screen layout**: Improved vertical distribution of book cards (`flex: 1` on book-info); offline button and progress control aligned to the bottom via `margin-top: auto`.
+
+### 📶 PWA Offline Mode & Cloudflare Worker
+- **Offline support** (`sw.js`): Service worker rewritten to serve the web client fully offline. Caches all static assets at install time; API requests fall back to an `IndexedDB`-backed local database (`local-db.ts`) when the desktop server is unreachable.
+- **Local database** (`local-db.ts`): Full `IndexedDB` implementation mirroring the server API — books, chapters, paragraphs, bookmarks, preferences, and reading state — so the PWA works independently of the Tauri backend.
+- **Cloudflare Worker CORS proxy**: When offline (disconnected from the desktop server), the web client routes Google Translate requests through a user-deployed Cloudflare Worker to bypass CORS restrictions. Added captcha/rate-limit detection: returns HTTP 429 with a `CAPTCHA_REQUIRED` JSON error when Google responds with HTML or detects unusual traffic.
+- **Setup guide** (`CLOUDFLARE_WORKER_SETUP.md`): Updated with deployment instructions, mitigation strategies for rate limits, volume recommendations, and an explanation that the Tauri desktop app calls Google Translate directly without a proxy.
+- **Settings sheet reorganized** (web client): Collapsible sections group interface language, theme, font, display settings, keyboard shortcuts, and offline mode indicator for better mobile usability.
+
+### 🐛 Bug Fixes
+- **TOC anchor navigation**: Added fallback logic that maps TOC anchors to the closest paragraph in the viewer when the anchor has no direct 1:1 match in the rendered content. Tracks `currentChapterBody` to preserve the original chapter DOM for accurate positional mapping; resets on EPUB load and chapter display.
+- **TOC tooltip debounce**: Introduced a debounce timer for TOC tooltip translation requests, preventing excessive API calls when the user hovers quickly over multiple TOC entries.
+- **Book search filter**: Fixed a regression where the status filter was not applied correctly when searching the library by title or author.
+
+### 🧪 Testing
+- **Offline-parity preservation tests**: Property-based tests lock the current `extractParagraphs` behavior and validate online/offline paragraph extraction parity (Requirements 3.1–3.6).
+- **Translator batch fallback tests**: New unit tests for the batch mismatch fallback path in both `translator.js` and the Rust backend.
+
+---
+
 # 🚀 GianoReader Release v0.9.0
 
 This release introduces **Web Server Mode** — an embedded HTTP server that exposes the EPUB library to any device on the local network via a mobile-first PWA web client. Also includes a responsive dual-panel reading layout, lazy translation with sentinel-based loading, and full REST API for books, chapters, bookmarks, and preferences.
@@ -72,7 +122,7 @@ This release introduces a **Resizable Library Modal**, a **Clean Library** tool 
 
 ### 📚 Library Modal Enhancements
 - **Resizable Library Modal**: The library modal window is now user-resizable (drag from bottom-right corner). Supports grow up to 90vw × 90vh with minimum constraints (320×300px) to prevent accidental collapse.
-- **Clean Library Tool**: New toolbar button (broken-link icon) that scans all books in the library and verifies file existence on disk. Displays results in a styled in-app modal listing broken entries (title + path), with a one-click "Remove" action to purge invalid entries. Fully localized across all 20 supported languages.
+- **Clean Library Tool**: New toolbar button (broken-link icon) that scans all books in the library and verifies file existence on disk. Displays results in a styled in-app modal listing broken entries (title + path), with a one-click "Remove" action to purge invalid entries. Fully localized across all 21 supported languages.
 
 ### 🎙️ TTS Voice Improvements
 - **Gender Indicators on All Models**: Added ♀️/♂️ labels to Grok Voice TTS (Eve ♀️, Ara ♀️, Rex ♂️, Sal ♂️, Leo ♂️) and OpenAI fallback voices (Alloy ♀️, Echo ♂️, Fable ♂️, Onyx ♂️, Nova ♀️, Shimmer ♀️).
@@ -85,13 +135,13 @@ This release introduces a **Resizable Library Modal**, a **Clean Library** tool 
 - **Activation Fix**: The download button now correctly activates for all PRO models (including Gemini) once playback begins, resolving the issue where it remained permanently disabled.
 
 ### 🌐 Localization
-- **20-Language Coverage for Clean Library**: All new UI strings (`libCheck`, `libCheckRunning`, `libCheckAllGood`, `libCheckBroken`, `libCheckConfirm`, `libCheckRemoveAction`, `libCheckRemoved`) translated across English, Italian, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Thai, Filipino, Arabic, Albanian, Swedish, Ukrainian, and Slovenian.
+- **21-Language Coverage for Clean Library**: All new UI strings (`libCheck`, `libCheckRunning`, `libCheckAllGood`, `libCheckBroken`, `libCheckConfirm`, `libCheckRemoveAction`, `libCheckRemoved`) translated across English, Italian, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Thai, Filipino, Arabic, Persian, Albanian, Swedish, Ukrainian, and Slovenian.
 
 ---
 
 # 🚀 GianoReader Release v0.8.2
 
-This release introduces a **Unified Reader Toolbar** for side-by-side reading layout customization, a new **Dual-Pane Hide/Show Toggle** with automatic scroll-sync restoration, **On-Hover TOC Chapter Translations** in the sidebar, complete multi-language localized labels across all 19 supported languages, and a thorough **Dead Code Removal** of the obsolete Python sidecar pipeline.
+This release introduces a **Unified Reader Toolbar** for side-by-side reading layout customization, a new **Dual-Pane Hide/Show Toggle** with automatic scroll-sync restoration, **On-Hover TOC Chapter Translations** in the sidebar, complete multi-language localized labels across all 20 supported languages, and a thorough **Dead Code Removal** of the obsolete Python sidecar pipeline.
 
 ---
 
@@ -113,7 +163,7 @@ This release introduces a **Unified Reader Toolbar** for side-by-side reading la
 - **Asynchronous Tooltip Caching**: Features a localized loading state in the tooltip (`...`) during translation. Once loaded, the translation is cached locally via dataset attributes (`data-translated-title`) so subsequent hovers display the translated title tooltip instantly, without repeating network requests.
 
 ### 🌐 Global Localization Updates
-- **Multi-language Support**: Added localized titles and tooltips for the new `hideOriginal` action across all **19 supported languages** (English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Tagalog, Arabic, Albanian, and more) inside the i18n module.
+- **Multi-language Support**: Added localized titles and tooltips for the new `hideOriginal` action across all **20 supported languages** (English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Tagalog, Arabic, Albanian, and more) inside the i18n module.
 
 ### 🎨 Visual & Icon Styling Refinements
 - **Theme-Compliant SVG Icons**: Configured SVGs inside the layout toggle buttons to use CSS `currentColor`, aligning with the active color palette across sepia, dark, solarized, monokai, and light reader themes without visual filters.
