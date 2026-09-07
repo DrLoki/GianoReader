@@ -7,7 +7,7 @@
 > **Read globally, understand locally. The dual-faced reader for language explorers.**
 
 <p align="center">
-  <img width="1021" height="704" alt="5EgwP4AOvV" src="https://github.com/user-attachments/assets/4848e1c7-e997-4f6a-87b4-4565fbcd38d0" />
+  <img width="1281" height="955" alt="Giano Reader App" src="https://github.com/user-attachments/assets/202f7fbc-d512-4d96-b350-f4353c196a86" />
 </p>
 
 ### 📖 Bridging the Gap in Foreign Literature
@@ -58,7 +58,9 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 - **Clean Library Tool**: One-click verification of all book file links with removal of broken entries
 - **i18n Developer Automations**: Integrated script in `.antigravity/` to automatically align and synchronize all 22 translation locales instantly
 - **In-App Auto-Updater**: On startup, the app checks for new releases and prompts the user with a dismissible install dialog showing real-time download progress
-- **PWA Offline Mode** (web client): Service worker and `IndexedDB`-backed local database let the mobile PWA work fully offline. When disconnected from the desktop server, translation requests are routed through a user-deployed **Cloudflare Worker** CORS proxy with captcha/rate-limit detection
+- **PWA Offline Mode** (web client): Service worker and `IndexedDB`-backed local database let the mobile PWA work fully offline. When disconnected from the desktop server, translation requests are routed through a user-deployed
+  <img width="338" height="412" alt="wmK4snXLRe" src="https://github.com/user-attachments/assets/d93438da-6dd2-41f9-8cce-f365c1c8e7c4" />
+- **Cloudflare Worker** CORS proxy with captcha/rate-limit detection
 
 ## 🌍 Supported Languages
 
@@ -83,6 +85,12 @@ You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and L
 > powershell -ExecutionPolicy Bypass -File scripts/migrate-appdata.ps1
 > ```
 >This moves your data from %LOCALAPPDATA%\com.bolzonella.giano-reader\ to %LOCALAPPDATA%\giano-reader\ and removes the old directory. If you skip this step, the app will start fresh with an empty library.
+
+---
+
+## 📙 Manual
+
+For the app's user manual see [MANUAL.md](giano-reader/MANUAL.md).
 
 ---
 
@@ -185,6 +193,9 @@ Giano Reader includes a dual-mode TTS engine for listening to your books:
     - **Microsoft MAI-Voice-2** — Natural voices across 10 languages
 
 All voices display ♀️/♂️ gender indicators. PRO mode accumulates audio as you listen and enables a **Download** button (far right of the TTS toolbar) that opens a native "Save As" dialog to export the chapter audio as MP3 or WAV.
+
+> [!TIP]
+> To install local voices see [INSTALL_TTS_VOICES.md](giano-reader/INSTALL_TTS_VOICES.md).
 
 ---
 
