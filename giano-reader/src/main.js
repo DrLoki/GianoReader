@@ -100,9 +100,10 @@ const originalPanel = document.getElementById('original-panel');
 const togglePairingBtn = document.getElementById('toggle-pairing-btn');
 const toggleNumbersBtn = document.getElementById('toggle-numbers-btn');
 const viewerWrapper = document.getElementById('viewer-wrapper');
-const toggleTranslationModeBtn = document.getElementById('toggle-translation-mode-btn');
+const translationModeSelect = document.getElementById('translation-mode-select');
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
+const gcloudApiKeyInput = document.getElementById('gcloud-api-key-input');
 
 // Web Server Mode
 const webServerSettings = document.getElementById('web-server-settings');
@@ -223,7 +224,7 @@ const FLAG_MAP = {
   pt: 'pt', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
   fil: 'ph', sq: 'al', hi: 'in', ko: 'kr', th: 'th',
   bn: 'in', id: 'id', sv: 'se', uk: 'ua', sl: 'si',
-  fa: 'ir',
+  fa: 'ir', vi: 'vn',
 };
 
 function createFlagSelect(selectEl) {
@@ -514,9 +515,9 @@ function applyUiLang(lang) {
   if (orModelLabel) orModelLabel.textContent = t(lang, 'openrouterModelPro');
   const orModelPlaceholder = document.getElementById('openrouter-model-placeholder');
   if (orModelPlaceholder) orModelPlaceholder.textContent = t(lang, 'openrouterSelectModel');
-  if (toggleTranslationModeBtn) {
-    toggleTranslationModeBtn.title = t(lang, 'toggleTranslationMode');
-    toggleTranslationModeBtn.setAttribute('aria-label', t(lang, 'toggleTranslationMode'));
+  if (translationModeSelect) {
+    translationModeSelect.title = t(lang, 'toggleTranslationMode');
+    translationModeSelect.setAttribute('aria-label', t(lang, 'toggleTranslationMode'));
   }
   document.getElementById('settings-modal-title').innerHTML = '<img src="/icons/gear.svg" class="icon" alt="" /> ' + t(lang, 'settings');
   settingsCloseBtn.title = t(lang, 'close');
@@ -575,7 +576,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.2' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.3' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -619,40 +620,76 @@ function applyUiLang(lang) {
   // Settings tab labels
   const _tabGeneral = document.getElementById('settings-tab-general');
   const _tabLibrary = document.getElementById('settings-tab-library');
+  const _tabBasic = document.getElementById('settings-tab-basic');
   const _tabPro = document.getElementById('settings-tab-pro');
   const _tabWebserver = document.getElementById('settings-tab-webserver');
   if (_tabGeneral) _tabGeneral.textContent = t(lang, 'settingsTabGeneral');
   if (_tabLibrary) _tabLibrary.textContent = t(lang, 'settingsTabLibrary');
+  if (_tabBasic) _tabBasic.textContent = t(lang, 'settingsTabBasic');
   if (_tabPro) _tabPro.textContent = t(lang, 'settingsTabPro');
   if (_tabWebserver) _tabWebserver.textContent = t(lang, 'settingsTabWebServer');
+  // Google Cloud labels
+  const _gcApiKeyLabel = document.getElementById('gcloud-api-key-label');
+  if (_gcApiKeyLabel) _gcApiKeyLabel.textContent = t(lang, 'gcloudApiKey');
   // Cloudflare subdomain label
   const _cfLabel = document.getElementById('cloudflare-subdomain-label');
   if (_cfLabel) _cfLabel.textContent = t(lang, 'cloudflareWorkerSubdomain');
+  // Web Server password label
+  const _pwLabel = document.getElementById('web-server-password-label');
+  if (_pwLabel) _pwLabel.textContent = t(lang, 'webServerPassword');
 }
 
-function updateTranslationModeVisibility() {
-  if (!toggleTranslationModeBtn) return;
+function updateTranslationModeSelect() {
+  if (!translationModeSelect) return;
   const s = loadSettings();
-  const apiKey = (s.openrouterApiKey || '').trim();
-  const isValid = apiKey.startsWith('sk-or-') && apiKey.length > 6;
 
-  toggleTranslationModeBtn.classList.toggle('hidden', !isValid);
+  // Determine which modes are available
+  const hasBasic = !!(s.gcloudApiKey && s.gcloudApiKey.trim());
+  const hasProKey = (s.openrouterApiKey || '').trim();
+  const hasPro = hasProKey.startsWith('sk-or-') && hasProKey.length > 6 && !!(s.openrouterModel);
 
-  // Se la chiave è invalida e siamo in modalità PRO, torna a FREE!
-  if (!isValid && s.translationMode === 'pro') {
-    s.translationMode = 'free';
-    saveSettings(s);
+  const availableModes = ['free'];
+  if (hasBasic) availableModes.push('basic');
+  if (hasPro) availableModes.push('pro');
 
-    const isPro = false;
-    toggleTranslationModeBtn.setAttribute('aria-pressed', String(isPro));
-    toggleTranslationModeBtn.classList.remove('active');
-    toggleTranslationModeBtn.textContent = 'FREE';
+  // If only FREE is available, hide the select entirely
+  if (availableModes.length <= 1) {
+    translationModeSelect.classList.add('hidden');
+    // Fallback if current mode is no longer available
+    const currentMode = s.translationMode || 'free';
+    if (currentMode !== 'free') {
+      s.translationMode = 'free';
+      saveSettings(s);
+      if (currentChapterParagraphs && currentChapterParagraphs.length) {
+        const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+        const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
+        translateCurrentChapter(scrollPct);
+      }
+    }
+  } else {
+    translationModeSelect.classList.remove('hidden');
+    // Rebuild options
+    const currentMode = s.translationMode || 'free';
+    translationModeSelect.innerHTML = '';
+    availableModes.forEach(mode => {
+      const opt = document.createElement('option');
+      opt.value = mode;
+      opt.textContent = mode.toUpperCase();
+      if (mode === currentMode) opt.selected = true;
+      translationModeSelect.appendChild(opt);
+    });
 
-    // Riavvia la traduzione in modalità FREE
-    if (currentChapterParagraphs && currentChapterParagraphs.length) {
-      const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
-      const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
-      translateCurrentChapter(scrollPct);
+    // If current mode is no longer available, fallback to FREE
+    if (!availableModes.includes(currentMode)) {
+      s.translationMode = 'free';
+      saveSettings(s);
+      translationModeSelect.value = 'free';
+      // Retranslate with FREE mode
+      if (currentChapterParagraphs && currentChapterParagraphs.length) {
+        const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
+        const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
+        translateCurrentChapter(scrollPct);
+      }
     }
   }
 }
@@ -1354,13 +1391,13 @@ ttsController._onProgressChange = (pct) => {
   const openrouterApiKey = s.openrouterApiKey || '';
   if (openrouterKeyInput) openrouterKeyInput.value = openrouterApiKey;
 
+  // Google Cloud (Basic mode) settings init
+  if (gcloudApiKeyInput) gcloudApiKeyInput.value = s.gcloudApiKey || '';
+
 
   const translationMode = s.translationMode || 'free';
-  if (toggleTranslationModeBtn) {
-    const isPro = translationMode === 'pro';
-    toggleTranslationModeBtn.setAttribute('aria-pressed', String(isPro));
-    toggleTranslationModeBtn.classList.toggle('active', isPro);
-    toggleTranslationModeBtn.textContent = isPro ? 'PRO' : 'FREE';
+  if (translationModeSelect) {
+    translationModeSelect.value = translationMode;
   }
 
   if (openrouterModelSelect) {
@@ -1376,7 +1413,7 @@ ttsController._onProgressChange = (pct) => {
     }
   }
 
-  updateTranslationModeVisibility();
+  updateTranslationModeSelect();
 
   // Sostituisce i select lingua con dropdown custom (bandiere emoji)
   createFlagSelect(langSelect);
@@ -1457,7 +1494,7 @@ if (openrouterKeyInput) {
     const s = loadSettings();
     s.openrouterApiKey = openrouterKeyInput.value.trim();
     saveSettings(s);
-    updateTranslationModeVisibility();
+    updateTranslationModeSelect();
     updateTTSModeVisibility();
   };
   openrouterKeyInput.addEventListener('change', handleKeyUpdate);
@@ -1469,7 +1506,22 @@ if (openrouterModelSelect) {
     const s = loadSettings();
     s.openrouterModel = openrouterModelSelect.value;
     saveSettings(s);
+    updateTranslationModeSelect();
   });
+}
+
+// Google Cloud (Basic mode) settings persistence
+if (gcloudApiKeyInput) {
+  const handleGcloudKeyUpdate = () => {
+    const s = loadSettings();
+    s.gcloudApiKey = gcloudApiKeyInput.value.trim();
+    saveSettings(s);
+    updateTranslationModeSelect();
+    // Sync to web server if running
+    if (window._syncApiKeysToServer) window._syncApiKeysToServer();
+  };
+  gcloudApiKeyInput.addEventListener('change', handleGcloudKeyUpdate);
+  gcloudApiKeyInput.addEventListener('input', handleGcloudKeyUpdate);
 }
 
 const openrouterFetchBtn = document.getElementById('openrouter-fetch-btn');
@@ -1510,7 +1562,7 @@ if (openrouterFetchBtn) {
       s2.openrouterModels = models;
       s2.openrouterApiKey = apiKey;
       saveSettings(s2);
-      updateTranslationModeVisibility();
+      updateTranslationModeSelect();
 
       if (openrouterModelSelect) {
         openrouterModelSelect.innerHTML = `<option value="" id="openrouter-model-placeholder">${t(lang, 'openrouterSelectModel')}</option>`;
@@ -1538,28 +1590,11 @@ if (openrouterFetchBtn) {
   });
 }
 
-if (toggleTranslationModeBtn) {
-  toggleTranslationModeBtn.addEventListener('click', () => {
+if (translationModeSelect) {
+  translationModeSelect.addEventListener('change', () => {
     const s = loadSettings();
-    const currentMode = s.translationMode || 'free';
-    const nextMode = currentMode === 'free' ? 'pro' : 'free';
-    const lang = s.uiLang || 'en';
-
-    if (nextMode === 'pro') {
-      if (!s.openrouterApiKey || !s.openrouterModel) {
-        showAlert(t(lang, 'openrouterInvalidKey') + ' & ' + t(lang, 'openrouterSelectModel').toLowerCase());
-        settingsModal.classList.remove('hidden');
-        return;
-      }
-    }
-
-    s.translationMode = nextMode;
+    s.translationMode = translationModeSelect.value;
     saveSettings(s);
-
-    const isPro = nextMode === 'pro';
-    toggleTranslationModeBtn.setAttribute('aria-pressed', String(isPro));
-    toggleTranslationModeBtn.classList.toggle('active', isPro);
-    toggleTranslationModeBtn.textContent = isPro ? 'PRO' : 'FREE';
 
     // Trigger re-translation
     if (currentChapterParagraphs && currentChapterParagraphs.length) {
@@ -1571,8 +1606,8 @@ if (toggleTranslationModeBtn) {
 }
 
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
-settingsCloseBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
-settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.add('hidden'); });
+settingsCloseBtn.addEventListener('click', () => { settingsModal.classList.add('hidden'); updateTranslationModeSelect(); });
+settingsModal.addEventListener('click', e => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); updateTranslationModeSelect(); } });
 
 // ── Settings Tabs ──────────────────────────────────────────────────────────
 (function initSettingsTabs() {
@@ -1602,6 +1637,20 @@ if (cloudflareSubdomainInput) {
   });
 }
 
+// ── Web Server Password ────────────────────────────────────────────────────
+const webServerPasswordInput = document.getElementById('web-server-password-input');
+if (webServerPasswordInput) {
+  const s = loadSettings();
+  if (s.webServerPassword) webServerPasswordInput.value = s.webServerPassword;
+  webServerPasswordInput.addEventListener('change', () => {
+    const settings = loadSettings();
+    settings.webServerPassword = webServerPasswordInput.value;
+    saveSettings(settings);
+    // Sync password to running server if active
+    if (window._syncPasswordToServer) window._syncPasswordToServer();
+  });
+}
+
 // ── Web Server Mode ────────────────────────────────────────────────────────
 (function initWebServerMode() {
   // Show web server settings only in Tauri
@@ -1617,6 +1666,39 @@ if (cloudflareSubdomainInput) {
   function hideWebServerError() {
     if (webServerError) webServerError.classList.add('hidden');
   }
+
+  /** Sync API keys from desktop localStorage to the embedded web server preferences. */
+  function syncApiKeysToServer() {
+    if (!webServerToggle || !webServerToggle.checked) return;
+    const s = loadSettings();
+    const port = s.webServerPort || 8888;
+    const body = {};
+    if (s.gcloudApiKey) body.gcloudApiKey = s.gcloudApiKey;
+    // Only send if there's something to sync
+    if (Object.keys(body).length === 0) return;
+    fetch(`http://127.0.0.1:${port}/api/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).catch(() => { /* ignore sync errors silently */ });
+  }
+  // Expose globally so settings handlers can call it
+  window._syncApiKeysToServer = syncApiKeysToServer;
+
+  /** Sync password from desktop localStorage to the embedded web server preferences. */
+  function syncPasswordToServer() {
+    if (!webServerToggle || !webServerToggle.checked) return;
+    const s = loadSettings();
+    const port = s.webServerPort || 8888;
+    const body = { password: s.webServerPassword || '' };
+    fetch(`http://127.0.0.1:${port}/api/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).catch(() => { /* ignore sync errors silently */ });
+  }
+  // Expose globally so password input handler can call it
+  window._syncPasswordToServer = syncPasswordToServer;
 
   function updateWebServerUI(active, info) {
     if (!webServerToggle) return;
@@ -1675,6 +1757,10 @@ if (cloudflareSubdomainInput) {
           const settings = loadSettings();
           settings.webServerPort = port;
           saveSettings(settings);
+          // Sync API keys to the server's preference store
+          syncApiKeysToServer();
+          // Sync password to the server
+          syncPasswordToServer();
         } catch (err) {
           const msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to start server');
           showWebServerError(msg);
@@ -4471,6 +4557,7 @@ async function openBookDetail(entryId) {
     entry.pubdate = document.getElementById('detail-pubdate').value.trim();
     entry.language = document.getElementById('detail-language').value.trim();
     entry.status = document.getElementById('detail-status').value;
+    entry.description = document.getElementById('detail-description').value.trim();
     entry.notes = document.getElementById('detail-notes').value.trim();
     const idx = lib.findIndex(e => e.id === entryId);
     if (idx >= 0) { lib[idx] = entry; await saveLibrary(lib); }

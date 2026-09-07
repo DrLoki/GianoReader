@@ -49,6 +49,7 @@
           <option value="sv">Svenska</option>
           <option value="uk">Українська</option>
           <option value="sl">Slovenščina</option>
+          <option value="vi">Tiếng Việt</option>
         </select>
       </div>
       <div id="book-info" class="hidden">
@@ -109,8 +110,10 @@
         <div id="reader-header-right">
           <span id="translation-lang-label">Translation</span>
           <div class="header-divider"></div>
-          <button id="toggle-translation-mode-btn" class="view-toggle-btn" aria-pressed="false" title=""
-            aria-label="">FREE</button>
+          <select id="translation-mode-select" class="translation-mode-select hidden"
+            aria-label="" title="">
+            <option value="free">FREE</option>
+          </select>
           <button id="toggle-pairing-btn" class="view-toggle-btn" aria-pressed="false" title="" aria-label="">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -282,6 +285,8 @@
           data-tab="general" id="settings-tab-general">General</button>
         <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-library"
           data-tab="library" id="settings-tab-library">Library</button>
+        <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-basic"
+          data-tab="basic" id="settings-tab-basic">Basic</button>
         <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-pro"
           data-tab="pro" id="settings-tab-pro">PRO</button>
         <button class="settings-tab" role="tab" aria-selected="false" aria-controls="settings-panel-webserver"
@@ -315,6 +320,7 @@
             <option value="sv">Svenska</option>
             <option value="uk">Українська</option>
             <option value="sl">Slovenščina</option>
+            <option value="vi">🇻🇳 Tiếng Việt</option>
           </select>
         </div>
         <div class="settings-row">
@@ -376,6 +382,15 @@
         </div>
       </div>
 
+      <!-- Panel: Basic (Google Cloud Translation API v2) -->
+      <div class="settings-panel" id="settings-panel-basic" role="tabpanel"
+        aria-labelledby="settings-tab-basic" hidden>
+        <div class="settings-row">
+          <label for="gcloud-api-key-input" id="gcloud-api-key-label">Google Cloud API Key</label>
+          <input type="password" id="gcloud-api-key-input" placeholder="AIza..." autocomplete="off" />
+        </div>
+      </div>
+
       <!-- Panel: PRO -->
       <div class="settings-panel" id="settings-panel-pro" role="tabpanel"
         aria-labelledby="settings-tab-pro" hidden>
@@ -410,6 +425,11 @@
         <div class="settings-row">
           <label for="cloudflare-subdomain-input" id="cloudflare-subdomain-label">Cloudflare Worker Subdomain</label>
           <input type="text" id="cloudflare-subdomain-input" placeholder="my-giano"
+            autocomplete="off" />
+        </div>
+        <div class="settings-row">
+          <label for="web-server-password-input" id="web-server-password-label">Password</label>
+          <input type="password" id="web-server-password-input" placeholder=""
             autocomplete="off" />
         </div>
         <!-- Web Server Mode (Tauri only) -->

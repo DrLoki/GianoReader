@@ -10,9 +10,10 @@ import ja from './ja.json';
 import ar from './ar.json';
 import fil from './fil.json';
 import sq from './sq.json';
+import vi from './vi.json';
 
 const locales: Record<string, Record<string, string>> = {
-  en, it, fr, de, es, pt, ru, zh, ja, ar, fil, sq,
+  en, it, fr, de, es, pt, ru, zh, ja, ar, fil, sq, vi,
 };
 
 let activeLocale: string = 'en';

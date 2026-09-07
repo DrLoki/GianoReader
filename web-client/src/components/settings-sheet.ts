@@ -116,6 +116,17 @@ settings-sheet {
   appearance: auto;
 }
 
+.settings-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface, #1e1e1e);
+  color: var(--on-surface, #fff);
+  font-size: 0.95rem;
+  min-height: 44px;
+}
+
 .settings-range-wrapper {
   display: flex;
   align-items: center;
@@ -274,6 +285,14 @@ class SettingsSheet extends HTMLElement {
         </div>
 
         <div class="settings-section">
+          <label class="settings-label" for="settings-translation-mode">${t('settings.translationMode')}</label>
+          <select id="settings-translation-mode" class="settings-select">
+            <option value="free" ${(this.currentPrefs.translationMode || 'free') === 'free' ? 'selected' : ''}>FREE</option>
+            ${this.currentPrefs.gcloudApiKey?.trim() ? `<option value="basic" ${this.currentPrefs.translationMode === 'basic' ? 'selected' : ''}>BASIC</option>` : ''}
+          </select>
+        </div>
+
+        <div class="settings-section">
           <label class="settings-label" for="settings-font-size">${t('settings.fontSize')}</label>
           <div class="settings-range-wrapper">
             <input type="range" id="settings-font-size" class="settings-range"
@@ -298,6 +317,7 @@ class SettingsSheet extends HTMLElement {
             <option value="ar" ${this.currentPrefs.uiLanguage === 'ar' ? 'selected' : ''}>العربية</option>
             <option value="fil" ${this.currentPrefs.uiLanguage === 'fil' ? 'selected' : ''}>Filipino</option>
             <option value="sq" ${this.currentPrefs.uiLanguage === 'sq' ? 'selected' : ''}>Shqip</option>
+            <option value="vi" ${this.currentPrefs.uiLanguage === 'vi' ? 'selected' : ''}>Tiếng Việt</option>
           </select>
         </div>
 
@@ -375,6 +395,14 @@ class SettingsSheet extends HTMLElement {
       const translationLang = translationSelect.value;
       this.currentPrefs.translationLang = translationLang;
       this.applyAndPersist({ translationLang });
+    });
+
+    // Translation mode
+    const translationModeSelect = this.querySelector('#settings-translation-mode') as HTMLSelectElement;
+    translationModeSelect?.addEventListener('change', () => {
+      const translationMode = translationModeSelect.value;
+      this.currentPrefs.translationMode = translationMode;
+      this.applyAndPersist({ translationMode });
     });
 
     // Font size

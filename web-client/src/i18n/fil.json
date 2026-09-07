@@ -73,4 +73,14 @@
   "offline.switchToOnline": "Bumalik sa Server mode (Online)",
   "offline.localMode": "Lokal (Offline)",
   "offline.translationRequiresInternet": "Nangangailangan ng koneksyon sa internet ang pagsasalin"
+,
+
+  "password.empty": "Maglagay ng password.",
+  "password.incorrect": "Maling password. Subukan muli.",
+  "password.skip": "Magpatuloy nang walang password",
+  "password.title": "Kailangan ng Password",
+  "password.placeholder": "Password",
+  "password.error": "Error sa koneksyon. Subukan muli.",
+  "password.message": "Protektado ng password ang server na ito. Ilagay ang password para ma-access ang library at bookmarks.",
+  "password.submit": "Mag-sign in"
 }

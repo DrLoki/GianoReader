@@ -73,4 +73,14 @@
   "offline.switchToOnline": "Вернуться в режим сервера (онлайн)",
   "offline.localMode": "Локальный (офлайн)",
   "offline.translationRequiresInternet": "Для перевода требуется интернет-соединение"
+,
+
+  "password.empty": "Введите пароль.",
+  "password.incorrect": "Неверный пароль. Попробуйте ещё раз.",
+  "password.skip": "Продолжить без пароля",
+  "password.title": "Требуется пароль",
+  "password.placeholder": "Пароль",
+  "password.error": "Ошибка соединения. Попробуйте ещё раз.",
+  "password.message": "Этот сервер защищен паролем. Введите пароль для доступа к библиотеке и закладкам.",
+  "password.submit": "Войти"
 }

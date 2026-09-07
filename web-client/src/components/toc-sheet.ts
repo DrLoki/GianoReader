@@ -3,6 +3,7 @@ import { getBookmarks, deleteBookmark } from '../api/bookmarks';
 import { showToast } from './toast';
 import { t } from '../i18n/index';
 import type { TocEntry, Bookmark } from '../types';
+import { iconXmark } from '../icons';
 
 const SHEET_STYLES = `
 toc-sheet {
@@ -425,7 +426,7 @@ class TocSheet extends HTMLElement {
             <div class="toc-bm-label">${escapeHtml(label)}</div>
             <div class="toc-bm-chapter">${escapeHtml(t('bookmarks.defaultLabel', { chapter: String(bm.chapterIndex + 1) }))}</div>
           </div>
-          <button class="toc-bm-delete" aria-label="${escapeHtml(t('bookmarks.deleteTooltip'))}" data-bookmark-id="${escapeHtml(bm.id)}"><img class="bm-icon" src="/icons/xmark.svg" alt="" aria-hidden="true"></button>
+          <button class="toc-bm-delete" aria-label="${escapeHtml(t('bookmarks.deleteTooltip'))}" data-bookmark-id="${escapeHtml(bm.id)}">${iconXmark}</button>
         </li>`;
     }).join('')}</ul>`;
 

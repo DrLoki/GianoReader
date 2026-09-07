@@ -73,4 +73,14 @@
   "offline.switchToOnline": "العودة إلى وضع الخادم (متصل)",
   "offline.localMode": "محلي (دون اتصال)",
   "offline.translationRequiresInternet": "تتطلب الترجمة اتصالاً بالإنترنت"
+,
+
+  "password.empty": "أدخل كلمة المرور.",
+  "password.incorrect": "كلمة مرور خاطئة. حاول مرة أخرى.",
+  "password.skip": "المتابعة بدون كلمة مرور",
+  "password.title": "كلمة المرور مطلوبة",
+  "password.placeholder": "كلمة المرور",
+  "password.error": "خطأ في الاتصال. حاول مرة أخرى.",
+  "password.message": "هذا الخادم محمي بكلمة مرور. أدخل كلمة المرور للوصول إلى المكتبة والإشارات المرجعية.",
+  "password.submit": "تسجيل الدخول"
 }

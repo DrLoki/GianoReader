@@ -73,4 +73,14 @@
   "offline.switchToOnline": "Kthehu në modalitetin server (në linjë)",
   "offline.localMode": "Lokal (jashtë linje)",
   "offline.translationRequiresInternet": "Përkthimi kërkon një lidhje interneti"
+,
+
+  "password.empty": "Vendosni një fjalëkalim.",
+  "password.incorrect": "Fjalëkalim i gabuar. Provoni përsëri.",
+  "password.skip": "Vazhdo pa fjalëkalim",
+  "password.title": "Kërkohet fjalëkalimi",
+  "password.placeholder": "Fjalëkalimi",
+  "password.error": "Gabim lidhjeje. Provoni përsëri.",
+  "password.message": "Ky server është i mbrojtur me fjalëkalim. Vendosni fjalëkalimin për të aksesuar bibliotekën dhe faqerojtësit.",
+  "password.submit": "Hyr"
 }

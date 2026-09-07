@@ -21,7 +21,8 @@ const STATIC_LANGUAGES = [
   { code: 'sq', name: 'Shqip' },
   { code: 'sv', name: 'Svenska' },
   { code: 'uk', name: 'Українська' },
-  { code: 'sl', name: 'Slovenščina' }
+  { code: 'sl', name: 'Slovenščina' },
+  { code: 'vi', name: 'Tiếng Việt' },
 ];
 
 const CHAR_LIMIT = 4500;
@@ -70,6 +71,7 @@ async function postTranslateOffline(
   sourceLang: string,
   targetLang: string
 ): Promise<string[]> {
+  // In offline mode, only FREE is available (BASIC requires the server backend)
   const results = new Array(paragraphs.length).fill('');
   const batches: { start: number; end: number; text: string }[] = [];
   let batchStart = 0;
@@ -129,13 +131,35 @@ export async function postTranslate(
   targetLang: string,
 ): Promise<string[]> {
   if (isOfflineMode()) {
+    // In offline/guest mode, try the server's /api/translate for BASIC mode
+    // since that endpoint is public (not behind password auth).
+    const prefs = getLocalPreferences();
+    const mode = prefs.translationMode || 'free';
+    if (mode === 'basic') {
+      try {
+        const response = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texts, sourceLang, targetLang, mode }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          return data.translations;
+        }
+      } catch {
+        // Server unreachable — fall back to offline FREE translation
+      }
+    }
     return postTranslateOffline(texts, sourceLang, targetLang);
   }
+
+  const prefs = getLocalPreferences();
+  const mode = prefs.translationMode || 'free';
 
   const response = await apiFetch('/api/translate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ texts, sourceLang, targetLang }),
+    body: JSON.stringify({ texts, sourceLang, targetLang, mode }),
   });
 
   const data = await response.json();

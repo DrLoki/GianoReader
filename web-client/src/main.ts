@@ -1,4 +1,5 @@
 import { getPreferences } from './api/preferences';
+import { getStoredPassword, resetUnauthorizedFlag } from './api/client';
 import { setLocale } from './i18n/index';
 import type { Preferences } from './types';
 import { isOfflineMode, getLocalPreferences } from './api/local-db';
@@ -6,6 +7,7 @@ import './styles/base.css';
 import './styles/themes.css';
 import './styles/components.css';
 import './components/disconnected-overlay';
+import './components/password-prompt';
 import './components/library-screen';
 import './components/reading-screen';
 import './components/settings-sheet';
@@ -41,13 +43,32 @@ async function init(): Promise<void> {
   // Initialise i18n with the resolved uiLanguage
   setLocale(prefs.uiLanguage);
 
+  // If server requires a password and we don't have one stored, show prompt
+  if (!isOfflineMode() && prefs.passwordSet && !getStoredPassword()) {
+    showPasswordPrompt();
+    return;
+  }
+
   // Mount <library-screen> as the initial view
+  mountLibrary();
+}
+
+function mountLibrary(): void {
   const app = document.getElementById('app');
   if (app) {
     app.innerHTML = '';
     const libraryScreen = document.createElement('library-screen');
     app.appendChild(libraryScreen);
   }
+}
+
+function showPasswordPrompt(): void {
+  if (!document.querySelector('password-prompt')) {
+    const prompt = document.createElement('password-prompt');
+    document.body.appendChild(prompt);
+  }
+  // Do NOT mount the library behind the prompt — it would call protected
+  // endpoints and trigger 401 errors before the user has entered a password.
 }
 
 init();
@@ -118,4 +139,16 @@ document.addEventListener('locale-changed', () => {
     const libraryScreen = document.createElement('library-screen');
     app.appendChild(libraryScreen);
   }
+});
+
+// Show password prompt when server returns 401 (password required)
+document.addEventListener('unauthorized', () => {
+  if (isOfflineMode()) return;
+  showPasswordPrompt();
+});
+
+// Reload library after successful password entry
+document.addEventListener('password-accepted', () => {
+  resetUnauthorizedFlag();
+  mountLibrary();
 });

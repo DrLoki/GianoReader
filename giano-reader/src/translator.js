@@ -96,29 +96,120 @@ CRITICAL: Return ONLY the translated text, preserving the exact paragraph count 
 
 /**
  * Traduce un singolo blocco di testo verso la lingua target.
- * Chiama direttamente Google Translate (nessun proxy Worker necessario in Tauri/desktop).
+ *
+ * In ambiente Tauri (desktop) la richiesta viene delegata al comando Rust
+ * `translate_free`, che usa `reqwest` lato backend: questo evita che la
+ * richiesta sia soggetta alle policy CORS del webview, le quali possono far
+ * apparire come "bloccato da CORS" un errore di rate-limit (HTTP 429) di
+ * Google Translate — la risposta di errore di Google non include l'header
+ * Access-Control-Allow-Origin, quindi il browser/webview la segnala come
+ * violazione CORS anche se il vero problema è il rate limiting.
+ * In browser/PWA (nessun runtime Tauri) si usa `fetch()` diretto come prima.
+ *
  * @param {string} text       - Testo da tradurre (già suddiviso in chunk).
  * @param {string} targetLang - Codice lingua BCP-47 (es. "it", "en", "fr").
  * @returns {Promise<string>} Testo tradotto.
  */
 async function translateChunk(text, targetLang) {
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-
   console.log(`[GianoReader FREE] Starting translation request...`);
   console.log(`[GianoReader FREE] Target Language: ${targetLang}`);
   console.log(`[GianoReader FREE] Text Length: ${text.length} chars`);
 
   const startTime = performance.now();
-  const res = await fetch(url);
+  const isTauri = typeof window !== 'undefined' && (window.__TAURI__ || window.__TAURI_INTERNALS__);
+
+  let result;
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      result = await invoke('translate_free', {
+        text,
+        sourceLang: 'auto',
+        targetLang,
+      });
+    } catch (err) {
+      throw new Error(`Translation error: ${err?.message || err}`);
+    }
+  } else {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Translation error: ${res.status}`);
+    const data = await res.json();
+    result = data[0].map(seg => seg[0]).join('');
+  }
+
   const duration = (performance.now() - startTime) / 1000;
+  console.log(`[GianoReader FREE] Chunk translation complete in ${duration.toFixed(2)}s! Translated text size: ${result.length} chars`);
+  return result;
+}
 
-  console.log(`[GianoReader FREE] HTTP response received in ${duration.toFixed(2)}s with status ${res.status}`);
+/** Limite di caratteri per batch nella modalità Basic (Cloud Translation v2). */
+const CHAR_LIMIT_BASIC = 25000;
 
-  if (!res.ok) throw new Error(`Translation error: ${res.status}`);
+/** Limite massimo di stringhe per singola richiesta v2. */
+const MAX_SEGMENTS_BASIC = 128;
+
+/**
+ * Traduce un array di paragrafi tramite Google Cloud Translation API v2 (BASIC).
+ * Usa l'array nativo `q[]` dell'API — nessun join con \n\n necessario.
+ * Max 128 stringhe per richiesta.
+ *
+ * @param {string[]} paragraphs  - Array di testi da tradurre (un elemento per paragrafo, max 128).
+ * @param {string}   targetLang  - Codice lingua BCP-47 target.
+ * @param {string}   apiKey      - Google Cloud API Key.
+ * @param {AbortSignal} [signal] - Segnale di abort.
+ * @returns {Promise<string[]>}  Array di testi tradotti (stessa lunghezza dell'input).
+ */
+async function translateChunkBasic(paragraphs, targetLang, apiKey, signal) {
+  const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+
+  console.log(`[GianoReader BASIC] Starting translation request...`);
+  console.log(`[GianoReader BASIC] Target Language: ${targetLang}`);
+  console.log(`[GianoReader BASIC] Paragraphs: ${paragraphs.length}, Total chars: ${paragraphs.reduce((a, p) => a + p.length, 0)}`);
+
+  const body = {
+    q: paragraphs,
+    target: targetLang,
+    format: 'text'
+  };
+
+  const startTime = performance.now();
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal
+  });
+
+  const duration = (performance.now() - startTime) / 1000;
+  console.log(`[GianoReader BASIC] HTTP response received in ${duration.toFixed(2)}s with status ${res.status}`);
+
+  if (!res.ok) {
+    const errText = await res.text();
+    let message = `Google Cloud Translation error (${res.status})`;
+    try {
+      const parsed = JSON.parse(errText);
+      if (parsed.error?.message) {
+        message += `: ${parsed.error.message}`;
+      }
+    } catch {
+      if (errText) message += `: ${errText.substring(0, 200)}`;
+    }
+    if (res.status === 403) message = `Invalid Google Cloud API Key: ${message}`;
+    if (res.status === 429) message = `Google Cloud Translation quota exceeded: ${message}`;
+    throw new Error(message);
+  }
+
   const data = await res.json();
-  const result = data[0].map(seg => seg[0]).join('');
+  const translations = (data.data && data.data.translations) || [];
 
-  console.log(`[GianoReader FREE] Chunk translation complete! Translated text size: ${result.length} chars`);
+  if (translations.length !== paragraphs.length) {
+    console.warn(`[GianoReader BASIC] Response count mismatch: expected ${paragraphs.length}, got ${translations.length}`);
+  }
+
+  const result = translations.map(t => (t.translatedText || '').trim());
+  console.log(`[GianoReader BASIC] Chunk translation complete! ${result.length} paragraphs translated`);
   return result;
 }
 
@@ -136,6 +227,7 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
   const results = new Array(paragraphs.length).fill('');
   const settings = loadSettings();
   const isPro = settings.translationMode === 'pro';
+  const isBasic = settings.translationMode === 'basic';
   const apiKey = settings.openrouterApiKey;
   const model = settings.openrouterModel;
 
@@ -144,7 +236,44 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
     if (!model) throw new Error('OpenRouter Model not selected');
   }
 
-  // Costruisce i batch rispettando il limite di caratteri per richiesta
+  if (isBasic) {
+    const gcloudApiKey = (settings.gcloudApiKey || '').trim();
+    if (!gcloudApiKey) throw new Error('Google Cloud API Key not configured');
+
+    // Basic mode: batch by total char length (~25000) AND max 128 segments per request
+    const batches = [];
+    let batchStart = 0;
+    let batchLen = 0;
+
+    for (let i = 0; i < paragraphs.length; i++) {
+      const paraLen = paragraphs[i].length;
+      const batchCount = i - batchStart;
+      if (batchLen > 0 && ((batchLen + paraLen) > CHAR_LIMIT_BASIC || batchCount >= MAX_SEGMENTS_BASIC)) {
+        batches.push({ start: batchStart, end: i });
+        batchStart = i;
+        batchLen = paraLen;
+      } else {
+        batchLen += paraLen;
+      }
+    }
+    if (batchStart < paragraphs.length) {
+      batches.push({ start: batchStart, end: paragraphs.length });
+    }
+
+    for (const batch of batches) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const slice = paragraphs.slice(batch.start, batch.end);
+      const translated = await translateChunkBasic(slice, targetLang, gcloudApiKey, signal);
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      for (let j = 0; j < translated.length; j++) {
+        results[batch.start + j] = translated[j];
+      }
+    }
+
+    return results;
+  }
+
+  // FREE / PRO mode: batch by joined text length (~4500 chars, separated by \n\n)
   const batches = [];
   let batchStart = 0;
   let batchText = '';

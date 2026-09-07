@@ -17,6 +17,23 @@ fn get_system_ram() -> u64 {
     sys.total_memory() / 1_048_576 // byte → MB
 }
 
+/// Translates a single pre-batched text chunk using the free Google Translate
+/// endpoint from the Rust backend (via `reqwest`), bypassing the webview's
+/// CORS restrictions that apply to `fetch()` calls made directly from the
+/// frontend. The frontend (`src/translator.js`) already handles chunk
+/// batching/splitting and paragraph realignment, so this command performs a
+/// single raw translation request and returns the raw translated string.
+#[tauri::command]
+async fn translate_free(
+    text: String,
+    source_lang: String,
+    target_lang: String,
+) -> Result<String, String> {
+    web_server::translator::translate_chunk_raw(&text, &source_lang, &target_lang)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn start_web_server(
     port: u16,
@@ -64,6 +81,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             get_system_ram,
+            translate_free,
             start_web_server,
             stop_web_server,
             get_server_status

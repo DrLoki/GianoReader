@@ -73,4 +73,14 @@
   "offline.switchToOnline": "Volver al modo servidor (en línea)",
   "offline.localMode": "Local (sin conexión)",
   "offline.translationRequiresInternet": "La traducción requiere una conexión a internet"
+,
+
+  "password.empty": "Ingrese una contraseña.",
+  "password.incorrect": "Contraseña incorrecta. Inténtelo de nuevo.",
+  "password.skip": "Continuar sin contraseña",
+  "password.title": "Contraseña requerida",
+  "password.placeholder": "Contraseña",
+  "password.error": "Error de conexión. Inténtelo de nuevo.",
+  "password.message": "Este servidor está protegido por contraseña. Ingrese la contraseña para acceder a la biblioteca y los marcadores.",
+  "password.submit": "Iniciar sesión"
 }

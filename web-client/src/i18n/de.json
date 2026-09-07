@@ -73,4 +73,14 @@
   "offline.switchToOnline": "Zurück zum Servermodus (Online)",
   "offline.localMode": "Lokal (Offline)",
   "offline.translationRequiresInternet": "Für die Übersetzung ist eine Internetverbindung erforderlich"
+,
+
+  "password.empty": "Bitte geben Sie ein Passwort ein.",
+  "password.incorrect": "Falsches Passwort. Bitte versuchen Sie es erneut.",
+  "password.skip": "Ohne Passwort fortfahren",
+  "password.title": "Passwort erforderlich",
+  "password.placeholder": "Passwort",
+  "password.error": "Verbindungsfehler. Bitte versuchen Sie es erneut.",
+  "password.message": "Dieser Server ist passwortgeschützt. Geben Sie das Passwort ein, um auf die Bibliothek und Lesezeichen zuzugreifen.",
+  "password.submit": "Anmelden"
 }

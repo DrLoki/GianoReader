@@ -3,8 +3,12 @@ import type { Bookmark } from '../types';
 import { isOfflineMode, isLocalId, getLocalBookmarks, createLocalBookmark, deleteLocalBookmark } from './local-db';
 
 /**
- * Fetch all bookmarks for a given book, ordered by chapterIndex ascending
- * then paragraphId numerically ascending.
+ * Fetch all bookmarks for a given book.
+ *
+ * Local/offline books → IndexedDB only (these bookmarks are device-local and
+ * not synced to the server, since they wouldn't be usable on other devices).
+ * Server books → server API, with an empty fallback when the network is down.
+ *
  * @param bookId - The book identifier
  * @returns Array of bookmarks for the book
  */
@@ -12,8 +16,15 @@ export async function getBookmarks(bookId: string): Promise<Bookmark[]> {
   if (isOfflineMode() || isLocalId(bookId)) {
     return getLocalBookmarks(bookId);
   }
-  const response = await apiFetch(`/api/books/${bookId}/bookmarks`);
-  return response.json() as Promise<Bookmark[]>;
+
+  try {
+    const response = await apiFetch(`/api/books/${bookId}/bookmarks`);
+    return response.json() as Promise<Bookmark[]>;
+  } catch {
+    // Network failure — server bookmarks are unreachable; return empty
+    // rather than mixing in unrelated local data.
+    return [];
+  }
 }
 
 /**

@@ -8,12 +8,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::web_server::models::ApiError;
-use crate::web_server::translator::{translate, TranslateError};
+use crate::web_server::translator::{translate, translate_v2, TranslateError};
 
 use super::books::AppState;
 
 const SUPPORTED_LANGS: &[&str] = &[
-    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq",
+    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi",
 ];
 
 #[derive(Deserialize)]
@@ -23,6 +23,7 @@ pub struct TranslateRequest {
     pub source_lang: Option<String>,
     #[serde(alias = "target_lang", rename = "targetLang")]
     pub target_lang: Option<String>,
+    pub mode: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -151,8 +152,44 @@ pub async fn post_translate(
             .into_response();
     }
 
-    // Call the translation engine
-    match translate(texts, &source_lang, &target_lang).await {
+    // Call the translation engine based on mode
+    let mode = body.mode.as_deref().unwrap_or("free");
+
+    let result = if mode == "basic" {
+        // Load Google Cloud API key from preferences
+        let prefs = match _state.store.get_preferences() {
+            Ok(p) => p,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError {
+                        error: "Failed to load preferences".to_string(),
+                    }),
+                )
+                    .into_response();
+            }
+        };
+
+        let api_key = match prefs.gcloud_api_key {
+            Some(ref key) if !key.is_empty() => key.clone(),
+            _ => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiError {
+                        error: "Google Cloud API Key not configured. Set it in preferences."
+                            .to_string(),
+                    }),
+                )
+                    .into_response();
+            }
+        };
+
+        translate_v2(texts, &source_lang, &target_lang, &api_key).await
+    } else {
+        translate(texts, &source_lang, &target_lang).await
+    };
+
+    match result {
         Ok(translations) => (
             StatusCode::OK,
             Json(TranslateResponse { translations }),
@@ -169,6 +206,20 @@ pub async fn post_translate(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
                 error: "Translation engine not initialised".to_string(),
+            }),
+        )
+            .into_response(),
+        Err(TranslateError::InvalidCredentials(msg)) => (
+            StatusCode::FORBIDDEN,
+            Json(ApiError {
+                error: format!("Invalid Google Cloud credentials: {}", msg),
+            }),
+        )
+            .into_response(),
+        Err(TranslateError::RateLimited) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ApiError {
+                error: "Google Cloud Translation quota exceeded. Try again later.".to_string(),
             }),
         )
             .into_response(),
@@ -192,6 +243,7 @@ pub async fn get_languages() -> impl IntoResponse {
         Language { code: "ar".to_string(), name: "Arabic".to_string() },
         Language { code: "fil".to_string(), name: "Filipino".to_string() },
         Language { code: "sq".to_string(), name: "Albanian".to_string() },
+        Language { code: "vi".to_string(), name: "Vietnamese".to_string() },
     ];
 
     (StatusCode::OK, Json(languages))

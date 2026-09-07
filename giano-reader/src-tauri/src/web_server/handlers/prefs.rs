@@ -5,16 +5,19 @@ use std::sync::Arc;
 use crate::web_server::models::ApiError;
 use super::books::AppState;
 
-/// The 12 supported BCP-47 translation language codes.
+/// The supported BCP-47 translation language codes.
 const SUPPORTED_TRANSLATION_LANGS: &[&str] = &[
-    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq",
+    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi",
 ];
 
 /// Valid theme values.
 const VALID_THEMES: &[&str] = &["light", "dark", "sepia"];
 
+/// Valid translation mode values.
+const VALID_TRANSLATION_MODES: &[&str] = &["free", "basic", "pro"];
+
 /// Valid UI language values.
-const VALID_UI_LANGUAGES: &[&str] = &["it", "en"];
+const VALID_UI_LANGUAGES: &[&str] = &["it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi"];
 
 /// Request body for PUT /api/preferences.
 /// All fields are optional to support partial updates.
@@ -25,6 +28,9 @@ pub struct PutPreferencesRequest {
     pub ui_language: Option<String>,
     pub translation_lang: Option<String>,
     pub font_size: Option<serde_json::Value>,
+    pub translation_mode: Option<String>,
+    pub gcloud_api_key: Option<String>,
+    pub password: Option<String>,
 }
 
 /// GET /api/preferences
@@ -34,7 +40,16 @@ pub struct PutPreferencesRequest {
 /// `{ theme: "dark", uiLanguage: "en", translationLang: "it", fontSize: 16 }`
 pub async fn get_preferences(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.store.get_preferences() {
-        Ok(prefs) => (StatusCode::OK, Json(prefs)).into_response(),
+        Ok(prefs) => {
+            // Never expose the raw password to clients; instead return a boolean flag
+            let password_set = prefs.password.is_some();
+            let mut value = serde_json::to_value(&prefs).unwrap();
+            if let Some(obj) = value.as_object_mut() {
+                obj.remove("password");
+                obj.insert("passwordSet".to_string(), serde_json::Value::Bool(password_set));
+            }
+            (StatusCode::OK, Json(value)).into_response()
+        }
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
@@ -126,6 +141,22 @@ pub async fn put_preferences(
         }
     }
 
+    // Validate translationMode if present
+    if let Some(ref translation_mode) = body.translation_mode {
+        if !VALID_TRANSLATION_MODES.contains(&translation_mode.as_str()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError {
+                    error: format!(
+                        "translationMode: must be one of {:?}",
+                        VALID_TRANSLATION_MODES
+                    ),
+                }),
+            )
+                .into_response();
+        }
+    }
+
     // Load current preferences
     let mut prefs = match state.store.get_preferences() {
         Ok(p) => p,
@@ -154,10 +185,27 @@ pub async fn put_preferences(
         // Already validated above, safe to unwrap
         prefs.font_size = font_size_val.as_u64().unwrap() as u8;
     }
+    if let Some(translation_mode) = body.translation_mode {
+        prefs.translation_mode = translation_mode;
+    }
+    if let Some(gcloud_api_key) = body.gcloud_api_key {
+        prefs.gcloud_api_key = if gcloud_api_key.is_empty() { None } else { Some(gcloud_api_key) };
+    }
+    if let Some(password) = body.password {
+        prefs.password = if password.is_empty() { None } else { Some(password) };
+    }
 
     // Persist
     match state.store.put_preferences(&prefs) {
-        Ok(()) => (StatusCode::OK, Json(prefs)).into_response(),
+        Ok(()) => {
+            let password_set = prefs.password.is_some();
+            let mut value = serde_json::to_value(&prefs).unwrap();
+            if let Some(obj) = value.as_object_mut() {
+                obj.remove("password");
+                obj.insert("passwordSet".to_string(), serde_json::Value::Bool(password_set));
+            }
+            (StatusCode::OK, Json(value)).into_response()
+        }
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
@@ -423,6 +471,99 @@ mod tests {
             .unwrap();
         let err: ApiError = serde_json::from_slice(&body).unwrap();
         assert!(err.error.contains("translationLang"));
+    }
+
+    #[tokio::test]
+    async fn test_put_preferences_translation_mode_persists_across_requests() {
+        let app = create_test_app();
+
+        // Save translationMode = "basic"
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/preferences")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "translationMode": "basic" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let prefs: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(prefs["translationMode"], "basic");
+
+        // Simulate re-opening settings: GET should still report "basic",
+        // not silently reset to the "free" default.
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/preferences")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let prefs: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(prefs["translationMode"], "basic");
+    }
+
+    #[tokio::test]
+    async fn test_put_preferences_invalid_translation_mode() {
+        let app = create_test_app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/preferences")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "translationMode": "premium" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let err: ApiError = serde_json::from_slice(&body).unwrap();
+        assert!(err.error.contains("translationMode"));
+    }
+
+    #[tokio::test]
+    async fn test_get_preferences_defaults_translation_mode_to_free() {
+        let app = create_test_app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/preferences")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let prefs: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(prefs["translationMode"], "free");
     }
 
     #[tokio::test]

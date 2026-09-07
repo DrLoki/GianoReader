@@ -1,4 +1,4 @@
-export type ToastType = 'success' | 'error';
+export type ToastType = 'success' | 'error' | 'info';
 
 const TOAST_STYLES = `
 .toast {
@@ -32,6 +32,11 @@ const TOAST_STYLES = `
 
 .toast-error {
   background: #b71c1c;
+  color: #fff;
+}
+
+.toast-info {
+  background: #0288d1;
   color: #fff;
 }
 
