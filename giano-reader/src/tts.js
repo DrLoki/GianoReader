@@ -295,19 +295,37 @@ export class ProTTSEngine {
       speed
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://github.com/DrLoki/GianoReader',
-        'X-Title': 'GianoReader'
-      },
-      body: JSON.stringify(body),
-      signal
-    });
+    // Retry on transient gateway errors (502/503) with exponential backoff.
+    // These are upstream provider failures unrelated to the request itself.
+    const MAX_RETRIES = 3;
+    const RETRY_STATUSES = new Set([502, 503]);
+    let attempt = 0;
+    let res;
 
-    if (!res.ok) {
+    while (true) {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://github.com/DrLoki/GianoReader',
+          'X-Title': 'GianoReader'
+        },
+        body: JSON.stringify(body),
+        signal
+      });
+
+      if (res.ok) break;
+
+      if (RETRY_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
+        attempt++;
+        const delayMs = 1000 * attempt; // 1s, 2s, 3s
+        console.warn(`[TTS] OpenRouter ${res.status} on attempt ${attempt}/${MAX_RETRIES}, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      // Non-retryable error or retries exhausted
       let message = `OpenRouter TTS error (${res.status})`;
       let detail = '';
       try {
@@ -328,7 +346,10 @@ export class ProTTSEngine {
         body: detail,
         request: { model, voice, speed, responseFormat, textLength: text.length }
       });
-      throw new Error(message);
+      const err = new Error(message);
+      // Tag 502/503 as retryable-exhausted so the caller can skip rather than stop
+      if (RETRY_STATUSES.has(res.status)) err.isGatewayError = true;
+      throw err;
     }
 
     const arrayBuffer = await res.arrayBuffer();
@@ -1003,8 +1024,11 @@ export class TTSController {
     } catch (err) {
       if (err.name === 'AbortError') return; // User stopped, ignore
 
-      // Determine if this is a fatal error (HTTP/network) or a transient one (audio decode)
-      const isFatalError = err.message &&
+      // Determine if this is a fatal error (HTTP/network) or a transient one (audio decode).
+      // Gateway errors (502/503) that exhausted retries are skippable — the paragraph is
+      // lost but playback continues rather than stopping entirely.
+      const isGatewayError = !!err.isGatewayError;
+      const isFatalError = !isGatewayError && err.message &&
         (err.message.includes('OpenRouter TTS error') ||
          err.message.includes('API key not configured') ||
          err.message.includes('Failed to fetch') ||
@@ -1012,7 +1036,7 @@ export class TTSController {
          err.message.includes('Network request failed'));
 
       if (isFatalError) {
-        // HTTP errors and network failures: stop playback, notify user
+        // Hard HTTP errors and network failures: stop playback, notify user
         console.error('[TTS] Pro engine fatal error:', err.message);
         this._cancelAll();
         this._currentIndex = 0;
@@ -1022,8 +1046,13 @@ export class TTSController {
         this._clearHighlight();
         if (this._onError) this._onError(err);
       } else {
-        // Audio decode failure or other transient error: skip paragraph
-        console.warn('[TTS] Pro engine error, skipping paragraph:', err.message);
+        // Audio decode failure, gateway error (502/503 after retries), or other transient
+        // error: log a warning and skip to the next paragraph
+        if (isGatewayError) {
+          console.warn('[TTS] Pro engine gateway error after retries, skipping paragraph:', err.message);
+        } else {
+          console.warn('[TTS] Pro engine error, skipping paragraph:', err.message);
+        }
         if (this._state === 'playing') {
           this._advanceToNext();
         }

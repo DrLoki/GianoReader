@@ -55,7 +55,25 @@ pub async fn start(
 
     let display_ip = lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
     let lan_url = format!("http://{}:{}", display_ip, port);
-    let qr_url = lan_url.clone();
+
+    // Detect Hostname for local mDNS URL (e.g. http://granfico.local:8888/)
+    let hostname = sysinfo::System::host_name()
+        .or_else(|| std::env::var("COMPUTERNAME").ok())
+        .or_else(|| std::env::var("HOSTNAME").ok())
+        .map(|h| h.trim().to_lowercase())
+        .filter(|h| !h.is_empty());
+
+    let hostname_url = hostname.map(|h| {
+        let clean_host = h.chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.').collect::<String>();
+        let host = if clean_host.ends_with(".local") {
+            clean_host
+        } else {
+            format!("{}.local", clean_host)
+        };
+        format!("http://{}:{}/", host, port)
+    });
+
+    let qr_url = hostname_url.as_ref().unwrap_or(&lan_url).clone();
 
     // Create cancellation token for graceful shutdown
     let token = CancellationToken::new();
@@ -82,12 +100,14 @@ pub async fn start(
         server_task,
         port,
         lan_ip,
+        hostname_url: hostname_url.clone(),
     };
     *server_state.handle.lock().unwrap() = Some(handle);
 
     Ok(ServerInfo {
         port,
         lan_url,
+        hostname_url,
         qr_url,
     })
 }

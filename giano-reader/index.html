@@ -446,7 +446,13 @@
             </div>
             <p id="web-server-error" class="settings-error hidden"></p>
             <div id="web-server-info" class="hidden">
-              <p id="web-server-url" class="web-server-url"></p>
+              <div class="web-server-url-row">
+                <label class="switch" for="web-server-url-toggle" title="Switch between PC Name and IP">
+                  <input type="checkbox" id="web-server-url-toggle" />
+                  <span class="switch-slider"></span>
+                </label>
+                <a id="web-server-url" class="web-server-url" href="#" target="_blank" rel="noopener noreferrer" title="Click to open in browser"></a>
+              </div>
               <img id="web-server-qr" class="web-server-qr" alt="QR Code" />
             </div>
             <p id="web-server-warning" class="settings-error hidden">⚠ Server only reachable from this device (no LAN

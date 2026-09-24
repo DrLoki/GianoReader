@@ -118,6 +118,7 @@ pub struct ApiError {
 pub struct ServerInfo {
     pub port: u16,
     pub lan_url: String,
+    pub hostname_url: Option<String>,
     pub qr_url: String,
 }
 
@@ -129,6 +130,7 @@ pub struct ServerHandle {
     pub server_task: tokio::task::JoinHandle<()>,
     pub port: u16,
     pub lan_ip: Option<std::net::Ipv4Addr>,
+    pub hostname_url: Option<String>,
 }
 
 /// Tauri-managed state wrapping the optional live server handle.

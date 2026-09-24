@@ -63,13 +63,41 @@ fn get_server_status(
     let guard = state.handle.lock().unwrap();
     guard.as_ref().map(|h| {
         let display_ip = h.lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
-        let url = format!("http://{}:{}", display_ip, h.port);
+        let lan_url = format!("http://{}:{}", display_ip, h.port);
+        let qr_url = h.hostname_url.as_ref().unwrap_or(&lan_url).clone();
         ServerInfo {
             port: h.port,
-            lan_url: url.clone(),
-            qr_url: url,
+            lan_url,
+            hostname_url: h.hostname_url.clone(),
+            qr_url,
         }
     })
+}
+
+#[tauri::command]
+fn open_browser_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -84,7 +112,8 @@ pub fn run() {
             translate_free,
             start_web_server,
             stop_web_server,
-            get_server_status
+            get_server_status,
+            open_browser_url
         ])
         .setup(|app| {
             // Initialize ServerState (empty — no server running yet)

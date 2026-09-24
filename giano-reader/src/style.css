@@ -892,10 +892,26 @@ body.theme-sepia {
 }
 .switch input:checked + .switch-slider { background: var(--accent); }
 .switch input:checked + .switch-slider::before { transform: translateX(18px); }
+.switch input:disabled + .switch-slider { opacity: 0.5; cursor: not-allowed; }
 /* QR code & URL */
+.web-server-url-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .web-server-url {
-  font-size: 0.82rem; color: var(--text);
-  word-break: break-all; margin: 0;
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  word-break: break-all;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 0.15s;
+}
+.web-server-url:hover {
+  opacity: 0.8;
 }
 .web-server-qr {
   width: 150px; height: 150px;

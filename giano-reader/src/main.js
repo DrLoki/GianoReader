@@ -111,6 +111,7 @@ const webServerToggle = document.getElementById('web-server-toggle');
 const webServerPort = document.getElementById('web-server-port');
 const webServerError = document.getElementById('web-server-error');
 const webServerInfo = document.getElementById('web-server-info');
+const webServerUrlToggle = document.getElementById('web-server-url-toggle');
 const webServerUrl = document.getElementById('web-server-url');
 const webServerQr = document.getElementById('web-server-qr');
 const webServerWarning = document.getElementById('web-server-warning');
@@ -1700,33 +1701,84 @@ if (webServerPasswordInput) {
   // Expose globally so password input handler can call it
   window._syncPasswordToServer = syncPasswordToServer;
 
-  function updateWebServerUI(active, info) {
-    if (!webServerToggle) return;
-    webServerToggle.checked = active;
-    webServerPort.disabled = active;
+  let currentServerInfo = null;
 
-    if (active && info) {
-      const url = info.lan_url || `http://127.0.0.1:${info.port}`;
+  function renderServerUrlAndQr() {
+    if (!currentServerInfo) return;
+    const showIp = webServerUrlToggle ? webServerUrlToggle.checked : false;
+    const hostnameUrl = currentServerInfo.hostname_url;
+    const lanUrl = currentServerInfo.lan_url || `http://127.0.0.1:${currentServerInfo.port}`;
+
+    // If IP switch is active or hostnameUrl is not available, show IP; otherwise show PC name URL
+    const url = (showIp || !hostnameUrl) ? lanUrl : hostnameUrl;
+
+    if (webServerUrl) {
       webServerUrl.textContent = url;
-
-      // Generate QR code via public API
+      webServerUrl.href = url;
+    }
+    if (webServerQr) {
       const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=150x150`;
       webServerQr.src = qrSrc;
       webServerQr.alt = `QR: ${url}`;
+    }
 
-      webServerInfo.classList.remove('hidden');
-
-      // Show loopback warning if URL contains 127.0.0.1
-      if (url.includes('127.0.0.1')) {
+    if (webServerWarning) {
+      if (lanUrl.includes('127.0.0.1')) {
         webServerWarning.classList.remove('hidden');
       } else {
         webServerWarning.classList.add('hidden');
       }
+    }
+  }
+
+  function updateWebServerUI(active, info) {
+    if (!webServerToggle) return;
+    webServerToggle.checked = active;
+    webServerPort.disabled = active;
+    currentServerInfo = active ? info : null;
+
+    if (active && info) {
+      if (webServerUrlToggle) {
+        webServerUrlToggle.checked = false; // default to PC name URL when enabled
+        if (!info.hostname_url) {
+          webServerUrlToggle.disabled = true;
+          webServerUrlToggle.title = 'Hostname not available';
+        } else {
+          webServerUrlToggle.disabled = false;
+          webServerUrlToggle.title = 'Switch between PC Name and IP';
+        }
+      }
+      renderServerUrlAndQr();
+      if (webServerInfo) webServerInfo.classList.remove('hidden');
     } else {
-      webServerInfo.classList.add('hidden');
-      webServerWarning.classList.add('hidden');
+      if (webServerInfo) webServerInfo.classList.add('hidden');
+      if (webServerWarning) webServerWarning.classList.add('hidden');
     }
     hideWebServerError();
+  }
+
+  if (webServerUrlToggle) {
+    webServerUrlToggle.addEventListener('change', () => {
+      renderServerUrlAndQr();
+    });
+  }
+
+  if (webServerUrl) {
+    webServerUrl.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const url = webServerUrl.getAttribute('href') || webServerUrl.textContent;
+      if (!url || url === '#') return;
+      if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('open_browser_url', { url });
+        } catch {
+          window.open(url, '_blank');
+        }
+      } else {
+        window.open(url, '_blank');
+      }
+    });
   }
 
   // Load persisted port from settings
