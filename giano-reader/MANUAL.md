@@ -98,6 +98,7 @@ The bar at the bottom shows your reading position. Each tick mark corresponds to
 | Gear icon | Opens Settings |
 | Arrows icon | Hides/shows the translation panel |
 | Image icon | Toggles between text view and original EPUB view |
+| Chain-link icon | Turns scroll synchronization on/off (see [Scroll Synchronization](#scroll-synchronization-sync-toggle)) |
 
 ---
 
@@ -121,9 +122,20 @@ The two panels (original and translation) scroll in a synchronized manner: movin
 | `Space` | Scrolls down by one page |
 | `Shift + Space` | Scrolls up by one page |
 
+### Scroll Synchronization (Sync Toggle)
+
+Click the **chain-link** icon in the header to turn scroll synchronization on or off. It is available in **both** the text view and the Original EPUB view, so you can always re-enable sync after switching modes.
+
+- When sync is **on**, scrolling either panel scrolls the other proportionally (by percentage).
+- When sync is **off**, the two panels scroll independently and the reading-percentage indicator turns **red** to signal the state.
+- **Manual realignment:** turn sync off, scroll to line up the passage you're reading in both panels, then turn sync back on — Giano Reader remembers the current gap (offset) and keeps it as you continue, instead of snapping back.
+- **Automatic realignment:** double-click the percentage indicator to reset the offset and align both panels to the same percentage.
+
+> The percentage-based sync is approximate when the two panels have very different heights (common with large images or comic-style EPUBs) — which is exactly what the manual/automatic realignment controls are for.
+
 ### Original EPUB View
 
-Click the **image** icon (file-image) to toggle the original EPUB view: the chapter is rendered in an iframe with its native, original EPUB styling. In this mode, synchronized scrolling is disabled. Internal links within the book work normally.
+Click the **image** icon (file-image) to toggle the original EPUB view: the chapter is rendered in an iframe with its native, original EPUB styling (fonts, images, layout). **The translation is generated in the right panel in this mode too**, so you read the faithful original on the left next to the translation on the right. Scroll synchronization works by percentage between the two panels (see [Scroll Synchronization](#scroll-synchronization-sync-toggle) above). Internal links within the book work normally.
 
 ### Paragraph-Level Helpers & Interactive Alignment
 
@@ -166,6 +178,14 @@ For a premium, context-aware translation that preserves literary style, nuances,
 - **Activation:** Paste a valid API Key in **Settings → PRO** tab. As soon as it is entered and a model is selected, the **PRO** option will appear in the translation mode dropdown in the sidebar.
 - **Model Selection:** You can load the list of available models directly from OpenRouter servers and select your preferred one. Fast and efficient models are highly recommended (such as `google/gemini-2.5-flash` or `meta-llama/llama-3-8b-instruct`) to reduce response times to just a few seconds.
 - **Timing & Network:** When using PRO mode, OpenRouter uses *Chunked Transfer Encoding*. Consequently, the translation is generated in the background and rendered as soon as it is finished; paragraphs currently being translated remain grayed out until the process completes.
+
+### Images & Formatting in the Translated Panel
+
+The translated panel preserves the visual structure of the chapter, not just plain text:
+
+- **Standalone figures** (block images, `<figure>`, illustrations) are shown identically in both panels, so images line up side by side.
+- **Inline images** — small icons or glyphs that appear in the middle of a sentence — are kept in place in the translation. If the translation engine happens to drop one, the image is appended to the end of the paragraph so it is never lost.
+- **Inline formatting** such as bold, italics, and links is preserved at the block level; internal links stay clickable in the original panel.
 
 ### Changing Translation Language
 
@@ -340,15 +360,15 @@ Toggle the switch **OFF** in Settings, or close GianoReader. The server stops ac
 
 ## Web Access With Tailscale
 
-
 Using **Tailscale** is the safest and easiest way to access your locally hosted instance of the [Giano Reader](https://github.com/DrLoki/GianoReader/blob/main/RELEASE.md) web app from your smartphone or tablet, without exposing your home network to the public internet.
 
 This guide will walk you through the setup process step by step.
 
 ## Prerequisites
-* **The Host Machine (Server):** The computer (Windows, macOS, or Linux) currently running the Giano Reader web app.
-* **A Mobile Device:** Your Android or iOS smartphone/tablet.
-* **A Tailscale Account:** It's completely free for personal use.
+
+- **The Host Machine (Server):** The computer (Windows, macOS, or Linux) currently running the Giano Reader web app.
+- **A Mobile Device:** Your Android or iOS smartphone/tablet.
+- **A Tailscale Account:** It's completely free for personal use.
 
 ---
 
@@ -357,7 +377,7 @@ This guide will walk you through the setup process step by step.
 1. Go to [Tailscale.com](https://tailscale.com/) and create a free account.
 2. Download and install the Tailscale client for your host machine's operating system.
 3. Open the Tailscale app and **log in** with your account.
-4. Once connected, Tailscale will assign a private IP address to your machine (it usually starts with `100.x.x.x`). 
+4. Once connected, Tailscale will assign a private IP address to your machine (it usually starts with `100.x.x.x`).
 5. Find this IP address by clicking the Tailscale icon in your system tray/menu bar. **Copy this IP**—you will need it later.
 
 ### Step 2: Configure Giano Reader for Network Access
@@ -369,27 +389,25 @@ Enable the Web Server mode from the Giano Reader settings and note the port on w
 1. Open the **App Store** (iOS) or **Google Play Store** (Android).
 2. Search for and install the **Tailscale** app.
 3. Open the app, agree to the VPN configuration prompts, and **log in using the exact same account** you used on your host machine.
-4. Make sure the toggle switch in the app is set to **Active / Connected**. 
+4. Make sure the toggle switch in the app is set to **Active / Connected**.
 
 *(Your phone is now securely connected to the same virtual local network as your computer).*
 
 ### Step 4: Access Giano Reader from Your Smartphone or Desktop Browser
 
 1. Open your preferred mobile or desktop browser (Chrome, Safari, Edge, etc.).
-2. In the address bar, type your host machine's Tailscale IP address or local LAN IP followed by the Giano Reader port (default port is `8888`). 
-   
-   **Format:** `http://<IP-Address>:<Port>`
-   **Example:** `http://100.115.92.4:8888` or `http://localhost:8888`
-
+2. In the address bar, type your host machine's Tailscale IP address or local LAN IP followed by the Giano Reader port (default port is `8888`).
+  **Format:** `http://<IP-Address>:<Port>`
+  **Example:** `http://100.115.92.4:8888` or `http://localhost:8888`
 3. Press Enter. The Giano Reader web client will load.
 
 > [!TIP]
 > **Installing Giano Reader as a PWA (Progressive Web App):**
 > Giano Reader is a full Progressive Web App and can be installed as a standalone app on both mobile devices and desktop computers:
 >
-> * **On iOS (Safari):** Tap the **Share** icon at the bottom of the screen, scroll down, and tap **"Add to Home Screen"**.
-> * **On Android (Chrome):** Tap the **3-dot menu** in the top right corner and select **"Add to Home screen"** or **"Install app"**.
-> * **On Desktop (Chrome / Edge):**
+> - **On iOS (Safari):** Tap the **Share** icon at the bottom of the screen, scroll down, and tap **"Add to Home Screen"**.
+> - **On Android (Chrome):** Tap the **3-dot menu** in the top right corner and select **"Add to Home screen"** or **"Install app"**.
+> - **On Desktop (Chrome / Edge):**
 >   - If accessing via `http://localhost:8888` or `http://127.0.0.1:8888`, click the **Install** icon in the address bar (or 3-dot menu → **"Install Giano Reader..."**).
 >   - If accessing via a **LAN / Tailscale IP** (e.g. `http://192.168.1.5:8888` or `http://100.x.x.x:8888`), Chromium blocks PWA installation on non-localhost HTTP by default. To enable installation:
 >     1. Navigate to `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in Chrome (or `edge://flags` in Edge).
@@ -403,18 +421,22 @@ If you prefer not to configure flags on individual client browsers, you can enab
 
 1. Enable **MagicDNS** and **HTTPS Certificates** in your [Tailscale Admin Console](https://login.tailscale.com/admin/dns).
 2. On your host machine (where Giano Reader is running with Web Server Mode enabled on port `8888`), open a terminal and run:
+
    ```bash
    tailscale serve --bg https / http://127.0.0.1:8888
    ```
+
 3. Tailscale will automatically provision a valid, trusted TLS/SSL certificate and assign an HTTPS URL for your device:
-   ```
+
+   ```text
    https://<your-machine-name>.<your-tailnet>.ts.net
    ```
 
 **Key Advantages:**
-* **Instant PWA Installation:** Because the connection is recognized as a genuine Secure Context (HTTPS), Chrome and Edge on both desktop and mobile will immediately show the native **Install App** button without any need to touch `chrome://flags`.
-* **Complete Offline Support:** Service Workers register and precache books and chapters automatically.
-* **End-to-End Encryption:** Encrypted network transport across your private Tailscale network.
+
+- **Instant PWA Installation:** Because the connection is recognized as a genuine Secure Context (HTTPS), Chrome and Edge on both desktop and mobile will immediately show the native **Install App** button without any need to touch `chrome://flags`.
+- **Complete Offline Support:** Service Workers register and precache books and chapters automatically.
+- **End-to-End Encryption:** Encrypted network transport across your private Tailscale network.
 
 ---
 
@@ -423,8 +445,8 @@ If you prefer not to configure flags on individual client browsers, you can enab
 Open Settings by clicking the **gear** icon in the sidebar.
 
 | Setting | Description |
-| --- | ---|
-| **Interface language** | UI text language (21 languages available with automatic i18n alignment) |
+| --- | --- |
+| **Interface language** | UI text language (22 languages available with automatic i18n alignment) |
 | **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
 | **Font** | Font family for reading text |
 | **Font size** | Slider from 12px to 32px |
@@ -472,6 +494,7 @@ Launch the application with the `--dev` flag to enable DevTools (F12). For examp
 
 **Why doesn't the PWA "Install" button appear in Chrome or Edge on desktop?**
 Chromium browsers require a Secure Context (HTTPS or `localhost`) to register Service Workers and allow PWA installation. If you are opening Giano Reader on another PC using a LAN IP (e.g. `http://192.168.1.5:8888`), Chromium marks HTTP as insecure and disables installation. To enable it:
+
 1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in Chrome (or `edge://flags` in Edge).
 2. Enter the server origin (e.g. `http://192.168.1.5:8888`).
 3. Set the option to **Enabled** and click **Relaunch**.

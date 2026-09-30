@@ -12,7 +12,7 @@
 
 ### 📖 Bridging the Gap in Foreign Literature
 
-**Giano Reader** is a lightweight, high-performance desktop application designed for those who refuse to let a language barrier stand between them and a great book. 
+**Giano Reader** is a lightweight, high-performance desktop application designed for those who refuse to let a language barrier stand between them and a great book.
 
 Named after the Roman god of dualities and transitions, Giano provides a **synchronized, side-by-side reading experience**. It is specifically crafted for language learners who want to dive into foreign literature without losing the flow, the context, or the original book's formatting.
 
@@ -20,10 +20,10 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 
 ### 🚀 Why Giano Reader?
 
-*   **⚡ Lightweight & Native:** Built with **Tauri 2**, offering a snappy desktop experience with a minimal system footprint.
-*   **🔗 Fluid Synchronization:** As you scroll the original text, the translation follows perfectly. Never lose your place again.
-*   **🧠 Context-Aware:** Unlike standard translators, Giano preserves the "soul" of the EPUB, rendering native styles while providing a modern translation overlay.
-*   **⏳ Smart Lazy Translation:** Our chunking logic means you don't have to wait for the whole book to be processed—it translates as you read, starting from your current position.
+- **⚡ Lightweight & Native:** Built with **Tauri 2**, offering a snappy desktop experience with a minimal system footprint.
+- **🔗 Fluid Synchronization:** As you scroll the original text, the translation follows perfectly. Never lose your place again.
+- **🧠 Context-Aware:** Unlike standard translators, Giano preserves the "soul" of the EPUB, rendering native styles while providing a modern translation overlay.
+- **⏳ Smart Lazy Translation:** Our chunking logic means you don't have to wait for the whole book to be processed—it translates as you read, starting from your current position.
 
 ---
 
@@ -42,6 +42,9 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 - **Word-Level Bidirectional Hover Alignment**: Hovering a word in the original text highlights the corresponding word in the translation (and vice versa) for immediate word-by-word comparison
 - **Paragraph Numbers Toggle**: Show/hide small paragraph numbers at the start of each text block for precise, high-accuracy study alignment
 - Lazy translation: starts from your current reading position, expands downward as you scroll
+- **Images & inline formatting in the translated panel**: standalone figures are mirrored on both sides, inline images (icons mid-sentence) are preserved through translation via placeholder tokens, and block-level inline formatting/links are re-applied to the translated text
+- **Translation in Original view**: the faithful EPUB iframe (native styling + images) now sits side-by-side with a translated panel — no longer original-only
+- **Percentage-based scroll sync with toggle**: a chain-link button (available in both views) turns scroll sync on/off; the reading percentage turns red when off; re-enabling keeps the current offset for manual realignment, and double-clicking the percentage snaps both panels back to the same position
 - Original EPUB view mode (rendered in an iframe with native styling)
 - Bookmarks with chapter and scroll position, import/export as JSON
 - **Filesystem Database Migration**: Tauri desktop app stores library metadata and bookmarks in secure, local JSON files on disk, ensuring virtually unlimited storage and preventing browser `QuotaExceededError` limits
@@ -70,9 +73,10 @@ English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese
 ---
 
 ## 📥 Download & Install
+
 You can find the ready-to-use installers for Windows (.msi), macOS (.dmg), and Linux (.AppImage) here:
 
-👉 [Download Giano Reader v0.9.3](https://github.com/DrLoki/GianoReader/releases/tag/v0.9.3)
+👉 [Download Giano Reader v0.9.4](https://github.com/DrLoki/GianoReader/releases/tag/v0.9.4)
 
 > [!IMPORTANT]
 > **Migration Note (from v0.7.x to v0.8.x):**
@@ -108,7 +112,7 @@ For build requirements and instructions see [BUILD.md](giano-reader/BUILD.md).
 
 ## 🛠 Project Structure
 
-```
+```text
 giano-reader/
 ├── index.html              # HTML entry point — all UI markup
 ├── package.json
@@ -152,11 +156,13 @@ giano-reader/
 
 Giano Reader implements a flexible three-tier translation engine:
 
-*   **FREE Mode**: Uses the unofficial Google Translate public endpoint (`translate.googleapis.com`) — **no API key required**. Text is split into ~4500-character chunks and translated lazily: the visible block first, then subsequent ones as you scroll. On the desktop app (Tauri), translation calls are made by the Rust backend via a `translate_free` command to bypass WebView2 CORS restrictions.
-*   **BASIC Mode**: Uses the official **Google Cloud Translation API** (v2/v3) with NMT or Translation LLM model selection. Requires a Google Cloud Project ID and API Key configured in Settings → Basic tab. Provides higher-quality, production-grade translations at predictable cost (~$0.01–0.02 per novel).
-*   **PRO Mode**: Uses **OpenRouter APIs** to query advanced Large Language Models (LLMs) like Gemini and Llama. This provides premium literary-grade, context-aware translations that respect the author's writing style. To activate it, simply paste your OpenRouter API Key into Settings. Once active, Giano will query OpenRouter asynchronously, and the text will be displayed block-by-block.
+- **FREE Mode**: Uses the unofficial Google Translate public endpoint (`translate.googleapis.com`) — **no API key required**. Text is split into ~4500-character chunks and translated lazily: the visible block first, then subsequent ones as you scroll. On the desktop app (Tauri), translation calls are made by the Rust backend via a `translate_free` command to bypass WebView2 CORS restrictions.
+- **BASIC Mode**: Uses the official **Google Cloud Translation API** (v2/v3) with NMT or Translation LLM model selection. Requires a Google Cloud Project ID and API Key configured in Settings → Basic tab. Provides higher-quality, production-grade translations at predictable cost (~$0.01–0.02 per novel).
+- **PRO Mode**: Uses **OpenRouter APIs** to query advanced Large Language Models (LLMs) like Gemini and Llama. This provides premium literary-grade, context-aware translations that respect the author's writing style. To activate it, simply paste your OpenRouter API Key into Settings. Once active, Giano will query OpenRouter asynchronously, and the text will be displayed block-by-block.
 
 For all modes, translation is entirely **lazy**: the app begins translating from your current reading position and expands downward as you scroll. When you open a bookmark, translation starts directly from the saved position, saving bandwidth and system load.
+
+Translation is available in **both view modes**: the reflowed text view (with images and inline formatting preserved) and the Original EPUB view (the native iframe on the left, the translation on the right). A chain-link button in the header toggles **scroll synchronization** on/off; because the two panels can have different heights (especially with images or comic-style EPUBs), the sync works by percentage, remembers the current offset when re-enabled for manual realignment, and can be reset with a double-click on the percentage indicator.
 
 ---
 
@@ -164,9 +170,9 @@ For all modes, translation is entirely **lazy**: the app begins translating from
 
 Giano Reader includes premium tools designed to speed up comprehension and make comparative reading natural:
 
-*   **Paragraph Coloring (Palette)**: Clicking the palette icon (`[Palette]`) in the translation header activates high-contrast paragraph matching. The original paragraphs and their corresponding translations are colored in matching background tints, letting your eyes instantly jump between the two versions. Giano includes separate, hand-tailored 5-color palettes optimized for both dark and light modes to maintain excellent text contrast.
-*   **Word-Level Bidirectional Alignment**: When paragraph coloring is turned off, hovering over any individual word in the original text will automatically highlight the corresponding translated word (and vice versa). This is incredibly powerful for identifying sentence structures, vocabulary counterparts, and idioms.
-*   **Paragraph Numbers (`#`)**: Clicking the `#` button toggles small inline paragraph numbers at the start of each text block. This helps you track structural alignment across chapters.
+- **Paragraph Coloring (Palette)**: Clicking the palette icon (`[Palette]`) in the translation header activates high-contrast paragraph matching. The original paragraphs and their corresponding translations are colored in matching background tints, letting your eyes instantly jump between the two versions. Giano includes separate, hand-tailored 5-color palettes optimized for both dark and light modes to maintain excellent text contrast.
+- **Word-Level Bidirectional Alignment**: When paragraph coloring is turned off, hovering over any individual word in the original text will automatically highlight the corresponding translated word (and vice versa). This is incredibly powerful for identifying sentence structures, vocabulary counterparts, and idioms.
+- **Paragraph Numbers (`#`)**: Clicking the `#` button toggles small inline paragraph numbers at the start of each text block. This helps you track structural alignment across chapters.
 
 ---
 
@@ -184,13 +190,13 @@ The **Clean Library** tool verifies that all stored book paths still exist on di
 
 Giano Reader includes a dual-mode TTS engine for listening to your books:
 
-*   **FREE Mode**: Uses the browser's built-in `SpeechSynthesis` API with available system voices. No configuration needed.
-*   **PRO Mode**: Connects to **OpenRouter** to access high-quality neural TTS models:
-    - **Orpheus 3B** — 8 English voices (Tara, Leah, Jess, Mia, Zoe, Leo, Dan, Zac)
-    - **Kokoro 82M** — Multilingual voices across English, Italian, French, Spanish, Portuguese, Japanese, Chinese, Hindi
-    - **Gemini 3.1 Flash TTS** — 30 expressive voices with style descriptors
-    - **Grok Voice TTS** — 5 voices (Eve, Ara, Rex, Sal, Leo) with 20+ language support
-    - **Microsoft MAI-Voice-2** — Natural voices across 10 languages
+- **FREE Mode**: Uses the browser's built-in `SpeechSynthesis` API with available system voices. No configuration needed.
+- **PRO Mode**: Connects to **OpenRouter** to access high-quality neural TTS models:
+  - **Orpheus 3B** — 8 English voices (Tara, Leah, Jess, Mia, Zoe, Leo, Dan, Zac)
+  - **Kokoro 82M** — Multilingual voices across English, Italian, French, Spanish, Portuguese, Japanese, Chinese, Hindi
+  - **Gemini 3.1 Flash TTS** — 30 expressive voices with style descriptors
+  - **Grok Voice TTS** — 5 voices (Eve, Ara, Rex, Sal, Leo) with 20+ language support
+  - **Microsoft MAI-Voice-2** — Natural voices across 10 languages
 
 All voices display ♀️/♂️ gender indicators. PRO mode accumulates audio as you listen and enables a **Download** button (far right of the TTS toolbar) that opens a native "Save As" dialog to export the chapter audio as MP3 or WAV.
 
@@ -210,7 +216,7 @@ Language dropdowns use custom SVG flags in `public/flags/` instead of Unicode em
 ## Main dependencies
 
 | Package | Purpose |
-|---|---|
+| --- | --- |
 | [epubjs](https://github.com/futurepress/epub.js/) | EPUB parsing and rendering |
 | [tauri-plugin-dialog](https://github.com/tauri-apps/plugins-workspace) | Native file open/save dialogs |
 | [tauri-plugin-fs](https://github.com/tauri-apps/plugins-workspace) | Filesystem read/write access |
@@ -219,4 +225,5 @@ Language dropdowns use custom SVG flags in `public/flags/` instead of Unicode em
 ---
 
 ## ⚖️ License
+
 This project is licensed under a custom license. See the [LICENSE](LICENSE) file for details.

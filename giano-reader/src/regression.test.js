@@ -84,24 +84,159 @@ function makeBookmarkFunctions(storage) {
 }
 
 // ── Pure functions from main.js ──────────────────────────────────────────
-function extractParagraphs(body) {
-  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
-  const rawBlocks = body.querySelectorAll?.(selectors.join(', '));
+// NB: copie allineate a giano-reader/src/main.js (modello a segmenti con immagini).
+const INLINE_TAGS = new Set(['a', 'b', 'strong', 'i', 'em', 'u', 's', 'sub', 'sup', 'span', 'small', 'mark', 'code', 'abbr', 'q', 'cite', 'br', 'img']);
+
+function resolveImgSrc(rawSrc, imgResolver) {
+  if (!rawSrc || !imgResolver) return rawSrc;
+  if (/^(blob:|data:|https?:)/i.test(rawSrc)) return rawSrc;
+  if (imgResolver.has(rawSrc)) return imgResolver.get(rawSrc);
+  const base = rawSrc.split(/[\\/]/).pop();
+  if (base && imgResolver.has(base)) return imgResolver.get(base);
+  return rawSrc;
+}
+
+function safeInnerHtml(el, imgResolver = null) {
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('script, style').forEach(n => n.remove());
+  clone.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    Array.from(a.attributes).forEach(attr => {
+      if (attr.name !== 'href') a.removeAttribute(attr.name);
+    });
+    a.setAttribute('data-epub-href', href);
+    a.removeAttribute('href');
+    a.style.cursor = 'pointer';
+  });
+  clone.querySelectorAll('img').forEach(img => {
+    const src = img.getAttribute('src') || '';
+    const resolved = resolveImgSrc(src, imgResolver);
+    if (resolved) img.setAttribute('src', resolved);
+    img.setAttribute('loading', 'lazy');
+    img.classList.add('inline-img');
+    Array.from(img.attributes).forEach(attr => {
+      if (!['src', 'alt', 'loading', 'width', 'height', 'class'].includes(attr.name)) img.removeAttribute(attr.name);
+    });
+  });
+  clone.querySelectorAll('*').forEach(n => {
+    ['onclick', 'onmouseover', 'onerror', 'onload'].forEach(ev => n.removeAttribute(ev));
+  });
+  return clone.innerHTML;
+}
+
+// ── Inline images (token) ──────────────────────────────────────────────────
+const INLINE_IMG_TOKEN_OPEN = '\u27E6IMG';
+const INLINE_IMG_TOKEN_CLOSE = '\u27E7';
+function inlineImgToken(i) { return `${INLINE_IMG_TOKEN_OPEN}${i}${INLINE_IMG_TOKEN_CLOSE}`; }
+const INLINE_IMG_TOKEN_RE = /\u27E6\s*IMG\s*(\d+)\s*\u27E7/g;
+
+function inlineImgHtml(img, imgResolver) {
+  const clone = img.cloneNode(false);
+  const src = clone.getAttribute('src') || '';
+  const resolved = resolveImgSrc(src, imgResolver);
+  if (resolved) clone.setAttribute('src', resolved);
+  clone.setAttribute('loading', 'lazy');
+  clone.classList.add('inline-img');
+  Array.from(clone.attributes).forEach(attr => {
+    if (!['src', 'alt', 'loading', 'width', 'height', 'class'].includes(attr.name)) clone.removeAttribute(attr.name);
+  });
+  return clone.outerHTML;
+}
+
+function extractTextWithInlineImages(el, imgResolver) {
+  const inlineImages = [];
+  const walk = (node) => {
+    let out = '';
+    node.childNodes.forEach(child => {
+      if (child.nodeType === 3) {
+        out += child.nodeValue;
+      } else if (child.nodeType === 1) {
+        const tag = child.tagName.toLowerCase();
+        if (tag === 'img') {
+          const idx = inlineImages.length;
+          inlineImages.push(inlineImgHtml(child, imgResolver));
+          out += ` ${inlineImgToken(idx)} `;
+        } else {
+          out += walk(child);
+        }
+      }
+    });
+    return out;
+  };
+  const text = walk(el).replace(/\s+/g, ' ').trim();
+  return { text, inlineImages };
+}
+
+function reinsertInlineImages(safeText, inlineImages) {
+  if (!inlineImages || !inlineImages.length) {
+    return safeText.replace(INLINE_IMG_TOKEN_RE, '').replace(/\s{2,}/g, ' ').trim();
+  }
+  const used = new Set();
+  let out = safeText.replace(INLINE_IMG_TOKEN_RE, (_m, n) => {
+    const idx = parseInt(n, 10);
+    if (idx >= 0 && idx < inlineImages.length) { used.add(idx); return inlineImages[idx]; }
+    return '';
+  });
+  const missing = inlineImages.filter((_, i) => !used.has(i));
+  if (missing.length) out = out.trim() + ' ' + missing.join(' ');
+  return out.replace(/\s{2,}/g, ' ').trim();
+}
+
+function buildImageBlockHtml(el, imgResolver) {
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('script, style').forEach(n => n.remove());
+  const imgs = el.tagName.toLowerCase() === 'img' ? [clone] : Array.from(clone.querySelectorAll('img'));
+  imgs.forEach(img => {
+    const src = img.getAttribute('src') || '';
+    const resolved = resolveImgSrc(src, imgResolver);
+    if (resolved) img.setAttribute('src', resolved);
+    img.setAttribute('loading', 'lazy');
+    Array.from(img.attributes).forEach(attr => {
+      if (!['src', 'alt', 'loading', 'width', 'height'].includes(attr.name)) img.removeAttribute(attr.name);
+    });
+  });
+  return clone.tagName ? clone.outerHTML : clone.innerHTML;
+}
+
+function isImageBlock(el) {
+  const tag = el.tagName?.toLowerCase();
+  return tag === 'img' || tag === 'figure' || tag === 'svg';
+}
+
+function extractParagraphs(body, imgResolver = null) {
+  const textSelectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
+  const imageSelectors = ['figure', 'img', 'svg'];
+  const allSelectors = [...textSelectors, ...imageSelectors];
+  const rawBlocks = body.querySelectorAll?.(allSelectors.join(', '));
   const blocks = rawBlocks ? Array.from(rawBlocks).filter(el => {
-    if (el.tagName.toLowerCase() !== 'blockquote') return true;
-    return !el.querySelector(selectors.join(', '));
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'blockquote') return !el.querySelector(textSelectors.join(', '));
+    if (tag === 'img' || tag === 'svg') {
+      if (el.closest('figure')) return false;
+      if (el.closest(textSelectors.join(', '))) return false;
+      return true;
+    }
+    return true;
   }) : rawBlocks;
   if (blocks && blocks.length > 0) {
     const r = [];
     blocks.forEach(el => {
-      const text = (el.textContent || '').trim();
-      if (text) r.push({ text, html: el.innerHTML });
+      if (isImageBlock(el)) {
+        const html = buildImageBlockHtml(el, imgResolver);
+        if (!html) return;
+        const alt = el.querySelector?.('img')?.getAttribute('alt') || el.getAttribute?.('alt') || '';
+        r.push({ type: 'image', html, id: el.id || null, alt });
+        return;
+      }
+      const { text, inlineImages } = extractTextWithInlineImages(el, imgResolver);
+      if (!text && !inlineImages.length) return;
+      r.push({ type: 'text', text, html: safeInnerHtml(el, imgResolver), id: el.id || null, inlineImages });
     });
     if (r.length) return r;
   }
   return (body.textContent || '').split('\n')
     .map(l => l.trim()).filter(l => l.length > 2)
-    .map(text => ({ text, html: text }));
+    .map(text => ({ type: 'text', text, html: text, id: null, inlineImages: [] }));
 }
 
 function escapeHtml(s) {
@@ -109,11 +244,55 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function applyInlineFormatting(originalHtml, translatedText, inlineImages = []) {
+  const safeText = escapeHtml(translatedText);
+  const withImages = reinsertInlineImages(safeText, inlineImages);
+  if (!originalHtml || originalHtml.indexOf('<') === -1) return withImages;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = originalHtml;
+  const elementChildren = Array.from(tmp.childNodes).filter(
+    n => n.nodeType === 1 || (n.nodeType === 3 && n.textContent.trim())
+  );
+  if (elementChildren.length === 1 && elementChildren[0].nodeType === 1) {
+    const el = elementChildren[0];
+    const tag = el.tagName.toLowerCase();
+    if (tag !== 'img' && INLINE_TAGS.has(tag)) {
+      const wrapper = el.cloneNode(false);
+      wrapper.innerHTML = withImages;
+      return wrapper.outerHTML;
+    }
+  }
+  const links = tmp.querySelectorAll('a[data-epub-href]');
+  if (links.length === 1 && (links[0].textContent || '').trim() === (tmp.textContent || '').trim()) {
+    const a = links[0].cloneNode(false);
+    a.innerHTML = withImages;
+    return a.outerHTML;
+  }
+  return withImages;
+}
+
 function paragraphsToHtml(paragraphs) {
-  return paragraphs.filter(p => (p.text || p).trim()).map(p => {
+  return paragraphs.filter(p => {
+    if (p && p.type === 'image') return !!p.html;
+    return ((p && p.text) || p || '').toString().trim();
+  }).map(p => {
+    if (p && p.type === 'image') return `<div class="segment-image">${p.html}</div>`;
     const html = p.html !== undefined ? p.html : escapeHtml(p);
     return `<p>${html}</p>`;
   }).join('');
+}
+
+// ── Scroll sync con offset (copia da main.js) ──────────────────────────────
+function computeSyncedPct(sourcePct, offsetPct) {
+  const p = sourcePct + offsetPct;
+  return Math.min(1, Math.max(0, p));
+}
+// L'offset è definito come right - left. Applica il sync da una sorgente
+// verso il target scegliendo il segno in base a quale pannello è la sorgente.
+function syncTargetPct(sourcePct, offsetPct, isLeftSource) {
+  return isLeftSource
+    ? computeSyncedPct(sourcePct, offsetPct)
+    : computeSyncedPct(sourcePct, -offsetPct);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -177,6 +356,144 @@ describe('Apertura libro semplice', () => {
 
   it('escapeHtml previene XSS', () => {
     expect(escapeHtml('<script>alert("xss")</script>')).toBe('&lt;script&gt;alert("xss")&lt;/script&gt;');
+  });
+
+  it('extractParagraphs marca i segmenti testo con type "text"', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<p>Ciao</p>';
+    const result = extractParagraphs(body);
+    expect(result[0].type).toBe('text');
+    expect(result[0].text).toBe('Ciao');
+  });
+
+  it('extractParagraphs estrae immagini standalone come segmenti type "image" non testuali', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<p>Prima</p><img src="Images/foo.jpg" alt="Figura"/><p>Dopo</p>';
+    const result = extractParagraphs(body);
+    expect(result).toHaveLength(3);
+    expect(result[0].type).toBe('text');
+    expect(result[1].type).toBe('image');
+    expect(result[1].text).toBeUndefined();
+    expect(result[1].alt).toBe('Figura');
+    expect(result[2].type).toBe('text');
+  });
+
+  it('extractParagraphs estrae <figure> come singolo segmento immagine (no img duplicata)', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<figure><img src="Images/f.png"/><figcaption>Didascalia</figcaption></figure>';
+    const result = extractParagraphs(body);
+    const images = result.filter(r => r.type === 'image');
+    expect(images).toHaveLength(1);
+    expect(images[0].html).toContain('figcaption');
+  });
+
+  it('extractParagraphs tratta una <img> inline dentro un <p> come segmento testo con token', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<p>Testo con <img src="Images/inline.png"/> immagine inline</p>';
+    const result = extractParagraphs(body);
+    // Un solo segmento testo; l'img è nell'html originale e come inlineImage+token
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('text');
+    expect(result[0].html).toContain('<img');
+    expect(result[0].inlineImages).toHaveLength(1);
+    expect(result[0].text).toMatch(/\u27E6IMG0\u27E7/); // token presente nel testo da tradurre
+    expect(result[0].text).toContain('Testo con');
+    expect(result[0].text).toContain('immagine inline');
+  });
+
+  it('extractParagraphs: caso reale Sigil — "paragraph button <img/> can be used"', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<p>The paragraph button <img alt="Normal Paragraph icon" src="../Images/heading-normal.png"/> can be used to change your text.</p>';
+    const seg = extractParagraphs(body)[0];
+    expect(seg.type).toBe('text');
+    expect(seg.inlineImages).toHaveLength(1);
+    expect(seg.inlineImages[0]).toContain('heading-normal.png');
+    expect(seg.text).toMatch(/paragraph button\s+\u27E6IMG0\u27E7\s+can be used/);
+  });
+
+  it('applyInlineFormatting reinserisce l\'immagine inline al posto del token tradotto', () => {
+    const seg = { html: 'The paragraph button <img src="blob:xyz"/> can be used', inlineImages: ['<img src="blob:xyz" class="inline-img">'] };
+    // Il traduttore preserva il token nella traduzione
+    const out = applyInlineFormatting(seg.html, 'Il pulsante Paragrafo \u27E6IMG0\u27E7 può essere usato', seg.inlineImages);
+    expect(out).toContain('<img src="blob:xyz"');
+    expect(out).toContain('Il pulsante Paragrafo');
+    expect(out).toContain('può essere usato');
+    expect(out).not.toMatch(/\u27E6IMG0\u27E7/); // token consumato
+  });
+
+  it('applyInlineFormatting appende l\'immagine se il traduttore perde il token', () => {
+    const inlineImages = ['<img src="blob:xyz" class="inline-img">'];
+    // Traduzione senza token (motore l'ha rimosso) → immagine appesa in coda, mai persa
+    const out = applyInlineFormatting('a <img src="blob:xyz"/> b', 'testo tradotto senza segnaposto', inlineImages);
+    expect(out).toContain('<img src="blob:xyz"');
+    expect(out).toContain('testo tradotto senza segnaposto');
+  });
+
+  it('applyInlineFormatting rimuove token residui quando non ci sono immagini', () => {
+    const out = applyInlineFormatting('testo', 'testo \u27E6IMG5\u27E7 tradotto', []);
+    expect(out).not.toMatch(/\u27E6/);
+    expect(out).toBe('testo tradotto');
+  });
+
+  it('extractParagraphs preserva l\'ordine di più immagini inline', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<p>A <img src="x/1.png"/> B <img src="x/2.png"/> C</p>';
+    const seg = extractParagraphs(body)[0];
+    expect(seg.inlineImages).toHaveLength(2);
+    expect(seg.inlineImages[0]).toContain('1.png');
+    expect(seg.inlineImages[1]).toContain('2.png');
+    const out = applyInlineFormatting(seg.html, 'A \u27E6IMG0\u27E7 B \u27E6IMG1\u27E7 C', seg.inlineImages);
+    expect(out.indexOf('1.png')).toBeLessThan(out.indexOf('2.png')); // ordine preservato
+  });
+
+  it('resolveImgSrc rimappa src relativi in blob URL tramite il resolver', () => {
+    const resolver = new Map([['Images/foo.jpg', 'blob:xyz'], ['foo.jpg', 'blob:xyz']]);
+    expect(resolveImgSrc('Images/foo.jpg', resolver)).toBe('blob:xyz');
+    expect(resolveImgSrc('../Images/foo.jpg', resolver)).toBe('blob:xyz'); // match per basename
+    expect(resolveImgSrc('data:image/png;base64,AAA', resolver)).toBe('data:image/png;base64,AAA'); // già assoluto
+    expect(resolveImgSrc('Images/missing.jpg', resolver)).toBe('Images/missing.jpg'); // non trovato → invariato
+  });
+
+  it('buildImageBlockHtml rimappa src e pulisce attributi pericolosi', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<img src="Images/f.jpg" onerror="alert(1)" data-x="y" alt="A"/>';
+    const img = body.querySelector('img');
+    const html = buildImageBlockHtml(img, new Map([['Images/f.jpg', 'blob:abc']]));
+    expect(html).toContain('blob:abc');
+    expect(html).not.toContain('onerror');
+    expect(html).not.toContain('data-x');
+    expect(html).toContain('alt="A"');
+  });
+
+  it('applyInlineFormatting: testo puro senza tag → escape semplice', () => {
+    expect(applyInlineFormatting('Ciao mondo', 'Hello world')).toBe('Hello world');
+  });
+
+  it('applyInlineFormatting: wrapper inline intero preservato attorno alla traduzione', () => {
+    const out = applyInlineFormatting('<em>Ciao</em>', 'Hello');
+    expect(out).toBe('<em>Hello</em>');
+  });
+
+  it('applyInlineFormatting: link che copre tutto il blocco preserva href', () => {
+    const body = document.createElement('div');
+    body.innerHTML = '<a data-epub-href="chap2.xhtml#n1">Vedi nota</a>';
+    const out = applyInlineFormatting(body.innerHTML, 'See note');
+    expect(out).toContain('data-epub-href="chap2.xhtml#n1"');
+    expect(out).toContain('See note');
+  });
+
+  it('applyInlineFormatting: formattazione inline sparsa → fallback a testo puro (contenuto integro)', () => {
+    const out = applyInlineFormatting('Testo <strong>in</strong> mezzo', 'Text in the middle');
+    expect(out).toBe('Text in the middle');
+  });
+
+  it('paragraphsToHtml include i segmenti immagine come blocco div', () => {
+    const paras = [
+      { type: 'text', text: 'Hello', html: 'Hello' },
+      { type: 'image', html: '<img src="blob:abc" alt="x">' },
+    ];
+    const html = paragraphsToHtml(paras);
+    expect(html).toBe('<p>Hello</p><div class="segment-image"><img src="blob:abc" alt="x"></div>');
   });
 
   it('escapeHtml non lancia errore con null o undefined (bookmark PWA senza campi desktop)', () => {
@@ -654,3 +971,46 @@ describe('Associazione paragrafi (colori, numeri, hover)', () => {
   });
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYNC SCROLL CON OFFSET (vista originale EPUB / PDF)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Scroll sync con offset', () => {
+  it('computeSyncedPct somma l\'offset e limita a [0,1]', () => {
+    expect(computeSyncedPct(0.5, 0)).toBe(0.5);
+    expect(computeSyncedPct(0.5, 0.2)).toBeCloseTo(0.7, 5);
+    expect(computeSyncedPct(0.9, 0.5)).toBe(1);      // clamp superiore
+    expect(computeSyncedPct(0.1, -0.5)).toBe(0);     // clamp inferiore
+  });
+
+  it('senza offset i due pannelli si allineano alla stessa percentuale', () => {
+    expect(syncTargetPct(0.3, 0, true)).toBeCloseTo(0.3, 5);   // left → right
+    expect(syncTargetPct(0.3, 0, false)).toBeCloseTo(0.3, 5);  // right → left
+  });
+
+  it('con offset positivo (right più avanti) il delta è mantenuto in entrambe le direzioni', () => {
+    const offset = 0.2; // right è 0.2 più avanti di left
+    // Scrollo il pannello sinistro a 0.4 → destro va a 0.6
+    expect(syncTargetPct(0.4, offset, true)).toBeCloseTo(0.6, 5);
+    // Scrollo il pannello destro a 0.6 → sinistro torna a 0.4 (delta preservato)
+    expect(syncTargetPct(0.6, offset, false)).toBeCloseTo(0.4, 5);
+  });
+
+  it('riattivazione: l\'offset ricalcolato mantiene lo scarto corrente (no riallineamento)', () => {
+    // Utente disattiva il sync, allinea manualmente: left=0.5, right=0.3
+    const leftPct = 0.5, rightPct = 0.3;
+    const recomputedOffset = rightPct - leftPct; // -0.2
+    // Alla riattivazione, scrollando left resta lo scarto: left 0.5 → right 0.3
+    expect(syncTargetPct(leftPct, recomputedOffset, true)).toBeCloseTo(rightPct, 5);
+    // E proseguendo: left 0.6 → right 0.4 (delta -0.2 mantenuto)
+    expect(syncTargetPct(0.6, recomputedOffset, true)).toBeCloseTo(0.4, 5);
+  });
+
+  it('toggleSync ha una traduzione in en e it', () => {
+    for (const lang of ['en', 'it']) {
+      const val = t(lang, 'toggleSync');
+      expect(val).not.toBe('toggleSync');
+      expect(val.length).toBeGreaterThan(0);
+    }
+  });
+});

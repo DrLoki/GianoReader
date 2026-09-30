@@ -15,6 +15,8 @@ let currentChapterBody = null;      // body DOM del capitolo corrente (per navig
 let chapterLengths = [];            // lunghezza testo per capitolo (in caratteri)
 let chapterCumulativePct = [];      // posizione % cumulativa di ogni capitolo (0–100)
 let syncingScroll = false;          // lock per evitare loop nello scroll sincronizzato
+let syncScrollEnabled = true;       // sync scroll on/off (toggle utente, default on)
+let syncOffsetPct = 0;              // scarto (delta percentuale) mantenuto tra i due pannelli
 let translationAbortController = null;
 let lazyObserver = null;            // IntersectionObserver per traduzione lazy
 let currentFilePath = null;         // path assoluto del file aperto (solo Tauri)
@@ -88,6 +90,7 @@ const optimalLimitBtn = document.getElementById('optimal-limit-btn');
 const ramAdvisorError = document.getElementById('ram-advisor-error');
 // View toggle — commuta tra Text_Mode e Original_Mode
 const viewToggleBtn = document.getElementById('view-toggle-btn');
+const toggleSyncBtn = document.getElementById('toggle-sync-btn');
 const syncDisabledNotice = document.getElementById('sync-disabled-notice');
 const originalNative = document.getElementById('original-native');
 // Hide translation toggle — nasconde/mostra il pannello di traduzione
@@ -150,6 +153,9 @@ hideTranslationBtn.addEventListener('click', () => {
       if (scrollPct > 0) {
         restoreScrollPct(scrollPct);
       }
+    } else if (currentViewMode === 'original' && currentChapterParagraphs && currentChapterParagraphs.length) {
+      // Vista originale (EPUB o PDF): rigenera la traduzione nel pannello destro
+      translateCurrentChapter(0);
     }
   } else {
     if (translationAbortController) {
@@ -159,6 +165,7 @@ hideTranslationBtn.addEventListener('click', () => {
     setTranslationStatus('');
     translationViewer.innerHTML = '';
   }
+  updateSyncUi();
 });
 
 hideOriginalBtn.addEventListener('click', () => {
@@ -552,6 +559,13 @@ function applyUiLang(lang) {
   nextBtn.title = t(lang, 'nextChapter');
   settingsBtn.title = t(lang, 'settings');
   // View toggle & sync notice
+  if (toggleSyncBtn) {
+    toggleSyncBtn.title = t(lang, 'toggleSync');
+    toggleSyncBtn.setAttribute('aria-label', t(lang, 'toggleSync'));
+  }
+  if (translationStatus) {
+    translationStatus.title = t(lang, 'resyncHint');
+  }
   if (viewToggleBtn) {
     viewToggleBtn.title = t(lang, 'viewToggle');
     viewToggleBtn.setAttribute('aria-label', t(lang, 'viewToggle'));
@@ -577,7 +591,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.3' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.4' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -2114,7 +2128,11 @@ progressTrack.addEventListener('mouseleave', hideTooltip);
 
 // ── Utilità testo ──────────────────────────────────────────────────────────
 function paragraphsToHtml(paragraphs) {
-  return paragraphs.filter(p => (p.text || p).trim()).map(p => {
+  return paragraphs.filter(p => {
+    if (p && p.type === 'image') return !!p.html;
+    return ((p && p.text) || p || '').toString().trim();
+  }).map(p => {
+    if (p && p.type === 'image') return `<div class="segment-image">${p.html}</div>`;
     const html = p.html !== undefined ? p.html : escapeHtml(p);
     return `<p>${html}</p>`;
   }).join('');
@@ -2124,9 +2142,26 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Serializza il contenuto inline di un elemento preservando link e formattazione base,
-// ma rimuovendo attributi pericolosi. Usato per il pannello originale in modalità testo.
-function safeInnerHtml(el) {
+// Tag inline la cui formattazione va preservata nel testo tradotto.
+const INLINE_TAGS = new Set(['a', 'b', 'strong', 'i', 'em', 'u', 's', 'sub', 'sup', 'span', 'small', 'mark', 'code', 'abbr', 'q', 'cite', 'br', 'img']);
+
+// Risolve l'attributo src/href di un'immagine (relativo al file del capitolo)
+// in un blob/data URL persistente usando le risorse di epubjs.
+// `imgResolver` è una mappa {srcOriginale → urlRisolto} costruita da buildImageResolver.
+function resolveImgSrc(rawSrc, imgResolver) {
+  if (!rawSrc || !imgResolver) return rawSrc;
+  if (/^(blob:|data:|https?:)/i.test(rawSrc)) return rawSrc;
+  // Prova corrispondenza diretta, poi per basename (gli EPUB usano path relativi vari)
+  if (imgResolver.has(rawSrc)) return imgResolver.get(rawSrc);
+  const base = rawSrc.split(/[\\/]/).pop();
+  if (base && imgResolver.has(base)) return imgResolver.get(base);
+  return rawSrc;
+}
+
+// Serializza il contenuto inline di un elemento preservando link, formattazione
+// base e immagini (con src rimappato), ma rimuovendo attributi pericolosi.
+// Usato per il pannello originale in modalità testo.
+function safeInnerHtml(el, imgResolver = null) {
   const clone = el.cloneNode(true);
   // Rimuovi script e stili inline
   clone.querySelectorAll('script, style').forEach(n => n.remove());
@@ -2141,6 +2176,18 @@ function safeInnerHtml(el) {
     a.removeAttribute('href');
     a.style.cursor = 'pointer';
   });
+  // Rimappa gli src delle immagini inline in blob URL persistenti
+  clone.querySelectorAll('img').forEach(img => {
+    const src = img.getAttribute('src') || '';
+    const resolved = resolveImgSrc(src, imgResolver);
+    if (resolved) img.setAttribute('src', resolved);
+    img.setAttribute('loading', 'lazy');
+    img.classList.add('inline-img');
+    // Rimuovi handler/attributi non necessari
+    Array.from(img.attributes).forEach(attr => {
+      if (!['src', 'alt', 'loading', 'width', 'height', 'class'].includes(attr.name)) img.removeAttribute(attr.name);
+    });
+  });
   // Rimuovi attributi di stile/evento da tutti gli altri elementi
   clone.querySelectorAll('*').forEach(n => {
     ['onclick', 'onmouseover', 'onerror', 'onload'].forEach(ev => n.removeAttribute(ev));
@@ -2148,26 +2195,121 @@ function safeInnerHtml(el) {
   return clone.innerHTML;
 }
 
-// Estrae paragrafi da un nodo DOM (body di un capitolo EPUB)
-// Restituisce oggetti { text, html, id } — text per la traduzione, html per il rendering, id per la navigazione
-function extractParagraphs(body) {
-  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
-  const rawBlocks = body.querySelectorAll?.(selectors.join(', '));
-  // Un <blockquote> che contiene a sua volta p/h*/li/blockquote (blocchi già
-  // selezionati singolarmente) non va incluso come blocco proprio, altrimenti
-  // il suo testo verrebbe duplicato. Va incluso solo se è "foglia" di testo
-  // (contiene solo span/testo inline, come nei blockquote di dialogo/SMS).
+// Serializza un blocco immagine standalone (img/figure/svg-image) rimappando gli
+// src in blob URL. Restituisce l'HTML del blocco immagine.
+function buildImageBlockHtml(el, imgResolver) {
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('script, style').forEach(n => n.remove());
+  const imgs = el.tagName.toLowerCase() === 'img' ? [clone] : Array.from(clone.querySelectorAll('img'));
+  imgs.forEach(img => {
+    const src = img.getAttribute('src') || '';
+    const resolved = resolveImgSrc(src, imgResolver);
+    if (resolved) img.setAttribute('src', resolved);
+    img.setAttribute('loading', 'lazy');
+    Array.from(img.attributes).forEach(attr => {
+      if (!['src', 'alt', 'loading', 'width', 'height'].includes(attr.name)) img.removeAttribute(attr.name);
+    });
+  });
+  // Rimappa anche <image href> di SVG (alcuni EPUB usano SVG per le figure)
+  clone.querySelectorAll('image').forEach(im => {
+    const href = im.getAttribute('href') || im.getAttribute('xlink:href') || '';
+    const resolved = resolveImgSrc(href, imgResolver);
+    if (resolved) {
+      im.setAttribute('href', resolved);
+      im.removeAttribute('xlink:href');
+    }
+  });
+  return clone.tagName ? clone.outerHTML : clone.innerHTML;
+}
+
+// Verifica se un elemento è un blocco "immagine" standalone (figura senza testo).
+function isImageBlock(el) {
+  const tag = el.tagName?.toLowerCase();
+  if (tag === 'img' || tag === 'figure' || tag === 'svg') return true;
+  return false;
+}
+
+// Token segnaposto per le immagini inline durante la traduzione.
+// Usa caratteri "mathematical brackets" (U+27E6/U+27E7) che i motori di
+// traduzione tendono a preservare senza alterarli.
+const INLINE_IMG_TOKEN_OPEN = '\u27E6IMG';
+const INLINE_IMG_TOKEN_CLOSE = '\u27E7';
+function inlineImgToken(i) { return `${INLINE_IMG_TOKEN_OPEN}${i}${INLINE_IMG_TOKEN_CLOSE}`; }
+// Regex tollerante: cattura anche eventuali spazi inseriti dal traduttore (es. "⟦ IMG 0 ⟧").
+const INLINE_IMG_TOKEN_RE = /\u27E6\s*IMG\s*(\d+)\s*\u27E7/g;
+
+// Produce l'HTML sanificato di una singola <img> inline (src rimappato).
+function inlineImgHtml(img, imgResolver) {
+  const clone = img.cloneNode(false);
+  const src = clone.getAttribute('src') || '';
+  const resolved = resolveImgSrc(src, imgResolver);
+  if (resolved) clone.setAttribute('src', resolved);
+  clone.setAttribute('loading', 'lazy');
+  clone.classList.add('inline-img');
+  Array.from(clone.attributes).forEach(attr => {
+    if (!['src', 'alt', 'loading', 'width', 'height', 'class'].includes(attr.name)) clone.removeAttribute(attr.name);
+  });
+  return clone.outerHTML;
+}
+
+// Estrae il testo di un blocco sostituendo ogni <img> inline con un token
+// segnaposto, e ritorna { text, inlineImages } dove inlineImages[i] è l'HTML
+// dell'immagine i-esima. Preserva l'ordine documentale delle immagini.
+function extractTextWithInlineImages(el, imgResolver) {
+  const inlineImages = [];
+  const walk = (node) => {
+    let out = '';
+    node.childNodes.forEach(child => {
+      if (child.nodeType === 3) { // text
+        out += child.nodeValue;
+      } else if (child.nodeType === 1) { // element
+        const tag = child.tagName.toLowerCase();
+        if (tag === 'img') {
+          const idx = inlineImages.length;
+          inlineImages.push(inlineImgHtml(child, imgResolver));
+          out += ` ${inlineImgToken(idx)} `;
+        } else {
+          out += walk(child);
+        }
+      }
+    });
+    return out;
+  };
+  const text = walk(el).replace(/\s+/g, ' ').trim();
+  return { text, inlineImages };
+}
+
+// Estrae segmenti da un nodo DOM (body di un capitolo EPUB), in ordine documentale.
+// Restituisce oggetti segmento:
+//   { type: 'text',  text, html, id, inlineImages }  → tradotto; le <img> inline
+//        sono rimpiazzate da token ⟦IMGn⟧ nel testo e reinserite dopo la traduzione
+//   { type: 'image', html, id, alt }   → non tradotto, immagine speculare nei due pannelli
+// `imgResolver` (Map src→blobUrl) rimappa gli src immagine in URL persistenti.
+function extractParagraphs(body, imgResolver = null) {
+  const textSelectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
+  const imageSelectors = ['figure', 'img', 'svg'];
+  const allSelectors = [...textSelectors, ...imageSelectors];
+  const rawBlocks = body.querySelectorAll?.(allSelectors.join(', '));
+
+  // Filtra i blocchi annidati per evitare duplicazioni:
+  // - un <blockquote> non-foglia (che contiene altri blocchi) va escluso
+  // - un <img> dentro un <figure> o dentro un blocco di testo va escluso (già coperto)
   const blocks = rawBlocks ? Array.from(rawBlocks).filter(el => {
-    if (el.tagName.toLowerCase() !== 'blockquote') return true;
-    return !el.querySelector(selectors.join(', '));
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'blockquote') return !el.querySelector(textSelectors.join(', '));
+    if (tag === 'img' || tag === 'svg') {
+      // Escludi se è dentro una figure (la figure verrà presa come blocco) o dentro un blocco testo
+      if (el.closest('figure')) return false;
+      if (el.closest(textSelectors.join(', '))) return false;
+      return true;
+    }
+    return true;
   }) : rawBlocks;
+
   if (blocks && blocks.length > 0) {
     const r = [];
     const seenIds = new Set();
-    blocks.forEach(el => {
-      const text = (el.textContent || '').trim();
-      if (!text) return;
-      // Prefer the element's own ID; fall back to the nearest ancestor with an ID
+    const takeId = (el) => {
       let id = el.id || null;
       if (!id) {
         let parent = el.parentElement;
@@ -2176,63 +2318,212 @@ function extractParagraphs(body) {
           parent = parent.parentElement;
         }
       }
-      // Avoid assigning the same ancestor ID to multiple paragraphs
       if (id && seenIds.has(id)) id = null;
       if (id) seenIds.add(id);
-      r.push({ text, html: safeInnerHtml(el), id });
+      return id;
+    };
+    blocks.forEach(el => {
+      if (isImageBlock(el)) {
+        // Blocco immagine standalone: nessun testo da tradurre
+        const html = buildImageBlockHtml(el, imgResolver);
+        if (!html) return;
+        const alt = el.querySelector?.('img')?.getAttribute('alt')
+          || el.getAttribute?.('alt') || '';
+        r.push({ type: 'image', html, id: takeId(el), alt });
+        return;
+      }
+      // Testo con token per le immagini inline (per riallineamento post-traduzione)
+      const { text, inlineImages } = extractTextWithInlineImages(el, imgResolver);
+      if (!text && !inlineImages.length) return;
+      r.push({ type: 'text', text, html: safeInnerHtml(el, imgResolver), id: takeId(el), inlineImages });
     });
     if (r.length) return r;
   }
   // Fallback: split per newline (funziona anche su XMLDocument)
   return (body.textContent || '').split('\n')
     .map(l => l.trim()).filter(l => l.length > 2)
-    .map(text => ({ text, html: escapeHtml(text), id: null }));
+    .map(text => ({ type: 'text', text, html: escapeHtml(text), id: null, inlineImages: [] }));
+}
+
+// Costruisce una mappa src→blobUrl per tutte le immagini referenziate nel body
+// del capitolo, usando le risorse di epubjs (già rimappate in blob URL).
+// Ritorna una Map che copre sia i path relativi originali sia i basename.
+async function buildImageResolver(book, spineItem, body) {
+  const resolver = new Map();
+  if (!book || !body?.querySelectorAll) return resolver;
+
+  // Raccogli tutti gli src/href immagine presenti nel capitolo
+  const rawSrcs = new Set();
+  body.querySelectorAll('img[src]').forEach(img => {
+    const s = img.getAttribute('src');
+    if (s) rawSrcs.add(s);
+  });
+  body.querySelectorAll('image').forEach(im => {
+    const s = im.getAttribute('href') || im.getAttribute('xlink:href');
+    if (s) rawSrcs.add(s);
+  });
+  if (!rawSrcs.size) return resolver;
+
+  // Assicurati che le risorse siano state rimappate in blob URL da epubjs.
+  try {
+    if (book.resources && typeof book.resources.replacements === 'function'
+        && (!book.resources.replacementUrls || !book.resources.replacementUrls.length)) {
+      await book.resources.replacements();
+    }
+  } catch (e) {
+    console.warn('[img] resources.replacements() failed:', e);
+  }
+
+  const sectionUrl = spineItem?.url || spineItem?.canonical || spineItem?.href || '';
+
+  for (const raw of rawSrcs) {
+    let resolved = null;
+    // 1) Via resources.substitute: costruisce un frammento e lascia che epubjs
+    //    sostituisca l'URL relativo (rispetto a section.url) col blob URL.
+    try {
+      if (book.resources && typeof book.resources.substitute === 'function') {
+        const marker = `<img src="${raw}">`;
+        const out = book.resources.substitute(marker, sectionUrl);
+        const m = out && out.match(/src="([^"]+)"/);
+        if (m && m[1] && m[1] !== raw) resolved = m[1];
+      }
+    } catch (_) { /* fallback sotto */ }
+
+    // 2) Fallback: risolvi il path assoluto e crea un blob URL dall'archivio.
+    if (!resolved) {
+      try {
+        const absolute = book.resolve ? book.resolve(raw) : raw;
+        if (book.archive && typeof book.archive.createUrl === 'function') {
+          resolved = await book.archive.createUrl(absolute, { base64: false });
+        }
+      } catch (e) {
+        // Ultimo tentativo: prova a risolvere relativo alla directory del capitolo
+        try {
+          const dir = sectionUrl.replace(/[^/]*$/, '');
+          const absolute = book.resolve ? book.resolve(dir + raw) : raw;
+          if (book.archive && typeof book.archive.createUrl === 'function') {
+            resolved = await book.archive.createUrl(absolute, { base64: false });
+          }
+        } catch (_) { /* immagine non risolvibile */ }
+      }
+    }
+
+    if (resolved) {
+      resolver.set(raw, resolved);
+      const base = raw.split(/[\\/]/).pop();
+      if (base && !resolver.has(base)) resolver.set(base, resolved);
+    }
+  }
+
+  return resolver;
 }
 
 // ── Scroll sincronizzato tra i due pannelli ────────────────────────────────
 let activeScrollSource = null;
 let syncTimeout = null;
+let currentScrollUnbind = null; // funzione per staccare i listener di sync correnti
+
+// Calcola la percentuale di scroll target dato quella source e uno scarto memorizzato.
+// Ritorna un valore in [0,1]. Esportata la logica pura per i test.
+function computeSyncedPct(sourcePct, offsetPct) {
+  const p = sourcePct + offsetPct;
+  return Math.min(1, Math.max(0, p));
+}
+
+// Astrae un elemento scrollabile (div .text-panel o iframe EPUB) esponendo
+// getPct()/setPct() in [0,1] e un modo per (dis)connettere il listener di scroll.
+function makeScrollable(kind) {
+  if (kind === 'iframe') {
+    const frame = document.getElementById('epub-native-frame');
+    const win = frame?.contentWindow;
+    const doc = frame?.contentDocument;
+    const scroller = doc?.scrollingElement || doc?.documentElement || doc?.body;
+    if (!frame || !win || !scroller) return null;
+    return {
+      el: win,
+      getPct: () => scroller.scrollTop / Math.max(1, scroller.scrollHeight - scroller.clientHeight),
+      setPct: (p) => { scroller.scrollTop = p * (scroller.scrollHeight - scroller.clientHeight); },
+      on: (fn) => win.addEventListener('scroll', fn, { passive: true }),
+      off: (fn) => win.removeEventListener('scroll', fn),
+    };
+  }
+  const el = kind === 'translation' ? translationViewer
+    : kind === 'nativePdf' ? originalNative
+    : originalViewer;
+  return {
+    el,
+    getPct: () => el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight),
+    setPct: (p) => { el.scrollTop = p * (el.scrollHeight - el.clientHeight); },
+    on: (fn) => { el.onscroll = fn; },
+    off: () => { el.onscroll = null; },
+  };
+}
+
+// Ricalcola e memorizza lo scarto corrente tra i due pannelli, così che alla
+// (ri)attivazione del sync lo scroll prosegua mantenendo il delta invece di
+// riallineare bruscamente le percentuali (permette il riallineamento manuale).
+function recomputeSyncOffset() {
+  const { left, right } = getSyncPair();
+  if (!left || !right) { syncOffsetPct = 0; return; }
+  syncOffsetPct = right.getPct() - left.getPct();
+}
+
+// Determina la coppia di pannelli scrollabili in base a modalità/tipo file.
+function getSyncPair() {
+  if (currentViewMode === 'original' && currentFileType === 'pdf') {
+    return { left: makeScrollable('nativePdf'), right: makeScrollable('translation') };
+  }
+  if (currentViewMode === 'original' && book) {
+    return { left: makeScrollable('iframe'), right: makeScrollable('translation') };
+  }
+  return { left: makeScrollable('text'), right: makeScrollable('translation') };
+}
 
 function bindSyncScroll() {
-  const handleScroll = (source, target) => {
+  // Stacca eventuali listener precedenti
+  if (currentScrollUnbind) { currentScrollUnbind(); currentScrollUnbind = null; }
+
+  const { left, right } = getSyncPair();
+  if (!left || !right) return;
+
+  // handler generico source→target che applica lo scarto memorizzato
+  const handleScroll = (source, target, isLeftSource) => {
+    if (!syncScrollEnabled) { updateProgress(); return; }
     if (syncingScroll) return;
     if (activeScrollSource && activeScrollSource !== source) return;
-
-    if (!activeScrollSource) {
-      activeScrollSource = source;
-    }
+    if (!activeScrollSource) activeScrollSource = source;
 
     syncingScroll = true;
-
-    const r = source.scrollTop / Math.max(1, source.scrollHeight - source.clientHeight);
-    target.scrollTop = r * (target.scrollHeight - target.clientHeight);
-
-    // Update progress bar in real-time as user scrolls
+    const sp = source.getPct();
+    // offset è definito come right - left; se la sorgente è il pannello destro
+    // (right) l'offset va sottratto, se è sinistro va sommato.
+    const targetPct = isLeftSource
+      ? computeSyncedPct(sp, syncOffsetPct)
+      : computeSyncedPct(sp, -syncOffsetPct);
+    target.setPct(targetPct);
     updateProgress();
 
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
       syncingScroll = false;
       activeScrollSource = null;
-    }, 50); // 50ms per smaltire l'inerzia e gli eventi asincroni del browser
+    }, 50);
   };
 
-  // In PDF Original View mode, sync between originalNative (canvas panel) and translationViewer
-  if (currentViewMode === 'original' && currentFileType === 'pdf') {
-    originalViewer.onscroll = null;
-    originalNative.onscroll = () => handleScroll(originalNative, translationViewer);
-    translationViewer.onscroll = () => handleScroll(translationViewer, originalNative);
-  } else {
-    originalNative.onscroll = null;
-    originalViewer.onscroll = () => handleScroll(originalViewer, translationViewer);
-    translationViewer.onscroll = () => handleScroll(translationViewer, originalViewer);
-  }
+  const onLeft = () => handleScroll(left, right, true);
+  const onRight = () => handleScroll(right, left, false);
+  left.on(onLeft);
+  right.on(onRight);
+  // pulizia
+  currentScrollUnbind = () => { try { left.off(onLeft); } catch (_) {} try { right.off(onRight); } catch (_) {} };
 }
 
 // ── View mode ──────────────────────────────────────────────────────────────
 function setViewMode(mode, { skipRender = false } = {}) {
   currentViewMode = mode;
   const isOriginal = mode === 'original';
+  // Nuova vista → riparti con allineamento senza scarto
+  syncOffsetPct = 0;
 
   // Mostra/nasconde i contenitori
   originalViewer.classList.toggle('hidden', isOriginal);
@@ -2255,6 +2546,12 @@ function setViewMode(mode, { skipRender = false } = {}) {
         }
       } else if (book && currentSpineItems.length) {
         renderNativeView();
+        // EPUB: attiva la traduzione nel pannello destro anche in vista originale.
+        // Il sync di scroll iframe↔traduzione viene agganciato in renderNativeView
+        // (frame.onload) e ribindato qui sotto quando la traduzione è pronta.
+        if (!translationHidden) {
+          translateCurrentChapter(0);
+        }
       }
     }
   } else {
@@ -2279,8 +2576,30 @@ function setViewMode(mode, { skipRender = false } = {}) {
     }
   }
 
-  // Avviso nel pannello di traduzione (hide for PDF since translation works in both modes)
-  syncDisabledNotice.classList.toggle('hidden', !isOriginal || currentFileType === 'pdf');
+  // Il toggle di sync scroll è utile quando i due pannelli hanno layout diversi
+  // (vista originale EPUB con iframe, o PDF): mostralo solo lì.
+  updateSyncUi();
+}
+
+// Aggiorna la visibilità del toggle sync e lo stato visivo della percentuale
+// in base a modalità/stato. Quando il sync è disattivo, la percentuale
+// (#translation-status) viene evidenziata in rosso — nessun avviso testuale,
+// così i comandi non si spostano.
+function updateSyncUi() {
+  // Il toggle è disponibile in entrambe le modalità (testo e originale), così
+  // il sync può sempre essere riattivato anche dopo un cambio di vista.
+  const showToggle = !!(book || (pdfDoc && pdfNav));
+  if (toggleSyncBtn) {
+    toggleSyncBtn.classList.toggle('hidden', !showToggle);
+    toggleSyncBtn.setAttribute('aria-pressed', String(syncScrollEnabled));
+    toggleSyncBtn.classList.toggle('active', syncScrollEnabled);
+  }
+  // Avviso testuale sempre nascosto (sostituito dalla percentuale rossa)
+  if (syncDisabledNotice) syncDisabledNotice.classList.add('hidden');
+  // Percentuale in rosso quando il sync è disattivo
+  if (translationStatus) {
+    translationStatus.classList.toggle('sync-off', showToggle && !syncScrollEnabled);
+  }
 }
 
 // ── Font controls disable/enable (PDF canvas mode) ────────────────────────
@@ -2364,6 +2683,11 @@ async function renderNativeView() {
           window.parent.postMessage({ type: 'epub-link', href: href }, '*');
         });
       <\/script>`;
+      // Quando l'iframe ha caricato il contenuto, aggancia il sync di scroll
+      // (lo scroll avviene dentro il documento dell'iframe).
+      frame.addEventListener('load', () => {
+        if (currentViewMode === 'original' && !translationHidden) bindSyncScroll();
+      });
       frame.srcdoc = themeStyle + interceptScript + html;
       originalNative.appendChild(frame);
     } catch (err) {
@@ -2378,6 +2702,37 @@ async function renderNativeView() {
 viewToggleBtn.addEventListener('click', () => {
   setViewMode(currentViewMode === 'text' ? 'original' : 'text');
 });
+
+// Toggle sincronizzazione scroll (default attivo). Alla RIATTIVAZIONE non
+// riallinea le percentuali: memorizza lo scarto corrente tra i due pannelli
+// così lo scroll prosegue mantenendo il delta (riallineamento manuale).
+if (toggleSyncBtn) {
+  toggleSyncBtn.addEventListener('click', () => {
+    syncScrollEnabled = !syncScrollEnabled;
+    if (syncScrollEnabled) {
+      // Cattura lo scarto attuale prima di riprendere la propagazione
+      recomputeSyncOffset();
+    }
+    updateSyncUi();
+  });
+}
+
+// Doppio clic sulla percentuale: riallineamento automatico → azzera lo scarto e
+// porta entrambi i pannelli alla stessa percentuale (quella del pannello sinistro).
+if (translationStatus) {
+  translationStatus.style.cursor = 'pointer';
+  translationStatus.title = ui('resyncHint');
+  translationStatus.addEventListener('dblclick', () => {
+    syncOffsetPct = 0;
+    const { left, right } = getSyncPair();
+    if (left && right) {
+      syncingScroll = true;
+      right.setPct(left.getPct());
+      updateProgress();
+      setTimeout(() => { syncingScroll = false; activeScrollSource = null; }, 60);
+    }
+  });
+}
 
 // ── Gestione link cliccati nell'iframe (modalità originale) ───────────────
 window.addEventListener('message', e => {
@@ -2475,11 +2830,102 @@ function scrollToTocAnchor(anchor) {
   }
 }
 
+// Reinserisce le immagini inline nel testo (già escapato) sostituendo i token
+// ⟦IMGn⟧ con l'HTML <img> corrispondente. Le immagini i cui token sono andati
+// persi nella traduzione vengono appese in coda per non perderle mai.
+function reinsertInlineImages(safeText, inlineImages) {
+  if (!inlineImages || !inlineImages.length) {
+    // Rimuovi eventuali token residui (paragrafo senza immagini)
+    return safeText.replace(INLINE_IMG_TOKEN_RE, '').replace(/\s{2,}/g, ' ').trim();
+  }
+  const used = new Set();
+  let out = safeText.replace(INLINE_IMG_TOKEN_RE, (_m, n) => {
+    const idx = parseInt(n, 10);
+    if (idx >= 0 && idx < inlineImages.length) {
+      used.add(idx);
+      return inlineImages[idx];
+    }
+    return '';
+  });
+  // Appendi le immagini i cui token si sono persi durante la traduzione
+  const missing = inlineImages.filter((_, i) => !used.has(i));
+  if (missing.length) {
+    out = out.trim() + ' ' + missing.join(' ');
+  }
+  return out.replace(/\s{2,}/g, ' ').trim();
+}
+
+// Riapplica al testo tradotto la formattazione inline "a livello di blocco"
+// presente nel segmento originale, in modo affidabile su tutte le modalità di
+// traduzione (FREE/BASIC restituiscono testo puro; PRO può restituire markup).
+//
+// Strategia:
+//  - le immagini inline vengono sempre reinserite dai token ⟦IMGn⟧
+//  - se l'intero contenuto è avvolto da UN wrapper inline (es. tutta la frase
+//    in <em>/<strong>/<a>) → riapplica quel wrapper attorno alla traduzione
+//  - i link (<a data-epub-href>) che coprono l'intero blocco vengono preservati
+//  - negli altri casi si usa testo puro + immagini inline (nessuna perdita di
+//    contenuto: solo alcuni corsivi/grassetti interni non riapplicati)
+function applyInlineFormatting(originalHtml, translatedText, inlineImages = []) {
+  const safeText = escapeHtml(translatedText);
+  const withImages = reinsertInlineImages(safeText, inlineImages);
+
+  if (!originalHtml || originalHtml.indexOf('<') === -1) return withImages;
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = originalHtml;
+
+  const elementChildren = Array.from(tmp.childNodes).filter(
+    n => n.nodeType === 1 || (n.nodeType === 3 && n.textContent.trim())
+  );
+
+  // Caso: singolo elemento inline che avvolge tutto il contenuto (escludi img,
+  // già gestite dai token). Riapplica il wrapper attorno a testo+immagini.
+  if (elementChildren.length === 1 && elementChildren[0].nodeType === 1) {
+    const el = elementChildren[0];
+    const tag = el.tagName.toLowerCase();
+    if (tag !== 'img' && INLINE_TAGS.has(tag)) {
+      const wrapper = el.cloneNode(false);
+      wrapper.innerHTML = withImages;
+      return wrapper.outerHTML;
+    }
+  }
+
+  // Caso: il blocco contiene un solo link che copre l'intero testo → preservalo
+  const links = tmp.querySelectorAll('a[data-epub-href]');
+  if (links.length === 1 && (links[0].textContent || '').trim() === (tmp.textContent || '').trim()) {
+    const a = links[0].cloneNode(false);
+    a.innerHTML = withImages;
+    return a.outerHTML;
+  }
+
+  // Fallback: testo tradotto + immagini inline reinserite
+  return withImages;
+}
+
+// Costruisce l'innerHTML di un paragrafo tradotto (numero + contenuto formattato).
+function buildTranslatedParagraphHtml(segment, translatedText, displayIndex) {
+  const originalHtml = segment && segment.html !== undefined ? segment.html : '';
+  const inlineImages = (segment && segment.inlineImages) || [];
+  const inner = applyInlineFormatting(originalHtml, translatedText, inlineImages);
+  return `<span class="para-num">${displayIndex}</span>${inner}`;
+}
+
 // ── Render pannelli testo ──────────────────────────────────────────────────
 function renderOriginal(paragraphs) {
   originalViewer.innerHTML = '';
   if (paragraphs.length) {
     paragraphs.forEach((p, i) => {
+      // Segmento immagine: blocco non testuale, reso identico nei due pannelli
+      if (p && p.type === 'image') {
+        const div = document.createElement('div');
+        div.dataset.idx = i;
+        if (p.id) div.id = p.id;
+        div.className = 'segment-image';
+        div.innerHTML = p.html;
+        originalViewer.appendChild(div);
+        return;
+      }
       const text = p.text !== undefined ? p.text : p;
       if (!text.trim()) return;
       const html = p.html !== undefined ? p.html : escapeHtml(p);
@@ -2716,13 +3162,24 @@ async function translateCurrentChapter(startPct = 0) {
   const total = paragraphs.length;
   const totalChunks = Math.ceil(total / LAZY_CHUNK);
 
-  // Crea subito tutti i <p> con il testo originale come placeholder visivo
+  // Crea subito gli elementi: i segmenti immagine sono resi speculari (non
+  // tradotti); i segmenti testo mostrano l'originale come placeholder "pending".
   const pEls = paragraphs.map((para, i) => {
+    if (para && para.type === 'image') {
+      const div = document.createElement('div');
+      div.dataset.idx = i;
+      if (para.id) div.id = para.id;
+      div.className = 'segment-image';
+      div.innerHTML = para.html;
+      translationViewer.appendChild(div);
+      return div; // non traducibile: translateChunk lo salta
+    }
     const text = para.text !== undefined ? para.text : para;
     const p = document.createElement('p');
     p.dataset.idx = i;
     p.classList.add('pending', `pair-color-${i % 5}`);
-    p.innerHTML = `<span class="para-num">${i + 1}</span>${escapeHtml(text)}`;
+    // Placeholder: testo originale con immagini inline già reinserite (niente token grezzi)
+    p.innerHTML = buildTranslatedParagraphHtml(para, text, i + 1);
     translationViewer.appendChild(p);
     return p;
   });
@@ -2744,24 +3201,42 @@ async function translateCurrentChapter(startPct = 0) {
     translatedChunks.add(chunkIdx);
     const start = chunkIdx * LAZY_CHUNK;
     const end = Math.min(start + LAZY_CHUNK, total);
-    const slice = paragraphs.slice(start, end).map(p => p.text !== undefined ? p.text : p);
+
+    // Considera solo i segmenti testuali: le immagini sono già rese speculari
+    // e non vanno inviate al traduttore.
+    const textIdx = [];
+    for (let i = start; i < end; i++) {
+      const seg = paragraphs[i];
+      if (seg && seg.type === 'image') continue;
+      textIdx.push(i);
+    }
+    if (!textIdx.length) { if (translatedChunks.size >= totalChunks) setTranslationStatus(''); return; }
+
+    const slice = textIdx.map(i => {
+      const p = paragraphs[i];
+      return p.text !== undefined ? p.text : p;
+    });
     setTranslationStatus(`${Math.round((translatedChunks.size / totalChunks) * 100)}%`);
     try {
       const translated = await translateParagraphs(slice, lang, signal);
       if (signal.aborted) return;
-      for (let i = 0; i < translated.length; i++) {
-        pEls[start + i].innerHTML = `<span class="para-num">${start + i + 1}</span>${escapeHtml(translated[i] || slice[i])}`;
-        pEls[start + i].setAttribute('data-translated', 'true');
-        pEls[start + i].classList.remove('pending');
+      for (let k = 0; k < textIdx.length; k++) {
+        const i = textIdx[k];
+        const seg = paragraphs[i];
+        pEls[i].innerHTML = buildTranslatedParagraphHtml(seg, translated[k] || slice[k], i + 1);
+        pEls[i].setAttribute('data-translated', 'true');
+        pEls[i].classList.remove('pending');
       }
       if (translatedChunks.size >= totalChunks) setTranslationStatus('');
     } catch (err) {
       if (signal.aborted) return;
       console.error('[translate] chunk error', chunkIdx, err);
-      // Fallback: mostra il testo originale per i paragrafi del chunk fallito
-      for (let i = start; i < end; i++) {
-        const fallback = paragraphs[i].text !== undefined ? paragraphs[i].text : paragraphs[i];
-        pEls[i].innerHTML = `<span class="para-num">${i + 1}</span>${escapeHtml(fallback)}`;
+      // Fallback: mostra il testo originale (formattato) per i segmenti del chunk fallito
+      for (let k = 0; k < textIdx.length; k++) {
+        const i = textIdx[k];
+        const seg = paragraphs[i];
+        const fallback = seg.text !== undefined ? seg.text : seg;
+        pEls[i].innerHTML = buildTranslatedParagraphHtml(seg, fallback, i + 1);
         pEls[i].classList.remove('pending');
       }
     }
@@ -3378,12 +3853,21 @@ async function displayChapter(index, scrollPct = 0) {
     if (!body) throw new Error('documento capitolo null');
 
     currentChapterBody = body;
-    currentChapterParagraphs = extractParagraphs(body);
+    // Costruisci la mappa src→blobUrl PRIMA di estrarre i segmenti, così le
+    // immagini vengono rimappate in URL persistenti (l'unload successivo degli
+    // altri capitoli non invalida i blob del capitolo corrente).
+    const imgResolver = await buildImageResolver(book, item, body);
+    if (currentSpineIndex !== myIndex) return;
+    currentChapterParagraphs = extractParagraphs(body, imgResolver);
     if (currentSpineIndex !== myIndex) return;
     updateProgress();
     updateActiveTick();
     if (currentViewMode === 'original') {
       await renderNativeView();
+      // Genera comunque la traduzione nel pannello destro (vista originale EPUB)
+      if (!translationHidden) {
+        await translateCurrentChapter(scrollPct);
+      }
     } else {
       renderOriginal(currentChapterParagraphs);
       await translateCurrentChapter(scrollPct);

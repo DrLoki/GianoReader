@@ -1,6 +1,6 @@
 {
   "productName": "Giano Reader",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "identifier": "giano-reader",
   "build": {
     "frontendDist": "../dist",

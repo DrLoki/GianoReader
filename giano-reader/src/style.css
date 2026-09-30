@@ -334,6 +334,8 @@ body {
 
 #translation-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 #translation-status { font-style: italic; text-transform: none; letter-spacing: 0; }
+/* Percentuale in rosso quando la sincronizzazione dello scroll è disattivata */
+#translation-status.sync-off { color: #e74c3c; font-weight: 600; }
 
 /* ── PDF translation overlay ── */
 .pdf-page-wrapper {
@@ -383,6 +385,34 @@ body {
 }
 .text-panel .placeholder {
   color: var(--text-muted); font-style: italic; font-size: 0.9em;
+}
+
+/* ── Segmenti immagine (modalità testo, affiancamento) ── */
+.text-panel .segment-image {
+  margin: 1em 0;
+  text-align: center;
+}
+.text-panel .segment-image img,
+.text-panel .segment-image svg,
+.text-panel p img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.text-panel .segment-image figcaption {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 0.4em;
+}
+/* Immagini inline (icone/glifi dentro il flusso del testo) */
+.text-panel img.inline-img {
+  display: inline-block;
+  vertical-align: middle;
+  max-height: 1.5em;
+  width: auto;
+  margin: 0 0.15em;
+  border-radius: 3px;
 }
 
 /* ── No-book placeholder ── */
