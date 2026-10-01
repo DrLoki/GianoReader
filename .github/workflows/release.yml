@@ -93,31 +93,28 @@ jobs:
           APPIMAGE=$(find giano-reader/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -n1)
           echo "Patching: $APPIMAGE"
 
-          # Install FUSE (required to run AppImage --appimage-extract on GitHub runners)
-          sudo apt-get install -y libfuse2
+          # Install tools: squashfs-tools for unsquashfs/mksquashfs (preserves permissions)
+          sudo apt-get install -y squashfs-tools
 
-          # Copy AppImage to a path without spaces to avoid shell quoting issues
+          # Copy AppImage to a path without spaces
           cp "$APPIMAGE" /tmp/input.AppImage
           chmod +x /tmp/input.AppImage
 
-          # Download appimagetool (needed to repack)
-          wget -q -O /tmp/appimagetool \
-            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x /tmp/appimagetool
+          # Find the offset where the squashfs starts (skip the ELF runtime at the top)
+          OFFSET=$(cat /tmp/input.AppImage | grep -c '' || true)
+          OFFSET=$(LC_ALL=C grep -obUaP '\x73\x71\x73\x68' /tmp/input.AppImage | head -1 | cut -d: -f1)
+          echo "Squashfs offset: $OFFSET"
 
-          # Extract the AppImage (always extracts to ./squashfs-root relative to cwd)
-          cd /tmp
-          /tmp/input.AppImage --appimage-extract > /dev/null
+          # Extract squashfs portion (unsquashfs preserves all permissions)
+          unsquashfs -offset "$OFFSET" -dest /tmp/squashfs-root /tmp/input.AppImage
 
-          # Show what icons Tauri put inside, so we can build the correct symlink
+          # Show what icons Tauri put inside
           echo "=== Icons found in AppDir ==="
           find /tmp/squashfs-root/usr/share/icons -name '*.png' 2>/dev/null || true
 
-          # Find the 256x256 icon inside the AppDir
+          # Find the 256x256 icon inside the AppDir and create a relative symlink
           INNER_ICON=$(find /tmp/squashfs-root/usr/share/icons/hicolor/256x256/apps -name '*.png' 2>/dev/null | head -n1)
-
           if [ -n "$INNER_ICON" ]; then
-            # Build a relative symlink path from the AppDir root to the icon
             REL_PATH=$(realpath --relative-to=/tmp/squashfs-root "$INNER_ICON")
             echo "Creating symlink: .DirIcon -> $REL_PATH"
             ln -sf "$REL_PATH" /tmp/squashfs-root/.DirIcon
@@ -126,17 +123,23 @@ jobs:
             cp giano-reader/src-tauri/icons/256x256.png /tmp/squashfs-root/.DirIcon
           fi
 
-          # Verify
-          echo "=== .DirIcon ==="
+          # Verify AppRun is executable (unsquashfs should preserve this)
+          ls -la /tmp/squashfs-root/AppRun
           ls -la /tmp/squashfs-root/.DirIcon
 
-          cd -
+          # Repack: extract the ELF runtime header from the original AppImage
+          dd if=/tmp/input.AppImage of=/tmp/runtime bs="$OFFSET" count=1 2>/dev/null
 
-          # Repack back to the original path (overwrite)
-          ARCH=x86_64 /tmp/appimagetool /tmp/squashfs-root "$APPIMAGE"
+          # Build new squashfs with original permissions preserved
+          mksquashfs /tmp/squashfs-root /tmp/new.squashfs -root-owned -noappend -comp zstd 2>/dev/null \
+            || mksquashfs /tmp/squashfs-root /tmp/new.squashfs -root-owned -noappend
+
+          # Concatenate runtime + new squashfs into the final AppImage
+          cat /tmp/runtime /tmp/new.squashfs > "$APPIMAGE"
+          chmod +x "$APPIMAGE"
 
           # Clean up
-          rm -rf /tmp/squashfs-root /tmp/input.AppImage
+          rm -rf /tmp/squashfs-root /tmp/input.AppImage /tmp/runtime /tmp/new.squashfs
 
       - name: Upload artifacts (Linux)
         if: matrix.platform == 'ubuntu-22.04'
