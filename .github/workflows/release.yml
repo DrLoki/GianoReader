@@ -129,9 +129,28 @@ jobs:
             cp giano-reader/src-tauri/icons/256x256.png /tmp/squashfs-root/.DirIcon
           fi
 
-          # Verify AppRun is executable (unsquashfs should preserve this)
-          ls -la /tmp/squashfs-root/AppRun
+          # Ensure the AppRun launcher and the wrapped binary are executable.
+          # Firejail (and some sandboxes) exec AppRun.wrapped directly; if it lacks the
+          # executable bit the AppImage fails with "AppRun.wrapped: Permission denied"
+          # and exits before showing a window. Enforce the bits explicitly instead of
+          # trusting whatever unsquashfs/mksquashfs preserved.
+          chmod 0755 /tmp/squashfs-root/AppRun
+          [ -e /tmp/squashfs-root/AppRun.wrapped ] && chmod 0755 /tmp/squashfs-root/AppRun.wrapped || true
+          # The real binary Tauri ships lives under usr/bin; make it executable too.
+          find /tmp/squashfs-root/usr/bin -maxdepth 1 -type f -exec chmod 0755 {} + 2>/dev/null || true
+
+          # Verify AppRun and the wrapped launcher are executable before repacking
+          echo "=== Launcher permissions ==="
+          ls -la /tmp/squashfs-root/AppRun /tmp/squashfs-root/AppRun.wrapped 2>/dev/null || true
           ls -la /tmp/squashfs-root/.DirIcon
+          if [ ! -x /tmp/squashfs-root/AppRun ]; then
+            echo "ERROR: AppRun is not executable after chmod"
+            exit 1
+          fi
+          if [ -e /tmp/squashfs-root/AppRun.wrapped ] && [ ! -x /tmp/squashfs-root/AppRun.wrapped ]; then
+            echo "ERROR: AppRun.wrapped exists but is not executable after chmod"
+            exit 1
+          fi
 
           # Repack: extract the ELF runtime header from the original AppImage
           dd if=/tmp/input.AppImage of=/tmp/runtime bs="$OFFSET" count=1 2>/dev/null
