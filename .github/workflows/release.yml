@@ -86,6 +86,32 @@ jobs:
           path: giano-reader/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: warn
 
+      - name: Patch AppImage – add .DirIcon (required by AppDir spec)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          set -e
+          APPIMAGE=$(find giano-reader/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -n1)
+          echo "Patching: $APPIMAGE"
+
+          # Download appimagetool (needed to repack)
+          wget -q -O /tmp/appimagetool \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
+
+          # Extract the AppImage into a squashfs-root directory
+          cd /tmp
+          "$APPIMAGE" --appimage-extract > /dev/null
+          cd -
+
+          # Copy the 256x256 icon as .DirIcon in the AppDir root
+          cp giano-reader/src-tauri/icons/256x256.png /tmp/squashfs-root/.DirIcon
+
+          # Repack into the same path (overwrite original)
+          ARCH=x86_64 /tmp/appimagetool /tmp/squashfs-root "$APPIMAGE"
+
+          # Clean up extracted directory
+          rm -rf /tmp/squashfs-root
+
       - name: Upload artifacts (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
