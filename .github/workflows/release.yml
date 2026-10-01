@@ -93,24 +93,28 @@ jobs:
           APPIMAGE=$(find giano-reader/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -n1)
           echo "Patching: $APPIMAGE"
 
+          # Copy AppImage to a path without spaces to avoid shell quoting issues
+          cp "$APPIMAGE" /tmp/input.AppImage
+          chmod +x /tmp/input.AppImage
+
           # Download appimagetool (needed to repack)
           wget -q -O /tmp/appimagetool \
             https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x /tmp/appimagetool
 
-          # Extract the AppImage into a squashfs-root directory
+          # Extract the AppImage (always extracts to ./squashfs-root)
           cd /tmp
-          "$APPIMAGE" --appimage-extract > /dev/null
+          /tmp/input.AppImage --appimage-extract > /dev/null
           cd -
 
           # Copy the 256x256 icon as .DirIcon in the AppDir root
           cp giano-reader/src-tauri/icons/256x256.png /tmp/squashfs-root/.DirIcon
 
-          # Repack into the same path (overwrite original)
+          # Repack back to the original path (overwrite)
           ARCH=x86_64 /tmp/appimagetool /tmp/squashfs-root "$APPIMAGE"
 
-          # Clean up extracted directory
-          rm -rf /tmp/squashfs-root
+          # Clean up
+          rm -rf /tmp/squashfs-root /tmp/input.AppImage
 
       - name: Upload artifacts (Linux)
         if: matrix.platform == 'ubuntu-22.04'
