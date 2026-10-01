@@ -100,10 +100,16 @@ jobs:
           cp "$APPIMAGE" /tmp/input.AppImage
           chmod +x /tmp/input.AppImage
 
-          # Find the offset where the squashfs starts (skip the ELF runtime at the top)
-          OFFSET=$(cat /tmp/input.AppImage | grep -c '' || true)
-          OFFSET=$(LC_ALL=C grep -obUaP '\x73\x71\x73\x68' /tmp/input.AppImage | head -1 | cut -d: -f1)
+          # Ask the AppImage runtime itself for the squashfs offset (official, reliable).
+          # Fragile magic-byte scanning finds spurious matches inside the ELF runtime and
+          # even the big-endian magic 'sqsh', which makes unsquashfs fail with
+          # "Reading a different endian SQUASHFS filesystem" / "Can't find a valid SQUASHFS superblock".
+          OFFSET=$(/tmp/input.AppImage --appimage-offset)
           echo "Squashfs offset: $OFFSET"
+          if ! [ "$OFFSET" -gt 0 ] 2>/dev/null; then
+            echo "ERROR: could not determine a valid squashfs offset (got '$OFFSET')"
+            exit 1
+          fi
 
           # Extract squashfs portion (unsquashfs preserves all permissions)
           unsquashfs -offset "$OFFSET" -dest /tmp/squashfs-root /tmp/input.AppImage
