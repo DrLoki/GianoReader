@@ -105,13 +105,32 @@ jobs:
             https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x /tmp/appimagetool
 
-          # Extract the AppImage (always extracts to ./squashfs-root)
+          # Extract the AppImage (always extracts to ./squashfs-root relative to cwd)
           cd /tmp
           /tmp/input.AppImage --appimage-extract > /dev/null
-          cd -
 
-          # Copy the 256x256 icon as .DirIcon in the AppDir root
-          cp giano-reader/src-tauri/icons/256x256.png /tmp/squashfs-root/.DirIcon
+          # Show what icons Tauri put inside, so we can build the correct symlink
+          echo "=== Icons found in AppDir ==="
+          find /tmp/squashfs-root/usr/share/icons -name '*.png' 2>/dev/null || true
+
+          # Find the 256x256 icon inside the AppDir
+          INNER_ICON=$(find /tmp/squashfs-root/usr/share/icons/hicolor/256x256/apps -name '*.png' 2>/dev/null | head -n1)
+
+          if [ -n "$INNER_ICON" ]; then
+            # Build a relative symlink path from the AppDir root to the icon
+            REL_PATH=$(realpath --relative-to=/tmp/squashfs-root "$INNER_ICON")
+            echo "Creating symlink: .DirIcon -> $REL_PATH"
+            ln -sf "$REL_PATH" /tmp/squashfs-root/.DirIcon
+          else
+            echo "No 256x256 icon found inside AppDir, copying from source"
+            cp giano-reader/src-tauri/icons/256x256.png /tmp/squashfs-root/.DirIcon
+          fi
+
+          # Verify
+          echo "=== .DirIcon ==="
+          ls -la /tmp/squashfs-root/.DirIcon
+
+          cd -
 
           # Repack back to the original path (overwrite)
           ARCH=x86_64 /tmp/appimagetool /tmp/squashfs-root "$APPIMAGE"
