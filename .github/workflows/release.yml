@@ -93,6 +93,9 @@ jobs:
           APPIMAGE=$(find giano-reader/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -n1)
           echo "Patching: $APPIMAGE"
 
+          # Install FUSE (required to run AppImage --appimage-extract on GitHub runners)
+          sudo apt-get install -y libfuse2
+
           # Copy AppImage to a path without spaces to avoid shell quoting issues
           cp "$APPIMAGE" /tmp/input.AppImage
           chmod +x /tmp/input.AppImage
