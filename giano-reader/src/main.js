@@ -2682,6 +2682,10 @@ async function renderNativeView() {
           var href = a.getAttribute('href') || '';
           window.parent.postMessage({ type: 'epub-link', href: href }, '*');
         });
+        window.open = function(url) {
+          if (url) window.parent.postMessage({ type: 'epub-link', href: String(url) }, '*');
+          return null;
+        };
       <\/script>`;
       // Quando l'iframe ha caricato il contenuto, aggancia il sync di scroll
       // (lo scroll avviene dentro il documento dell'iframe).
@@ -2738,7 +2742,11 @@ if (translationStatus) {
 window.addEventListener('message', e => {
   if (!e.data || e.data.type !== 'epub-link') return;
   const href = e.data.href || '';
-  if (!href || href.startsWith('http://') || href.startsWith('https://')) return;
+  if (!href) return;
+  if (href.startsWith('http://') || href.startsWith('https://')) {
+    openExternalLink(href);
+    return;
+  }
 
   // Separa file e ancora: "chapter02.xhtml#note-1" → file="chapter02.xhtml", anchor="note-1"
   const [filePart, anchor] = href.split('#');
@@ -2911,6 +2919,20 @@ function buildTranslatedParagraphHtml(segment, translatedText, displayIndex) {
   return `<span class="para-num">${displayIndex}</span>${inner}`;
 }
 
+// Apre un URL esterno nel browser di sistema (Tauri) o in una nuova tab (browser).
+async function openExternalLink(url) {
+  if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_browser_url', { url });
+      return;
+    } catch (e) {
+      console.warn('[link] Tauri open_browser_url failed:', e);
+    }
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 // ── Render pannelli testo ──────────────────────────────────────────────────
 function renderOriginal(paragraphs) {
   originalViewer.innerHTML = '';
@@ -2946,7 +2968,11 @@ function renderOriginal(paragraphs) {
     a.addEventListener('click', e => {
       e.preventDefault();
       const href = a.getAttribute('data-epub-href') || '';
-      if (!href || href.startsWith('http://') || href.startsWith('https://')) return;
+      if (!href) return;
+      if (href.startsWith('http://') || href.startsWith('https://')) {
+        openExternalLink(href);
+        return;
+      }
       const [filePart, anchor] = href.split('#');
       if (filePart) {
         const idx = currentSpineItems.findIndex(i =>
@@ -3068,7 +3094,7 @@ async function translatePdfOverlay(startPct = 0) {
           // Auto-shrink font if text overflows the box
           shrinkFontToFit(block.el);
         }
-        if (translatedChunks.size >= totalChunks) setTranslationStatus('');
+        if (translatedChunks.size >= totalChunks) setTranslationStatus('✓');
       } catch (err) {
         if (signal.aborted) return;
         // Requirement 4.6: keep placeholders in pending state, continue other batches
@@ -3210,7 +3236,7 @@ async function translateCurrentChapter(startPct = 0) {
       if (seg && seg.type === 'image') continue;
       textIdx.push(i);
     }
-    if (!textIdx.length) { if (translatedChunks.size >= totalChunks) setTranslationStatus(''); return; }
+    if (!textIdx.length) { if (translatedChunks.size >= totalChunks) setTranslationStatus('✓'); return; }
 
     const slice = textIdx.map(i => {
       const p = paragraphs[i];
@@ -3227,7 +3253,7 @@ async function translateCurrentChapter(startPct = 0) {
         pEls[i].setAttribute('data-translated', 'true');
         pEls[i].classList.remove('pending');
       }
-      if (translatedChunks.size >= totalChunks) setTranslationStatus('');
+      if (translatedChunks.size >= totalChunks) setTranslationStatus('✓');
     } catch (err) {
       if (signal.aborted) return;
       console.error('[translate] chunk error', chunkIdx, err);
