@@ -17,10 +17,17 @@ use super::persistence::PersistenceStore;
 // keyed (or validated) by the file's modification time, so replacing a book on
 // disk invalidates its cached data automatically.
 
-/// book_id → resolved EPUB path.
-fn path_cache() -> &'static Mutex<HashMap<String, PathBuf>> {
-    static C: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
+/// book_id → (resolved EPUB path, mtime of the desktop library JSON when cached).
+/// Entries are dropped when the library JSON changes, so a book removed from
+/// the desktop library stops being served even if the file is still on disk.
+type PathEntry = (PathBuf, Option<SystemTime>);
+fn path_cache() -> &'static Mutex<HashMap<String, PathEntry>> {
+    static C: OnceLock<Mutex<HashMap<String, PathEntry>>> = OnceLock::new();
     C.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn library_json_mtime(library_path: &Path) -> Option<SystemTime> {
+    file_mtime(&library_path.parent().unwrap_or(library_path).join("giano-reader-library.json"))
 }
 
 /// path → (mtime, EPUB title, EPUB creator).
@@ -243,16 +250,17 @@ pub fn generate_book_id(path: &Path) -> String {
 /// then falling back to scanning `library_path` directory.
 /// Returns the path to the epub file, or None if not found.
 pub fn find_epub_by_id(library_path: &Path, book_id: &str) -> Option<PathBuf> {
+    let lib_mtime = library_json_mtime(library_path);
     if let Ok(cache) = path_cache().lock() {
-        if let Some(path) = cache.get(book_id) {
-            if path.exists() {
+        if let Some((path, cached_mtime)) = cache.get(book_id) {
+            if *cached_mtime == lib_mtime && path.exists() {
                 return Some(path.clone());
             }
         }
     }
     let found = find_epub_by_id_uncached(library_path, book_id)?;
     if let Ok(mut cache) = path_cache().lock() {
-        cache.insert(book_id.to_string(), found.clone());
+        cache.insert(book_id.to_string(), (found.clone(), lib_mtime));
     }
     Some(found)
 }

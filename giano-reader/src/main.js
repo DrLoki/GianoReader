@@ -2,6 +2,8 @@ import ePub from 'epubjs';
 import { translateParagraphs } from './translator.js';
 import { t, RTL_LANGS } from './i18n.js';
 import { clampSearchDepth } from './settings-utils.js';
+import { sanitizeTree, isExternalHttpUrl, isSafeResourceUrl, escapeHtmlText } from './html-sanitizer.js';
+import { bookmarkKey, mergeBookmarkLists } from './bookmarks-sync.js';
 import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfWithOverlayPlaceholders } from './pdf.js';
 import { clearSegmentationCache } from './pdf-xycut-segmenter.js';
 import ttsController, { isProModeAvailable, makeDownloadFilename } from './tts.js';
@@ -591,7 +593,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.4' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.5' });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -2156,9 +2158,10 @@ function paragraphsToHtml(paragraphs) {
     return `<p>${html}</p>`;
   }).join('');
 }
+// Escapa anche le virgolette: il risultato viene usato pure dentro attributi.
 function escapeHtml(s) {
   if (s == null) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escapeHtmlText(s);
 }
 
 // Tag inline la cui formattazione va preservata nel testo tradotto.
@@ -2207,10 +2210,9 @@ function safeInnerHtml(el, imgResolver = null) {
       if (!['src', 'alt', 'loading', 'width', 'height', 'class'].includes(attr.name)) img.removeAttribute(attr.name);
     });
   });
-  // Rimuovi attributi di stile/evento da tutti gli altri elementi
-  clone.querySelectorAll('*').forEach(n => {
-    ['onclick', 'onmouseover', 'onerror', 'onload'].forEach(ev => n.removeAttribute(ev));
-  });
+  // Whitelist di tag/attributi: il markup EPUB non è affidabile e finisce nel
+  // documento principale, che ha accesso alle API Tauri.
+  sanitizeTree(clone);
   return clone.innerHTML;
 }
 
@@ -2238,6 +2240,7 @@ function buildImageBlockHtml(el, imgResolver) {
       im.removeAttribute('xlink:href');
     }
   });
+  sanitizeTree(clone, { includeRoot: true });
   return clone.tagName ? clone.outerHTML : clone.innerHTML;
 }
 
@@ -2268,6 +2271,7 @@ function inlineImgHtml(img, imgResolver) {
   Array.from(clone.attributes).forEach(attr => {
     if (!['src', 'alt', 'loading', 'width', 'height', 'class'].includes(attr.name)) clone.removeAttribute(attr.name);
   });
+  if (!isSafeResourceUrl(clone.getAttribute('src') || '')) clone.removeAttribute('src');
   return clone.outerHTML;
 }
 
@@ -2691,27 +2695,28 @@ async function renderNativeView() {
       const font = getComputedStyle(document.documentElement).getPropertyValue('--reader-font-family') || 'Georgia, serif';
       const size = getComputedStyle(document.documentElement).getPropertyValue('--font-size') || '16px';
       const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:${font}!important;font-size:${size}!important;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}a{color:inherit;}</style>`;
-      // Script iniettato nell'iframe: intercetta tutti i click sui link e li
-      // comunica al parent tramite postMessage invece di navigare l'iframe.
-      const interceptScript = `<script>
-        document.addEventListener('click', function(e) {
-          var a = e.target.closest('a');
-          if (!a) return;
-          e.preventDefault();
-          var href = a.getAttribute('href') || '';
-          window.parent.postMessage({ type: 'epub-link', href: href }, '*');
-        });
-        window.open = function(url) {
-          if (url) window.parent.postMessage({ type: 'epub-link', href: String(url) }, '*');
-          return null;
-        };
-      <\/script>`;
-      // Quando l'iframe ha caricato il contenuto, aggancia il sync di scroll
-      // (lo scroll avviene dentro il documento dell'iframe).
+      // Sicurezza: il contenuto EPUB non è affidabile. Un iframe srcdoc eredita
+      // l'origine del parent, quindi senza sandbox gli <script> del libro
+      // girerebbero con accesso alle API Tauri (filesystem). "allow-same-origin"
+      // SENZA "allow-scripts" disabilita ogni script del libro ma lascia al
+      // parent l'accesso a contentDocument (scroll sync, ancore, click sui link).
+      frame.setAttribute('sandbox', 'allow-same-origin');
+      // Quando l'iframe ha caricato il contenuto: intercetta i click sui link
+      // (dal parent, dato che nell'iframe non girano script) e aggancia lo
+      // scroll sync (lo scroll avviene dentro il documento dell'iframe).
       frame.addEventListener('load', () => {
+        const doc = frame.contentDocument;
+        if (doc) {
+          doc.addEventListener('click', e => {
+            const a = e.target && e.target.closest ? e.target.closest('a') : null;
+            if (!a) return;
+            e.preventDefault();
+            handleEpubLink(a.getAttribute('href') || '');
+          });
+        }
         if (currentViewMode === 'original' && !translationHidden) bindSyncScroll();
       });
-      frame.srcdoc = themeStyle + interceptScript + html;
+      frame.srcdoc = themeStyle + html;
       originalNative.appendChild(frame);
     } catch (err) {
       console.error('[native] rendering error:', err);
@@ -2758,14 +2763,15 @@ if (translationStatus) {
 }
 
 // ── Gestione link cliccati nell'iframe (modalità originale) ───────────────
-window.addEventListener('message', e => {
-  if (!e.data || e.data.type !== 'epub-link') return;
-  const href = e.data.href || '';
+// Chiamata dal listener di click agganciato dal parent al documento dell'iframe.
+function handleEpubLink(href) {
   if (!href) return;
-  if (href.startsWith('http://') || href.startsWith('https://')) {
+  if (isExternalHttpUrl(href)) {
     openExternalLink(href);
     return;
   }
+  // Schemi non http(s) (javascript:, mailto:, file:, …) non vengono seguiti
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return;
 
   // Separa file e ancora: "chapter02.xhtml#note-1" → file="chapter02.xhtml", anchor="note-1"
   const [filePart, anchor] = href.split('#');
@@ -2790,7 +2796,7 @@ window.addEventListener('message', e => {
     // Link a un'ancora nello stesso capitolo
     scrollToAnchor(anchor);
   }
-});
+}
 
 // Scrolla all'elemento con id/name corrispondente all'ancora nell'iframe corrente
 function scrollToAnchor(anchor) {
@@ -2940,6 +2946,7 @@ function buildTranslatedParagraphHtml(segment, translatedText, displayIndex) {
 
 // Apre un URL esterno nel browser di sistema (Tauri) o in una nuova tab (browser).
 async function openExternalLink(url) {
+  if (!isExternalHttpUrl(url)) return;
   if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -2988,10 +2995,12 @@ function renderOriginal(paragraphs) {
       e.preventDefault();
       const href = a.getAttribute('data-epub-href') || '';
       if (!href) return;
-      if (href.startsWith('http://') || href.startsWith('https://')) {
+      if (isExternalHttpUrl(href)) {
         openExternalLink(href);
         return;
       }
+      // Schemi non http(s) (javascript:, file:, …) non vengono seguiti
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return;
       const [filePart, anchor] = href.split('#');
       if (filePart) {
         const idx = currentSpineItems.findIndex(i =>
@@ -4175,16 +4184,26 @@ document.addEventListener('keydown', e => {
 
 // ── Segnalibri ─────────────────────────────────────────────────────────────
 const BOOKMARKS_KEY = 'giano-reader-bookmarks';
-let _cachedBookmarks = null;
+// Chiavi dei segnalibri visti all'ultimo load/save: servono a distinguere,
+// al salvataggio, le modifiche fatte altrove (server web / PWA) da quelle locali.
+let _knownBookmarkKeys = new Set();
 
+// Legge sempre dal disco: il server web può aggiungere o rimuovere segnalibri
+// mentre l'app desktop è aperta (non usare una cache in memoria).
 async function loadBookmarks() {
-  if (_cachedBookmarks) return _cachedBookmarks;
-  _cachedBookmarks = await PersistentStorage.get(BOOKMARKS_KEY, []);
-  return _cachedBookmarks;
+  const stored = await PersistentStorage.get(BOOKMARKS_KEY, []);
+  const bms = Array.isArray(stored) ? stored : [];
+  _knownBookmarkKeys = new Set(bms.map(bookmarkKey));
+  return bms;
 }
+// Salva unendo la lista locale con quella su disco (vedi bookmarks-sync.js),
+// così i segnalibri creati/rimossi dal telefono non vengono sovrascritti.
 async function saveBookmarks(bms) {
-  _cachedBookmarks = bms;
-  await PersistentStorage.set(BOOKMARKS_KEY, bms);
+  const onDisk = await PersistentStorage.get(BOOKMARKS_KEY, []);
+  const merged = mergeBookmarkLists(bms, onDisk, _knownBookmarkKeys);
+  await PersistentStorage.set(BOOKMARKS_KEY, merged);
+  _knownBookmarkKeys = new Set(merged.map(bookmarkKey));
+  return merged;
 }
 
 // Restituisce la label del capitolo corrente dalla progress bar
@@ -4259,7 +4278,7 @@ async function renderBookmarks(query = '') {
         <span class="bm-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
         <span class="bm-chapter">${escapeHtml(chapterLabel)}${bm.scrollPct != null ? ` · ${bm.scrollPct}%` : ''}</span>
       </span>
-      <button class="bm-delete" title="Delete bookmark" data-id="${bm.id}"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+      <button class="bm-delete" title="Delete bookmark" data-id="${escapeHtml(bm.id)}"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
     `;
     li.querySelector('.bm-info').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
     li.querySelector('.bm-icon').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
@@ -5440,7 +5459,7 @@ document.getElementById('lib-check-btn').addEventListener('click', async () => {
   libCheckTitle.textContent = ui('libCheck');
   libCheckMsg.textContent = ui('libCheckBroken');
   libCheckList.innerHTML = broken.map(e =>
-    `<li><span class="lib-check-title">${e.title || '?'}</span><span class="lib-check-path">${e.filePath}</span></li>`
+    `<li><span class="lib-check-title">${escapeHtml(e.title || '?')}</span><span class="lib-check-path">${escapeHtml(e.filePath)}</span></li>`
   ).join('');
   document.getElementById('lib-check-confirm-msg').textContent = ui('libCheckConfirm');
   libCheckRemoveBtn.textContent = ui('libCheckRemoveAction', { count: broken.length });

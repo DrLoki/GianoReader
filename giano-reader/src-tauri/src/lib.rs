@@ -60,7 +60,11 @@ async fn stop_web_server(
 fn get_server_status(
     state: tauri::State<'_, ServerState>,
 ) -> Option<ServerInfo> {
-    let guard = state.handle.lock().unwrap();
+    let mut guard = state.handle.lock().unwrap();
+    // The server task ends on its own if axum fails: report it as stopped.
+    if guard.as_ref().map_or(false, |h| h.server_task.is_finished()) {
+        *guard = None;
+    }
     guard.as_ref().map(|h| {
         let display_ip = h.lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
         let lan_url = format!("http://{}:{}", display_ip, h.port);
@@ -88,12 +92,32 @@ fn set_web_server_secrets(
     web_server::handlers::prefs::set_secrets(&app_state.store, password, gcloud_api_key)
 }
 
+/// Validates a URL before handing it to the OS: only absolute http(s) URLs with
+/// a host are accepted, and the normalised (percent-encoded) form is returned.
+/// The URL can come from links inside an untrusted EPUB.
+fn validate_external_url(url: &str) -> Result<String, String> {
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("Invalid URL".to_string());
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|_| "Invalid URL".to_string())?;
+    match parsed.scheme() {
+        "http" | "https" if parsed.host_str().map_or(false, |h| !h.is_empty()) => {
+            Ok(parsed.to_string())
+        }
+        _ => Err("Only http(s) URLs can be opened".to_string()),
+    }
+}
+
 #[tauri::command]
 fn open_browser_url(url: String) -> Result<(), String> {
+    let url = validate_external_url(&url)?;
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", &url])
+        // Not `cmd /C start`: cmd.exe would interpret `&`, `|`, `^` in the URL
+        // as shell operators (command injection from a crafted EPUB link).
+        // rundll32 receives the URL as a plain argument, with no shell parsing.
+        std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", &url])
             .spawn()
             .map_err(|e| e.to_string())?;
     }
@@ -201,4 +225,39 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("Errore avvio applicazione");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_external_url;
+
+    #[test]
+    fn accepts_plain_http_urls() {
+        assert_eq!(
+            validate_external_url("https://example.com/a?x=1&y=2").unwrap(),
+            "https://example.com/a?x=1&y=2"
+        );
+        assert!(validate_external_url("http://example.com").is_ok());
+    }
+
+    #[test]
+    fn rejects_non_http_schemes_and_shell_tricks() {
+        for bad in [
+            "javascript:alert(1)",
+            "file:///C:/Windows/System32/calc.exe",
+            "ms-settings:",
+            "calc.exe",
+            "https://example.com/ &calc",
+            "https://example.com/\n",
+            "",
+        ] {
+            assert!(validate_external_url(bad).is_err(), "accepted: {:?}", bad);
+        }
+    }
+
+    #[test]
+    fn quotes_are_percent_encoded() {
+        let url = validate_external_url("https://example.com/?q=\"x\"").unwrap();
+        assert!(!url.contains('"'), "{}", url);
+    }
 }

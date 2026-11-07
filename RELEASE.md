@@ -1,3 +1,57 @@
+# 🚀 GianoReader Release v0.9.5
+
+This is a **security and reliability release**. It closes several ways a crafted EPUB could run code inside the desktop app, hardens the LAN web server used by the mobile PWA, and fixes bookmarks created from the phone being lost when the desktop app saves.
+
+> [!IMPORTANT]
+> Upgrading is strongly recommended if you open EPUB files from untrusted sources or use Web Server mode on a shared network.
+
+---
+
+## 📝 Changelog (v0.9.4 → v0.9.5)
+
+### 🔒 Desktop App Security
+
+- **Sandboxed Original view**: The EPUB iframe in Original view now uses `sandbox="allow-same-origin"` without `allow-scripts`, so scripts embedded in a book no longer run. Before, they ran with the app's own origin and could reach the Tauri APIs. Link clicks, anchors and scroll sync are now handled from the parent window.
+- **Whitelist HTML sanitizer**: New `src/html-sanitizer.js` replaces the old denylist (which only removed four event attributes). Text view, translated panel and image blocks now keep only allowed tags and attributes. Every `on*` handler, `<iframe>`, `<object>`, `<form>`, SVG animation and `<foreignObject>` is removed, along with scriptable URLs.
+- **Safe external links**: `open_browser_url` accepts only absolute http(s) URLs. On Windows it opens them through `rundll32 url.dll,FileProtocolHandler` instead of `cmd /C start`, which treated `&` in a link as a command separator. The frontend applies the same validation.
+- **Escaping fixes**: `escapeHtml` now also escapes quotes (it is used inside attributes). The *Clean Library* dialog now escapes book titles and paths.
+- **Narrower filesystem permissions**: Writes are limited to the app data folder, plus files picked in a save dialog. Reads are still allowed anywhere, as the library needs that.
+- **Stricter CSP**: `'unsafe-inline'` was removed from the desktop `script-src`.
+
+### 🌐 LAN Web Server Hardening
+
+- **Password protection**: Constant-time password check, with a 5-minute lockout after 10 wrong attempts from one IP.
+- **Protected endpoints**: `POST /translate` (which can use your paid Google Cloud key) and `PUT /preferences` now require the password. The password and API key can only be changed from the desktop, through the new `set_web_server_secrets` command.
+- **No cross-origin access**: The permissive CORS layer was removed, so web pages opened on the phone can no longer read your library. Security headers and a strict CSP are added to every response.
+- **Sanitized chapter HTML**: The server rebuilds allowed tags with whitelisted attributes only, drops `javascript:` / `data:` links and decodes HTML entities in paragraph text.
+- **Reliable server lifecycle**: Starting the server again on the same port returns the running instance. Starting it on a different port is refused, instead of leaving an unreachable server running. A server that stopped on an error is now reported as stopped.
+
+### 🔖 Bookmarks Sync (Desktop ↔ Phone)
+
+- **No more lost bookmarks**: The desktop no longer keeps an in-memory copy of the bookmarks forever. It reads them from disk and merges on every save (`src/bookmarks-sync.js`), so bookmarks created or deleted from the PWA survive desktop edits.
+- **Safer server writes**: The server serializes bookmark and preference updates with locks. It also refuses to write when the bookmarks file cannot be parsed, where before it could overwrite the file with an empty list.
+
+### ⚡ Performance & Robustness
+
+- **EPUB caches**: Metadata, book paths and recently read chapters are cached in memory and invalidated when a file (or the desktop library) changes.
+- **HTTP client**: A single shared HTTP client with connect and request timeouts is used for every translation call. A stalled endpoint can no longer hang translation.
+- **Chapter count**: Chapter responses now include `totalChapters`, so clients know when they reach the end of the book.
+
+### 📱 Web Client (PWA)
+
+- **Back button**: The Android/browser back button returns to the library, or closes an open sheet, instead of closing the app.
+- **Updates**: A new service worker version is applied on the next return to the library, so you never lose your reading position.
+- **Progress and links**: Whole-book progress is calculated from chapter and scroll position. Footnote and cross-chapter links are resolved through the TOC.
+- **Password prompt**: Password prompt and offline translation fixes.
+
+### 🧪 Testing
+
+- New Vitest suites for the sanitizer (`html-sanitizer.test.js`) and bookmark merging (`bookmarks-sync.test.js`).
+- New Rust tests for URL validation, auth lockout, sanitizer and entity decoding.
+- Known issue: `i18n-locale.property.test.js` still reports missing keys in the `sv`, `uk` and `sl` locales. Run `node .antigravity/translate_i18n.mjs` to fill them.
+
+---
+
 # 🚀 GianoReader Release v0.9.4
 
 This release brings **images and inline formatting into the side-by-side translation**, enables **translation in Original view** (the faithful EPUB iframe now sits next to a translated panel), and adds a **percentage-based scroll sync** with a dedicated on/off toggle, offset preservation for manual realignment, and double-click re-alignment.

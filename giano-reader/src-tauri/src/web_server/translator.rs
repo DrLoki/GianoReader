@@ -8,6 +8,20 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
 
+/// Shared HTTP client: reuses connections across requests and bounds every
+/// call with a timeout, so a stalled translation endpoint cannot hang the
+/// reader (or a phone request) forever.
+fn http_client() -> &'static Client {
+    static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .unwrap_or_else(|_| Client::new())
+    })
+}
+
 /// Maximum characters per single translation request (~5000 is Google's limit).
 const CHAR_LIMIT: usize = 4500;
 
@@ -73,14 +87,14 @@ pub async fn translate(
         return Ok(Vec::new());
     }
 
-    let client = Client::new();
+    let client = http_client();
     let mut results: Vec<String> = vec![String::new(); texts.len()];
 
     // Build batches respecting CHAR_LIMIT
     let batches = build_batches(&texts);
 
     for batch in &batches {
-        let translated = translate_chunk(&client, &batch.text, source_lang, target_lang).await?;
+        let translated = translate_chunk(client, &batch.text, source_lang, target_lang).await?;
         let count = batch.end - batch.start;
 
         // Split the translated text by double-newline to realign with original paragraphs
@@ -98,7 +112,7 @@ pub async fn translate(
                 // avoid silently losing/misaligning text.
                 for j in 0..count {
                     let idx = batch.start + j;
-                    let single = translate_chunk(&client, &texts[idx], source_lang, target_lang).await?;
+                    let single = translate_chunk(client, &texts[idx], source_lang, target_lang).await?;
                     results[idx] = single.trim().to_string();
                 }
             }
@@ -158,7 +172,7 @@ pub async fn translate_v2(
         return Ok(Vec::new());
     }
 
-    let client = Client::new();
+    let client = http_client();
     let mut results: Vec<String> = vec![String::new(); texts.len()];
 
     // Build batches respecting CHAR_LIMIT_V3 and MAX_SEGMENTS_V2
@@ -167,7 +181,7 @@ pub async fn translate_v2(
     for batch in &batches {
         let slice: Vec<String> = texts[batch.start..batch.end].to_vec();
         let translated = translate_chunk_v2(
-            &client, slice, source_lang, target_lang, api_key,
+            client, slice, source_lang, target_lang, api_key,
         )
         .await?;
 
@@ -347,8 +361,8 @@ pub async fn translate_chunk_raw(
     source_lang: &str,
     target_lang: &str,
 ) -> Result<String, TranslateError> {
-    let client = Client::new();
-    translate_chunk(&client, text, source_lang, target_lang).await
+    let client = http_client();
+    translate_chunk(client, text, source_lang, target_lang).await
 }
 
 /// Sends a single batch to the Google Translate endpoint and returns the translated text.

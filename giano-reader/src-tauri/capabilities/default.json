@@ -1,7 +1,9 @@
 {
   "identifier": "default",
-  "description": "Permessi default per Giano Reader",
-  "windows": ["main"],
+  "description": "Permessi default per Giano Reader. Lettura file ovunque (libreria in cartelle scelte dall'utente); scrittura solo nella cartella dati dell'app. I percorsi scelti nei dialog di salvataggio vengono abilitati a runtime dal plugin dialog.",
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-set-size",
@@ -14,21 +16,78 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",
-    "fs:allow-read-file",
-    "fs:allow-read-text-file",
-    "fs:allow-read-dir",
-    "fs:allow-exists",
-    "fs:allow-stat",
-    "fs:allow-write-file",
-    "fs:allow-write-text-file",
-    "fs:allow-mkdir",
-    "fs:scope-home-recursive",
-    "fs:scope-desktop-recursive",
-    "fs:scope-download-recursive",
-    "fs:scope-document-recursive",
     {
-      "identifier": "fs:scope",
-      "allow": [{ "path": "**" }]
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        }
+      ]
     },
     "updater:default",
     "process:allow-restart"

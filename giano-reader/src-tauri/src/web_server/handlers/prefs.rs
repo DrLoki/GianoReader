@@ -51,6 +51,7 @@ pub fn set_secrets(
     password: Option<String>,
     gcloud_api_key: Option<String>,
 ) -> Result<(), String> {
+    let _guard = store.prefs_lock.lock().unwrap_or_else(|e| e.into_inner());
     let mut prefs = store.get_preferences().map_err(|e| e.to_string())?;
     if let Some(pw) = password {
         prefs.password = if pw.is_empty() { None } else { Some(pw) };
@@ -190,7 +191,8 @@ pub async fn put_preferences(
         }
     }
 
-    // Load current preferences
+    // Load current preferences (locked: the desktop may update secrets concurrently)
+    let _guard = state.store.prefs_lock.lock().unwrap_or_else(|e| e.into_inner());
     let mut prefs = match state.store.get_preferences() {
         Ok(p) => p,
         Err(_) => {

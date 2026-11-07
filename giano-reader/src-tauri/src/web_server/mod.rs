@@ -29,6 +29,32 @@ pub async fn start(
     app_state: Arc<AppState>,
 ) -> Result<ServerInfo, String> {
     println!("[web_server] start() called with port {}", port);
+
+    // A second start would overwrite the handle and leave the first server
+    // listening with no way to stop it. A handle whose task already ended
+    // (server error) is stale and is cleared.
+    {
+        let mut guard = server_state.handle.lock().unwrap();
+        if let Some(h) = guard.as_ref() {
+            if h.server_task.is_finished() {
+                *guard = None;
+            } else if h.port == port {
+                // Already running on the requested port (e.g. after a webview reload)
+                let display_ip = h.lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
+                let lan_url = format!("http://{}:{}", display_ip, h.port);
+                let qr_url = h.hostname_url.clone().unwrap_or_else(|| lan_url.clone());
+                return Ok(ServerInfo {
+                    port: h.port,
+                    lan_url,
+                    hostname_url: h.hostname_url.clone(),
+                    qr_url,
+                });
+            } else {
+                return Err(format!("Web Server is already running on port {}", h.port));
+            }
+        }
+    }
+
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     // Bind listener, detect AddrInUse
@@ -103,7 +129,17 @@ pub async fn start(
         lan_ip,
         hostname_url: hostname_url.clone(),
     };
-    *server_state.handle.lock().unwrap() = Some(handle);
+    {
+        let mut guard = server_state.handle.lock().unwrap();
+        if let Some(existing) = guard.as_ref() {
+            if !existing.server_task.is_finished() {
+                // Lost a race with a concurrent start: shut this one down
+                handle.shutdown_tx.cancel();
+                return Err(format!("Web Server is already running on port {}", existing.port));
+            }
+        }
+        *guard = Some(handle);
+    }
 
     Ok(ServerInfo {
         port,

@@ -1,5 +1,6 @@
 use sled::Db;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use super::models::{Bookmark, Preferences, ReadingState};
 use chrono::Utc;
@@ -36,6 +37,12 @@ pub struct PersistenceStore {
     /// When present, bookmark operations read/write this file as the
     /// single source of truth so desktop and mobile stay in sync.
     desktop_bookmarks_path: PathBuf,
+    /// Serialises read-modify-write cycles on the bookmarks file: concurrent
+    /// requests (several phones, or quick taps) would otherwise lose updates.
+    bookmarks_lock: Mutex<()>,
+    /// Serialises read-modify-write cycles on the preferences record (LAN
+    /// `PUT /preferences` vs. desktop `set_web_server_secrets`).
+    pub(crate) prefs_lock: Mutex<()>,
 }
 
 impl PersistenceStore {
@@ -50,7 +57,12 @@ impl PersistenceStore {
         let path = app_data_dir.join("giano-web.db");
         let db = sled::open(path)?;
         let desktop_bookmarks_path = app_data_dir.join("giano-reader-bookmarks.json");
-        Ok(Self { db, desktop_bookmarks_path })
+        Ok(Self {
+            db,
+            desktop_bookmarks_path,
+            bookmarks_lock: Mutex::new(()),
+            prefs_lock: Mutex::new(()),
+        })
     }
 
     // ── Reading state ────────────────────────────────────────────────────────
@@ -78,9 +90,19 @@ impl PersistenceStore {
 
     /// Reads all bookmarks from the desktop JSON file.
     fn read_desktop_bookmarks(&self) -> Vec<DesktopBookmark> {
+        self.read_desktop_bookmarks_strict().unwrap_or_default()
+    }
+
+    /// Like `read_desktop_bookmarks`, but fails when the file exists and cannot
+    /// be read or parsed. Used before writing: treating an unreadable file as an
+    /// empty list and saving would wipe every desktop bookmark.
+    fn read_desktop_bookmarks_strict(&self) -> Result<Vec<DesktopBookmark>, String> {
         match std::fs::read_to_string(&self.desktop_bookmarks_path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-            Err(_) => Vec::new(),
+            Ok(content) if content.trim().is_empty() => Ok(Vec::new()),
+            Ok(content) => serde_json::from_str(&content)
+                .map_err(|e| format!("bookmarks file is not valid JSON: {}", e)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(format!("cannot read bookmarks file: {}", e)),
         }
     }
 
@@ -230,7 +252,8 @@ impl PersistenceStore {
             extra,
         };
 
-        let mut all = self.read_desktop_bookmarks();
+        let _guard = self.bookmarks_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut all = self.read_desktop_bookmarks_strict().map_err(to_sled_error)?;
         all.push(desktop_bm);
         self.write_desktop_bookmarks(&all);
 
@@ -245,7 +268,8 @@ impl PersistenceStore {
 
     /// Deletes a bookmark by API id. Returns `true` if it existed, `false` otherwise.
     pub fn delete_bookmark(&self, book_id: &str, bookmark_id: &str) -> Result<bool, sled::Error> {
-        let mut all = self.read_desktop_bookmarks();
+        let _guard = self.bookmarks_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut all = self.read_desktop_bookmarks_strict().map_err(to_sled_error)?;
         let before = all.len();
 
         all.retain(|bm| {
@@ -283,4 +307,10 @@ impl PersistenceStore {
         self.db.insert(b"preferences", json)?;
         Ok(())
     }
+}
+
+/// Wraps a file error in `sled::Error` so bookmark methods keep their signature.
+fn to_sled_error(msg: String) -> sled::Error {
+    eprintln!("[persistence] {}", msg);
+    sled::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, msg))
 }
