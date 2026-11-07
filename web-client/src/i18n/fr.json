@@ -39,6 +39,7 @@
   "settings.connectionInfo": "Connexion",
   "settings.statusConnected": "Connecté",
   "settings.statusDisconnected": "Déconnecté",
+  "settings.version": "Version",
 
   "bookmarks.title": "Signets",
   "bookmarks.addTooltip": "Ajouter un signet",

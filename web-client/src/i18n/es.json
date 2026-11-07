@@ -39,6 +39,7 @@
   "settings.connectionInfo": "Conexión",
   "settings.statusConnected": "Conectado",
   "settings.statusDisconnected": "Desconectado",
+  "settings.version": "Versión",
 
   "bookmarks.title": "Marcadores",
   "bookmarks.addTooltip": "Añadir marcador",

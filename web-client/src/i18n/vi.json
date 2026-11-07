@@ -41,6 +41,7 @@
   "settings.connectionInfo": "Kết nối",
   "settings.statusConnected": "Đã kết nối",
   "settings.statusDisconnected": "Mất kết nối",
+  "settings.version": "Phiên bản",
   "settings.translationMode": "Chế độ dịch",
   "settings.gcloudProjectId": "Google Cloud Project ID",
   "settings.gcloudApiKey": "Google Cloud API Key",

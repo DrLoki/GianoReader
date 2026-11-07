@@ -108,6 +108,8 @@ Each installer format must be compiled on its native OS:
 
 ### Automated via GitHub Actions
 
+**Version number:** the app version is defined only in `giano-reader/package.json`. `tauri.conf.json` reads it from there (`"version": "../package.json"`), and Vite injects it as `__APP_VERSION__` into both the desktop UI (Settings) and the PWA (Settings → Connection). `src-tauri/Cargo.toml` has its own crate version: keeping it aligned is optional, because the installers and the updater use the Tauri version.
+
 The repository includes `.github/workflows/release.yml`. Push a version tag to trigger a full multi-platform build and draft release:
 
 ```bash

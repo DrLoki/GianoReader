@@ -4,6 +4,11 @@ import { t, RTL_LANGS } from './i18n.js';
 import { clampSearchDepth } from './settings-utils.js';
 import { sanitizeTree, isExternalHttpUrl, isSafeResourceUrl, escapeHtmlText } from './html-sanitizer.js';
 import { bookmarkKey, mergeBookmarkLists } from './bookmarks-sync.js';
+
+// Versione dell'app, iniettata da Vite a build time leggendo package.json
+// (vedi vite.config.js): non va più aggiornata a mano nel codice.
+// eslint-disable-next-line no-undef
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
 import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfWithOverlayPlaceholders } from './pdf.js';
 import { clearSegmentationCache } from './pdf-xycut-segmenter.js';
 import ttsController, { isProModeAvailable, makeDownloadFilename } from './tts.js';
@@ -593,7 +598,7 @@ function applyUiLang(lang) {
   }
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
-  document.getElementById('settings-version').textContent = t(lang, 'version', { version: '0.9.5' });
+  document.getElementById('settings-version').textContent = t(lang, 'version', { version: APP_VERSION });
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');

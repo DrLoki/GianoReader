@@ -68,6 +68,14 @@ describe('settings-sheet component', () => {
     expect(panel?.getAttribute('aria-modal')).toBe('true');
   });
 
+  it('shows the app version taken from giano-reader/package.json', async () => {
+    const { default: pkg } = await import('../../../giano-reader/package.json');
+    const sheet = createSheet();
+    const row = sheet.querySelector('.settings-version-row');
+    expect(row?.textContent).toContain('settings.version');
+    expect(sheet.querySelector('.settings-version')?.textContent).toBe(pkg.version);
+  });
+
   it('has an overlay for closing on outside tap', () => {
     const sheet = createSheet();
     const overlay = sheet.querySelector('.settings-overlay');

@@ -39,6 +39,7 @@
   "settings.connectionInfo": "Koneksyon",
   "settings.statusConnected": "Nakakonekta",
   "settings.statusDisconnected": "Naka-disconnect",
+  "settings.version": "Bersyon",
 
   "bookmarks.title": "Mga Bookmark",
   "bookmarks.addTooltip": "Magdagdag ng bookmark",

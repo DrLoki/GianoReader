@@ -39,6 +39,7 @@
   "settings.connectionInfo": "الاتصال",
   "settings.statusConnected": "متصل",
   "settings.statusDisconnected": "غير متصل",
+  "settings.version": "الإصدار",
 
   "bookmarks.title": "الإشارات المرجعية",
   "bookmarks.addTooltip": "إضافة إشارة مرجعية",

@@ -39,6 +39,7 @@
   "settings.connectionInfo": "Подключение",
   "settings.statusConnected": "Подключено",
   "settings.statusDisconnected": "Отключено",
+  "settings.version": "Версия",
 
   "bookmarks.title": "Закладки",
   "bookmarks.addTooltip": "Добавить закладку",

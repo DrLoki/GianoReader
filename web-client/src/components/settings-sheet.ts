@@ -7,6 +7,9 @@ import type { Preferences } from '../types';
 import { isOfflineMode } from '../api/local-db';
 import { getStoredPassword } from '../api/client';
 
+/** App version, injected by Vite from giano-reader/package.json. */
+const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
+
 const SHEET_STYLES = `
 settings-sheet {
   position: fixed;
@@ -347,6 +350,10 @@ class SettingsSheet extends HTMLElement {
                 <span class="settings-status-dot ${isOfflineMode() ? 'disconnected' : (isConnected ? 'connected' : 'disconnected')}"></span>
                 ${isOfflineMode() ? t('offline.localMode') : (isConnected ? t('settings.statusConnected') : t('settings.statusDisconnected'))}
               </span>
+            </div>
+            <div class="settings-connection-row settings-version-row">
+              <span>${t('settings.version')}</span>
+              <span class="settings-version">${APP_VERSION}</span>
             </div>
           </div>
         </div>

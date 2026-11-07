@@ -39,6 +39,7 @@
   "settings.connectionInfo": "接続",
   "settings.statusConnected": "接続済み",
   "settings.statusDisconnected": "切断済み",
+  "settings.version": "バージョン",
 
   "bookmarks.title": "ブックマーク",
   "bookmarks.addTooltip": "ブックマークを追加",

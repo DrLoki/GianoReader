@@ -39,6 +39,7 @@
   "settings.connectionInfo": "连接",
   "settings.statusConnected": "已连接",
   "settings.statusDisconnected": "已断开",
+  "settings.version": "版本",
 
   "bookmarks.title": "书签",
   "bookmarks.addTooltip": "添加书签",

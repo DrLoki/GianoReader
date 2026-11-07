@@ -39,6 +39,7 @@
   "settings.connectionInfo": "Lidhja",
   "settings.statusConnected": "I lidhur",
   "settings.statusDisconnected": "I shkëputur",
+  "settings.version": "Versioni",
 
   "bookmarks.title": "Faqeshënuesit",
   "bookmarks.addTooltip": "Shto faqeshënues",

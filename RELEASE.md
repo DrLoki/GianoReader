@@ -43,6 +43,11 @@ This is a **security and reliability release**. It closes several ways a crafted
 - **Updates**: A new service worker version is applied on the next return to the library, so you never lose your reading position.
 - **Progress and links**: Whole-book progress is calculated from chapter and scroll position. Footnote and cross-chapter links are resolved through the TOC.
 - **Password prompt**: Password prompt and offline translation fixes.
+- **App version in Settings**: The PWA Settings panel now shows the app version (Connection section).
+
+### 🏷️ Single Source for the Version Number
+
+- The version is now defined only in `giano-reader/package.json`. `tauri.conf.json` reads it from there, and Vite injects it at build time into the desktop Settings panel and the PWA, so it no longer needs updating by hand in the code.
 
 ### 🧪 Testing
 

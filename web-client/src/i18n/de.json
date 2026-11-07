@@ -39,6 +39,7 @@
   "settings.connectionInfo": "Verbindung",
   "settings.statusConnected": "Verbunden",
   "settings.statusDisconnected": "Getrennt",
+  "settings.version": "Version",
 
   "bookmarks.title": "Lesezeichen",
   "bookmarks.addTooltip": "Lesezeichen hinzufügen",
