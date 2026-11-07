@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { escapeHtml, bookProgress, chunkOf, resolveEpubLink } from './reading';
+import { escapeHtml, bookProgress, chunkOf, resolveEpubLink, looksUntranslated, scrollElementToTop } from './reading';
 import type { TocEntry } from '../types';
 
 describe('escapeHtml', () => {
@@ -77,5 +77,33 @@ describe('resolveEpubLink', () => {
     expect(resolveEpubLink('javascript:alert(1)', toc).kind).toBe('unknown');
     expect(resolveEpubLink('missing.xhtml', toc).kind).toBe('unknown');
     expect(resolveEpubLink('', toc).kind).toBe('unknown');
+  });
+});
+
+describe('looksUntranslated', () => {
+  it('flags a paragraph returned unchanged', () => {
+    const src = 'The quick brown fox jumps over the lazy dog.';
+    expect(looksUntranslated(src, src)).toBe(true);
+    expect(looksUntranslated(src, '  the quick brown fox jumps over the lazy dog ')).toBe(true);
+  });
+  it('accepts a real translation', () => {
+    expect(looksUntranslated('The quick brown fox jumps.', 'La rapida volpe marrone salta.')).toBe(false);
+  });
+  it('ignores short text and text without letters', () => {
+    expect(looksUntranslated('Chapter 1', 'Chapter 1')).toBe(false);
+    expect(looksUntranslated('1234567890 — 1234567890', '1234567890 — 1234567890')).toBe(false);
+  });
+});
+
+describe('scrollElementToTop', () => {
+  it('scrolls only the given container by the element offset', () => {
+    const container = document.createElement('div');
+    const el = document.createElement('p');
+    container.appendChild(el);
+    container.getBoundingClientRect = () => ({ top: 100, height: 500 } as DOMRect);
+    el.getBoundingClientRect = () => ({ top: 400, height: 50 } as DOMRect);
+    container.scrollTop = 0;
+    scrollElementToTop(container, el, 0.5);
+    expect(container.scrollTop).toBe(325);
   });
 });

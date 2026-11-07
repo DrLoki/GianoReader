@@ -80,3 +80,32 @@ export function resolveEpubLink(href: string, toc: TocEntry[]): EpubLinkTarget {
   }
   return { kind: 'unknown' };
 }
+
+/**
+ * Scrolls `container` so that `el` sits at its top edge, touching only that
+ * container. `Element.scrollIntoView()` also scrolls every scrollable
+ * ancestor — including `overflow: hidden` ones — so on phones it could slide
+ * <card-ui> sideways and reveal the off-screen Translated panel while the
+ * Original tab was still marked as active.
+ */
+export function scrollElementToTop(container: HTMLElement, el: HTMLElement, ratioInEl = 0): void {
+  const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+  const extra = ratioInEl * el.getBoundingClientRect().height;
+  container.scrollTop = Math.max(0, container.scrollTop + delta + extra);
+}
+
+function normalizeForCompare(s: string): string {
+  return s.normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
+/**
+ * True when the engine returned the source text unchanged. The free Google
+ * endpoint occasionally does this for some paragraphs of a multi-paragraph
+ * batch. Text without letters (numbers, symbols) and very short text (names,
+ * "OK") legitimately come back identical, so they are not flagged.
+ */
+export function looksUntranslated(source: string, translated: string): boolean {
+  const a = normalizeForCompare(source);
+  if (a.length < 12 || !/\p{L}/u.test(a)) return false;
+  return a === normalizeForCompare(translated);
+}

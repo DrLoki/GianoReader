@@ -1,4 +1,5 @@
 import { t } from '../i18n/index';
+import { scrollElementToTop } from '../utils/reading';
 
 /**
  * <card-ui> — Dual-panel reading layout.
@@ -23,11 +24,21 @@ class CardUI extends HTMLElement {
     this.setupScrollSync();
     this.addEventListener('pointerdown', this.onPointerDown, { passive: true });
     this.addEventListener('pointerup', this.onPointerUp, { passive: true });
+    // The panels slide with `left`, never by scrolling <card-ui>. Anything
+    // that scrolls it anyway (focus, find-in-page, a stray scrollIntoView)
+    // would show one panel while the header tab names the other.
+    this.addEventListener('scroll', this.onSelfScroll, { passive: true });
   }
+
+  private onSelfScroll = (): void => {
+    if (this.scrollLeft !== 0) this.scrollLeft = 0;
+    if (this.scrollTop !== 0) this.scrollTop = 0;
+  };
 
   disconnectedCallback(): void {
     this.removeEventListener('pointerdown', this.onPointerDown);
     this.removeEventListener('pointerup', this.onPointerUp);
+    this.removeEventListener('scroll', this.onSelfScroll);
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
   }
 
@@ -150,13 +161,11 @@ class CardUI extends HTMLElement {
         const targetPRect = targetP.getBoundingClientRect();
 
         if (toContainerRect.height > 0 && targetPRect.height > 0) {
-          const delta = targetPRect.top - toContainerRect.top;
-          toSlot.scrollTop = Math.max(0, toSlot.scrollTop + delta + (targetParagraphInfo.ratioInP * targetPRect.height));
-          return;
+          scrollElementToTop(toSlot, targetP, targetParagraphInfo.ratioInP);
         } else {
-          targetP.scrollIntoView({ block: 'start' });
-          return;
+          scrollElementToTop(toSlot, targetP);
         }
+        return;
       }
     }
 
@@ -216,6 +225,8 @@ class CardUI extends HTMLElement {
           width: 100%;
           height: 100%;
           overflow: hidden;
+          /* clip (unlike hidden) cannot be scrolled programmatically */
+          overflow: clip;
           touch-action: pan-y;
           position: relative;
         }

@@ -22,6 +22,7 @@
   "reading.tabTranslated": "Translated",
   "reading.settingsTooltip": "Settings",
   "reading.translationError": "Translation failed — tap to retry",
+  "reading.refreshTranslation": "Refresh translation",
   "reading.prevChapter": "Previous chapter",
   "reading.nextChapter": "Next chapter",
   "reading.toc": "Contents",

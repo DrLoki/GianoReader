@@ -8,9 +8,9 @@ import { showToast } from './toast';
 import * as translationCache from '../cache/translation-cache';
 import type { ChapterResponse, Paragraph, ReadingState, TocEntry } from '../types';
 import { getToc } from '../api/books';
-import { escapeHtml, bookProgress, chunkOf, resolveEpubLink } from '../utils/reading';
+import { escapeHtml, bookProgress, chunkOf, resolveEpubLink, scrollElementToTop, looksUntranslated } from '../utils/reading';
 import { isOfflineMode, isLocalId, getLocalChapter } from '../api/local-db';
-import { iconList, iconStar, iconHouse, iconGear, iconChevronLeft, iconChevronRight } from '../icons';
+import { iconList, iconStar, iconHouse, iconGear, iconChevronLeft, iconChevronRight, iconRotate } from '../icons';
 import './card-ui';
 import './toc-sheet';
 
@@ -59,8 +59,12 @@ class ReadingScreen extends HTMLElement {
 
   // Lazy translation state
   private translationObserver: IntersectionObserver | null = null;
+  /** Bumped by every new translation session (chapter load or refresh). */
+  private translationSession = 0;
   private targetLang: string = 'it';
   private targetLangReady: Promise<void> = Promise.resolve();
+  /** The chapter the current translation session belongs to (for refresh). */
+  private translationChapter: { slot: HTMLElement; generation: number; chapterIndex: number } | null = null;
   private paragraphData: Paragraph[] = [];
 
   /** Set book context via property from navigation. */
@@ -399,6 +403,7 @@ class ReadingScreen extends HTMLElement {
         <div class="chapter-nav-left">
           <button class="nav-icon-btn fab-library-btn" aria-label="${t('fab.library')}">${iconHouse}</button>
           <button class="nav-icon-btn settings-btn" aria-label="${t('reading.settingsTooltip')}">${iconGear}</button>
+          <button class="nav-icon-btn refresh-translation-btn" aria-label="${t('reading.refreshTranslation')}" title="${t('reading.refreshTranslation')}">${iconRotate}</button>
         </div>
         <div class="chapter-nav-right">
           <button class="nav-icon-btn nav-prev" aria-label="${t('reading.prevChapter')}">${iconChevronLeft}</button>
@@ -446,6 +451,12 @@ class ReadingScreen extends HTMLElement {
       this.dispatchEvent(
         new CustomEvent('open-settings', { bubbles: true, composed: true })
       );
+    });
+
+    // Re-translate the current chapter, ignoring cached translations
+    const refreshBtn = this.querySelector('.refresh-translation-btn') as HTMLButtonElement;
+    refreshBtn?.addEventListener('click', () => {
+      this.refreshTranslation();
     });
 
     // Bookmark FAB: create bookmark at current reading position
@@ -722,7 +733,7 @@ class ReadingScreen extends HTMLElement {
       // 2. Native EPUB anchor (TOC fragment like #c5, also on inline elements)
       const el = this.findByAttr(slot, 'data-id', target) ?? this.findByAttr(slot, 'id', target);
       if (el) {
-        el.scrollIntoView({ block: 'start' });
+        scrollElementToTop(slot, el.closest<HTMLElement>('[data-pos]') ?? el);
         return;
       }
     }
@@ -858,11 +869,10 @@ class ReadingScreen extends HTMLElement {
     const anchor = this.findByAttr(originalSlot, 'id', fragment);
     if (!anchor) return false;
     const block = anchor.closest<HTMLElement>('[data-pos]') ?? anchor;
-    block.scrollIntoView({ block: 'start' });
+    scrollElementToTop(originalSlot, block);
     const pos = block.getAttribute('data-pos');
-    if (pos !== null && translatedSlot) {
-      translatedSlot.querySelector<HTMLElement>(`[data-pos="${pos}"]`)?.scrollIntoView({ block: 'start' });
-    }
+    const twin = pos !== null ? translatedSlot?.querySelector<HTMLElement>(`[data-pos="${pos}"]`) : null;
+    if (twin && translatedSlot) scrollElementToTop(translatedSlot, twin);
     return true;
   }
 
@@ -911,11 +921,18 @@ class ReadingScreen extends HTMLElement {
    * to: when the user changes chapter mid-request, late results are dropped
    * instead of being written (and cached) under the wrong chapter.
    */
-  private setupTranslationObserver(translatedSlot: HTMLElement, generation: number, chapterIndex: number): void {
+  private setupTranslationObserver(
+    translatedSlot: HTMLElement,
+    generation: number,
+    chapterIndex: number,
+    bypassCache = false
+  ): void {
     if (this.translationObserver) {
       this.translationObserver.disconnect();
       this.translationObserver = null;
     }
+    const session = ++this.translationSession;
+    this.translationChapter = { slot: translatedSlot, generation, chapterIndex };
 
     const paragraphs = this.paragraphData;
     const total = paragraphs.length;
@@ -923,7 +940,7 @@ class ReadingScreen extends HTMLElement {
 
     const bookId = this.bookId;
     const targetLang = this.targetLang;
-    const isStale = () => generation !== this.loadGeneration;
+    const isStale = () => generation !== this.loadGeneration || session !== this.translationSession;
     const requestedChunks = new Set<number>();
     const totalChunks = Math.ceil(total / this.LAZY_CHUNK);
 
@@ -939,7 +956,9 @@ class ReadingScreen extends HTMLElement {
       for (let pos = start; pos < end; pos++) {
         const paragraph = paragraphs[pos];
         if (!paragraph) continue;
-        const cached = await translationCache.get({ bookId, chapterIndex, paragraphId: paragraph.id, targetLang });
+        const cached = bypassCache
+          ? undefined
+          : await translationCache.get({ bookId, chapterIndex, paragraphId: paragraph.id, targetLang });
         if (isStale()) return;
         if (cached !== undefined) {
           this.setTranslatedText(translatedSlot, pos, cached);
@@ -956,6 +975,22 @@ class ReadingScreen extends HTMLElement {
       try {
         const translations = await postTranslate(uncached.map(pos => paragraphs[pos].text), 'auto', targetLang);
         if (isStale()) return;
+
+        // The free engine sometimes hands back a few paragraphs of a batch
+        // untouched. Retry those one by one, which usually works.
+        const untranslated = uncached
+          .map((_, i) => i)
+          .filter(i => looksUntranslated(paragraphs[uncached[i]].text, translations[i] ?? ''));
+        for (const i of untranslated) {
+          try {
+            const [retry] = await postTranslate([paragraphs[uncached[i]].text], 'auto', targetLang);
+            if (isStale()) return;
+            if (retry && retry.trim() !== '') translations[i] = retry;
+          } catch {
+            if (isStale()) return;
+          }
+        }
+
         uncached.forEach((pos, i) => {
           const translated = translations[i];
           if (!translated || translated.trim() === '') {
@@ -966,7 +1001,11 @@ class ReadingScreen extends HTMLElement {
             return;
           }
           this.setTranslatedText(translatedSlot, pos, translated);
-          translationCache.set({ bookId, chapterIndex, paragraphId: paragraphs[pos].id, targetLang }, translated);
+          // Don't cache a paragraph still in the source language: the next
+          // visit (or a refresh) gets another chance to translate it.
+          if (!looksUntranslated(paragraphs[pos].text, translated)) {
+            translationCache.set({ bookId, chapterIndex, paragraphId: paragraphs[pos].id, targetLang }, translated);
+          }
         });
       } catch (err: any) {
         if (isStale()) return;
@@ -1003,6 +1042,22 @@ class ReadingScreen extends HTMLElement {
     translatedSlot.querySelectorAll<HTMLElement>('[data-pos]').forEach((el) => {
       this.translationObserver?.observe(el);
     });
+  }
+
+  /**
+   * Re-translates the current chapter from scratch: cached translations are
+   * ignored and overwritten. Useful when some paragraphs came back still in
+   * the source language. Translation stays lazy (visible part first).
+   */
+  public refreshTranslation(): void {
+    const current = this.translationChapter;
+    if (!current || current.generation !== this.loadGeneration) return;
+    const { slot, generation, chapterIndex } = current;
+    if (!slot.isConnected || this.paragraphData.length === 0) return;
+    for (let pos = 0; pos < this.paragraphData.length; pos++) {
+      this.showPlaceholder(slot, pos);
+    }
+    this.setupTranslationObserver(slot, generation, chapterIndex, true);
   }
 
   private paragraphAt(translatedSlot: HTMLElement, pos: number): HTMLElement | null {
