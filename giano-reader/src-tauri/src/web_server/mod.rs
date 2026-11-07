@@ -1,4 +1,4 @@
-use axum::{routing::{get, post, delete}, Router};
+use axum::{routing::{get, post, put, delete}, Router};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -85,7 +85,8 @@ pub async fn start(
     // Spawn server task with graceful shutdown
     let server_task = tokio::spawn(async move {
         println!("[web_server] Starting on {}", addr);
-        if let Err(e) = axum::serve(listener, router.into_make_service())
+        // connect_info exposes the client IP to the auth middleware (rate limiting)
+        if let Err(e) = axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
             .with_graceful_shutdown(shutdown_token.cancelled_owned())
             .await
         {
@@ -153,10 +154,13 @@ pub async fn stop(server_state: &ServerState) -> Result<(), String> {
 /// Builds the complete axum router with all API routes, CORS middleware, and static file serving.
 ///
 /// - All REST API handlers are mounted under `/api/`
-/// - CORS middleware allows cross-origin requests from any LAN device (Requirement 18.6)
+/// - No CORS layer: the PWA is served from this same origin, so cross-origin
+///   pages the phone visits cannot read the library through the user's browser
 /// - Static file service serves the embedded web client at `/` with SPA fallback (Requirement 18.5)
-/// - Protected routes (books, bookmarks, state, chapters) require password if configured
-/// - Public routes (preferences, translate) are always accessible
+/// - Protected routes (books, bookmarks, state, chapters, preference updates,
+///   translation) require the password if one is configured
+/// - Public routes: covers, language list and `GET /preferences` (needed to know
+///   whether a password is required before the user has entered one)
 pub fn build_router(state: Arc<AppState>) -> Router {
     // Protected routes: require password when configured
     let protected_routes = Router::new()
@@ -170,6 +174,9 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // Bookmarks
         .route("/books/{id}/bookmarks", get(handlers::bookmarks::list_bookmarks).post(handlers::bookmarks::create_bookmark))
         .route("/books/{id}/bookmarks/{bookmarkId}", delete(handlers::bookmarks::delete_bookmark))
+        // Preference updates and translation (BASIC uses the owner's paid API key)
+        .route("/preferences", put(handlers::prefs::put_preferences))
+        .route("/translate", post(handlers::translate::post_translate))
         .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::require_password))
         .with_state(state.clone());
 
@@ -177,11 +184,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let public_routes = Router::new()
         // Book covers (loaded via <img> tags which cannot send Authorization headers)
         .route("/books/{id}/cover", get(handlers::books::get_cover))
-        // Translate
-        .route("/translate", post(handlers::translate::post_translate))
         .route("/translate/languages", get(handlers::translate::get_languages))
-        // Preferences
-        .route("/preferences", get(handlers::prefs::get_preferences).put(handlers::prefs::put_preferences))
+        .route("/preferences", get(handlers::prefs::get_preferences))
         .with_state(state);
 
     let api_routes = Router::new()
@@ -191,5 +195,5 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         .nest("/api", api_routes)
         .fallback_service(static_files::static_file_service())
-        .layer(middleware::cors_layer())
+        .layer(axum::middleware::from_fn(middleware::security_headers))
 }

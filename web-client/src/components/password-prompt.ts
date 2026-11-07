@@ -23,9 +23,10 @@ function escapeHtml(str: string): string {
  * dispatches 'password-accepted' so the app can load the library.
  *
  * If the password is incorrect, the app silently dismisses the prompt and
- * enters "guest mode" — the user can load local EPUBs and use translation
- * (including BASIC via gcloudApiKey) but cannot access the server library
- * or bookmarks.
+ * enters "guest mode" — the user can load local EPUBs and use FREE translation
+ * (directly or via their Cloudflare Worker) but cannot access the server
+ * library, bookmarks or the server's BASIC translation, which uses the owner's
+ * paid Google Cloud key and therefore requires the password.
  */
 class PasswordPrompt extends HTMLElement {
   private abortController: AbortController | null = null;
@@ -189,31 +190,23 @@ class PasswordPrompt extends HTMLElement {
 
   /**
    * Enter guest mode: dismiss the prompt and switch to offline mode.
-   * The user can still load local EPUBs and use translation (BASIC mode
-   * works because /api/translate is a public endpoint not behind auth).
-   * Merges server preferences (gcloudApiKey) into local prefs so BASIC
-   * translation mode is available in guest mode.
+   * The user can still load local EPUBs and use FREE translation. Server
+   * preferences (theme, languages…) are merged into the local ones; BASIC
+   * translation is not available to guests because /api/translate requires
+   * the password.
    */
   private async enterGuestMode(): Promise<void> {
-    // Fetch server preferences (public endpoint) and merge into local prefs
-    // so gcloudApiKey is available for BASIC translation in guest mode.
     try {
       const response = await fetch('/api/preferences');
       if (response.ok) {
         const serverPrefs: Preferences = await response.json();
-        // Merge: keep existing local settings (like translationMode) but
-        // pull in gcloudApiKey and other server-side values
+        // Keep existing local settings (like translationMode) over server values
         const existing = JSON.parse(localStorage.getItem('giano-local-preferences') || '{}');
-        const merged: Preferences = {
-          ...serverPrefs,
-          ...existing,
-          // Always take gcloudApiKey from server (the authoritative source)
-          gcloudApiKey: serverPrefs.gcloudApiKey,
-        };
-        // If server has gcloudApiKey, default translationMode to 'basic' if not already set
-        if (serverPrefs.gcloudApiKey && !existing.translationMode) {
-          merged.translationMode = 'basic';
-        }
+        const merged: Preferences = { ...serverPrefs, ...existing };
+        // Guests cannot reach the server's BASIC engine: fall back to FREE
+        if (merged.translationMode === 'basic') merged.translationMode = 'free';
+        // Drop any key cached by older versions of the app
+        delete (merged as Preferences & { gcloudApiKey?: string }).gcloudApiKey;
         saveLocalPreferences(merged);
       }
     } catch {

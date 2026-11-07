@@ -5,6 +5,7 @@ import { applyPreferences } from '../main';
 import { t, setLocale } from '../i18n/index';
 import type { Preferences } from '../types';
 import { isOfflineMode } from '../api/local-db';
+import { getStoredPassword } from '../api/client';
 
 const SHEET_STYLES = `
 settings-sheet {
@@ -253,6 +254,18 @@ class SettingsSheet extends HTMLElement {
     };
   }
 
+  /**
+   * BASIC (Google Cloud) runs on the server with the owner's key, so it is
+   * offered only when the server has a key and this client may call
+   * /api/translate: online, or offline when no password is required, or when
+   * a password is stored.
+   */
+  private canUseBasic(): boolean {
+    if (!this.currentPrefs.gcloudKeySet) return false;
+    if (!isOfflineMode()) return true;
+    return !this.currentPrefs.passwordSet || !!getStoredPassword();
+  }
+
   private render(): void {
     const serverUrl = window.location.origin;
     const isConnected = !document.querySelector('disconnected-overlay');
@@ -288,7 +301,7 @@ class SettingsSheet extends HTMLElement {
           <label class="settings-label" for="settings-translation-mode">${t('settings.translationMode')}</label>
           <select id="settings-translation-mode" class="settings-select">
             <option value="free" ${(this.currentPrefs.translationMode || 'free') === 'free' ? 'selected' : ''}>FREE</option>
-            ${this.currentPrefs.gcloudApiKey?.trim() ? `<option value="basic" ${this.currentPrefs.translationMode === 'basic' ? 'selected' : ''}>BASIC</option>` : ''}
+            ${this.canUseBasic() ? `<option value="basic" ${this.currentPrefs.translationMode === 'basic' ? 'selected' : ''}>BASIC</option>` : ''}
           </select>
         </div>
 

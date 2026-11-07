@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, getStoredPassword } from './client';
 import { isOfflineMode, getLocalPreferences } from './local-db';
 
 const STATIC_LANGUAGES = [
@@ -13,6 +13,7 @@ const STATIC_LANGUAGES = [
   { code: 'ja', name: '日本語' },
   { code: 'ko', name: '한국어' },
   { code: 'ar', name: 'العربية' },
+  { code: 'fa', name: 'فارسی' },
   { code: 'hi', name: 'हिन्दी' },
   { code: 'bn', name: 'বাংলা' },
   { code: 'id', name: 'Bahasa Indonesia' },
@@ -131,15 +132,19 @@ export async function postTranslate(
   targetLang: string,
 ): Promise<string[]> {
   if (isOfflineMode()) {
-    // In offline/guest mode, try the server's /api/translate for BASIC mode
-    // since that endpoint is public (not behind password auth).
+    // In offline mode, try the server's /api/translate for BASIC mode. The
+    // endpoint requires the password when one is configured (it spends the
+    // owner's Google Cloud quota); on 401 or network failure fall back to FREE.
     const prefs = getLocalPreferences();
     const mode = prefs.translationMode || 'free';
     if (mode === 'basic') {
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const password = getStoredPassword();
+        if (password) headers['Authorization'] = `Bearer ${password}`;
         const response = await fetch('/api/translate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ texts, sourceLang, targetLang, mode }),
         });
         if (response.ok) {
@@ -162,7 +167,13 @@ export async function postTranslate(
     body: JSON.stringify({ texts, sourceLang, targetLang, mode }),
   });
 
+  if (!response.ok) {
+    throw new Error(`Translation failed: ${response.status}`);
+  }
   const data = await response.json();
+  if (!Array.isArray(data?.translations)) {
+    throw new Error('Translation failed: malformed response');
+  }
   return data.translations;
 }
 

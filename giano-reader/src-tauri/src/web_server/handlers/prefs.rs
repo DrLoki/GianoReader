@@ -2,13 +2,10 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::web_server::models::ApiError;
+use crate::web_server::models::{ApiError, Preferences};
+use crate::web_server::persistence::PersistenceStore;
 use super::books::AppState;
-
-/// The supported BCP-47 translation language codes.
-const SUPPORTED_TRANSLATION_LANGS: &[&str] = &[
-    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi",
-];
+use super::translate::{is_supported_lang, supported_lang_codes};
 
 /// Valid theme values.
 const VALID_THEMES: &[&str] = &["light", "dark", "sepia"];
@@ -33,23 +30,46 @@ pub struct PutPreferencesRequest {
     pub password: Option<String>,
 }
 
+/// Serialises preferences for HTTP clients. Secrets never leave the server:
+/// `password` and `gcloudApiKey` are replaced by `passwordSet` / `gcloudKeySet`.
+pub fn public_preferences(prefs: &Preferences) -> serde_json::Value {
+    let mut value = serde_json::to_value(prefs).unwrap();
+    if let Some(obj) = value.as_object_mut() {
+        obj.remove("password");
+        obj.remove("gcloudApiKey");
+        obj.insert("passwordSet".to_string(), serde_json::Value::Bool(prefs.password.is_some()));
+        obj.insert("gcloudKeySet".to_string(), serde_json::Value::Bool(prefs.gcloud_api_key.is_some()));
+    }
+    value
+}
+
+/// Updates the server secrets. Called only from the desktop app through a
+/// Tauri command, never over HTTP. `None` leaves a value unchanged, an empty
+/// string clears it.
+pub fn set_secrets(
+    store: &PersistenceStore,
+    password: Option<String>,
+    gcloud_api_key: Option<String>,
+) -> Result<(), String> {
+    let mut prefs = store.get_preferences().map_err(|e| e.to_string())?;
+    if let Some(pw) = password {
+        prefs.password = if pw.is_empty() { None } else { Some(pw) };
+    }
+    if let Some(key) = gcloud_api_key {
+        let key = key.trim().to_string();
+        prefs.gcloud_api_key = if key.is_empty() { None } else { Some(key) };
+    }
+    store.put_preferences(&prefs).map_err(|e| e.to_string())
+}
+
 /// GET /api/preferences
 ///
-/// Returns the full Preferences object.
+/// Returns the Preferences object without secrets (see `public_preferences`).
 /// If nothing has been saved, returns defaults:
 /// `{ theme: "dark", uiLanguage: "en", translationLang: "it", fontSize: 16 }`
 pub async fn get_preferences(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.store.get_preferences() {
-        Ok(prefs) => {
-            // Never expose the raw password to clients; instead return a boolean flag
-            let password_set = prefs.password.is_some();
-            let mut value = serde_json::to_value(&prefs).unwrap();
-            if let Some(obj) = value.as_object_mut() {
-                obj.remove("password");
-                obj.insert("passwordSet".to_string(), serde_json::Value::Bool(password_set));
-            }
-            (StatusCode::OK, Json(value)).into_response()
-        }
+        Ok(prefs) => (StatusCode::OK, Json(public_preferences(&prefs))).into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
@@ -69,7 +89,8 @@ pub async fn get_preferences(State(state): State<Arc<AppState>>) -> impl IntoRes
 /// - `fontSize`: must be 12–32
 /// - `theme`: must be one of `["light", "dark", "sepia"]`
 /// - `uiLanguage`: must be one of `["it", "en"]`
-/// - `translationLang`: must be one of the 12 supported BCP-47 codes
+/// - `translationLang`: must be one of the supported BCP-47 codes
+/// - `password` / `gcloudApiKey`: rejected with 403 (desktop-only)
 ///
 /// On validation success: loads current prefs, merges provided fields,
 /// persists, and returns 200 with the full updated Preferences.
@@ -77,6 +98,18 @@ pub async fn put_preferences(
     State(state): State<Arc<AppState>>,
     Json(body): Json<PutPreferencesRequest>,
 ) -> impl IntoResponse {
+    // Secrets can only be changed from the desktop app (Tauri command), never
+    // by a LAN client: otherwise anyone could remove the password or swap the key.
+    if body.password.is_some() || body.gcloud_api_key.is_some() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiError {
+                error: "password and gcloudApiKey can only be changed from the desktop app".to_string(),
+            }),
+        )
+            .into_response();
+    }
+
     // Validate fontSize if present
     if let Some(ref font_size_val) = body.font_size {
         match font_size_val.as_u64() {
@@ -127,13 +160,13 @@ pub async fn put_preferences(
 
     // Validate translationLang if present
     if let Some(ref translation_lang) = body.translation_lang {
-        if !SUPPORTED_TRANSLATION_LANGS.contains(&translation_lang.as_str()) {
+        if !is_supported_lang(translation_lang) {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(ApiError {
                     error: format!(
                         "translationLang: must be one of {:?}",
-                        SUPPORTED_TRANSLATION_LANGS
+                        supported_lang_codes()
                     ),
                 }),
             )
@@ -188,24 +221,10 @@ pub async fn put_preferences(
     if let Some(translation_mode) = body.translation_mode {
         prefs.translation_mode = translation_mode;
     }
-    if let Some(gcloud_api_key) = body.gcloud_api_key {
-        prefs.gcloud_api_key = if gcloud_api_key.is_empty() { None } else { Some(gcloud_api_key) };
-    }
-    if let Some(password) = body.password {
-        prefs.password = if password.is_empty() { None } else { Some(password) };
-    }
 
     // Persist
     match state.store.put_preferences(&prefs) {
-        Ok(()) => {
-            let password_set = prefs.password.is_some();
-            let mut value = serde_json::to_value(&prefs).unwrap();
-            if let Some(obj) = value.as_object_mut() {
-                obj.remove("password");
-                obj.insert("passwordSet".to_string(), serde_json::Value::Bool(password_set));
-            }
-            (StatusCode::OK, Json(value)).into_response()
-        }
+        Ok(()) => (StatusCode::OK, Json(public_preferences(&prefs))).into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
@@ -236,14 +255,82 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         let store = PersistenceStore::open(tmp_dir).unwrap();
-        let state = Arc::new(AppState {
-            library_path: PathBuf::new(),
-            store,
-        });
+        let state = Arc::new(AppState::new(PathBuf::new(), store));
+        app_with_state(state)
+    }
 
+    fn app_with_state(state: Arc<AppState>) -> Router {
         Router::new()
             .route("/api/preferences", get(get_preferences).put(put_preferences))
             .with_state(state)
+    }
+
+    fn create_state() -> Arc<AppState> {
+        let tmp_dir = std::env::temp_dir().join(format!("giano-test-prefs-{}", uuid::Uuid::new_v4()));
+        Arc::new(AppState::new(PathBuf::new(), PersistenceStore::open(tmp_dir).unwrap()))
+    }
+
+    #[tokio::test]
+    async fn test_put_preferences_rejects_password_over_http() {
+        let state = create_state();
+        set_secrets(&state.store, Some("secret".into()), None).unwrap();
+        let response = app_with_state(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/preferences")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "password": "" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        // Password must still be set
+        assert_eq!(state.store.get_preferences().unwrap().password.as_deref(), Some("secret"));
+    }
+
+    #[tokio::test]
+    async fn test_put_preferences_rejects_api_key_over_http() {
+        let response = create_test_app()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/preferences")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "gcloudApiKey": "attacker-key" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_get_preferences_never_exposes_secrets() {
+        let state = create_state();
+        set_secrets(&state.store, Some("secret".into()), Some("AIza-key".into())).unwrap();
+        let response = app_with_state(state)
+            .oneshot(Request::builder().uri("/api/preferences").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(!text.contains("secret"));
+        assert!(!text.contains("AIza-key"));
+        let prefs: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(prefs["passwordSet"], true);
+        assert_eq!(prefs["gcloudKeySet"], true);
+    }
+
+    #[test]
+    fn test_set_secrets_clears_with_empty_string() {
+        let state = create_state();
+        set_secrets(&state.store, Some("pw".into()), Some("key".into())).unwrap();
+        set_secrets(&state.store, Some(String::new()), None).unwrap();
+        let prefs = state.store.get_preferences().unwrap();
+        assert!(prefs.password.is_none());
+        assert_eq!(prefs.gcloud_api_key.as_deref(), Some("key"));
     }
 
     #[tokio::test]
@@ -433,7 +520,7 @@ mod tests {
                     .method("PUT")
                     .uri("/api/preferences")
                     .header("content-type", "application/json")
-                    .body(Body::from(json!({ "uiLanguage": "fr" }).to_string()))
+                    .body(Body::from(json!({ "uiLanguage": "xx" }).to_string()))
                     .unwrap(),
             )
             .await

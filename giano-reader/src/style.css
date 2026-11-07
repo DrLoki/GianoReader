@@ -2161,3 +2161,23 @@ html.rtl .text-panel [data-segment-id].translation-error {
   text-align: right;
   flex-shrink: 0;
 }
+
+/* Notifica silenziosa non bloccante (es. "segnalibro aggiunto") */
+.app-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  max-width: min(90vw, 420px);
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: var(--modal-bg);
+  color: var(--modal-text);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-family);
+  font-size: 14px;
+  text-align: center;
+  z-index: 10000;
+  pointer-events: none;
+}

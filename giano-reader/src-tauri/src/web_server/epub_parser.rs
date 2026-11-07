@@ -1,11 +1,66 @@
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 use epub::doc::EpubDoc;
 use sha2::{Digest, Sha256};
 
 use super::models::{BookSummary, ChapterResponse, Paragraph, TocEntry};
 use super::persistence::PersistenceStore;
+
+// ── In-memory caches ─────────────────────────────────────────────────────────
+//
+// Opening an EPUB (zip + OPF parsing) is the dominant cost of every request.
+// These process-wide caches avoid re-opening files on each call. Every entry is
+// keyed (or validated) by the file's modification time, so replacing a book on
+// disk invalidates its cached data automatically.
+
+/// book_id → resolved EPUB path.
+fn path_cache() -> &'static Mutex<HashMap<String, PathBuf>> {
+    static C: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// path → (mtime, EPUB title, EPUB creator).
+type MetaEntry = (Option<SystemTime>, Option<String>, Option<String>);
+fn meta_cache() -> &'static Mutex<HashMap<PathBuf, MetaEntry>> {
+    static C: OnceLock<Mutex<HashMap<PathBuf, MetaEntry>>> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Small LRU of extracted chapters: ((book_id, chapter, mtime), response).
+type ChapterKey = (String, u32, Option<SystemTime>);
+const CHAPTER_CACHE_CAPACITY: usize = 24;
+fn chapter_cache() -> &'static Mutex<VecDeque<(ChapterKey, ChapterResponse)>> {
+    static C: OnceLock<Mutex<VecDeque<(ChapterKey, ChapterResponse)>>> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(VecDeque::new()))
+}
+
+fn file_mtime(path: &Path) -> Option<SystemTime> {
+    fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// Returns (title, creator) from the EPUB metadata, using the cache when the
+/// file has not changed. Returns `None` if the file cannot be opened.
+fn epub_metadata(path: &Path) -> Option<(Option<String>, Option<String>)> {
+    let mtime = file_mtime(path);
+    if let Ok(cache) = meta_cache().lock() {
+        if let Some((cached_mtime, title, author)) = cache.get(path) {
+            if *cached_mtime == mtime {
+                return Some((title.clone(), author.clone()));
+            }
+        }
+    }
+    let doc = EpubDoc::new(path).ok()?;
+    let title = doc.get_title();
+    let author = doc.mdata("creator").map(|item| item.value.clone());
+    if let Ok(mut cache) = meta_cache().lock() {
+        cache.insert(path.to_path_buf(), (mtime, title.clone(), author.clone()));
+    }
+    Some((title, author))
+}
 
 /// Scans `library_path` for `.epub` files and returns a summary for each one.
 /// First checks for a `giano-reader-library.json` file (desktop app library) in
@@ -99,18 +154,13 @@ fn book_summary_from_path(
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let id = generate_book_id(&canonical);
 
-    let doc = match EpubDoc::new(path) {
-        Ok(doc) => doc,
-        Err(_e) => {
-            // eprintln!("[epub_parser] Skipping {:?}: failed to open epub: {}", path, _e);
-            return None;
-        }
-    };
+    // Skip unreadable files (metadata comes from the cache when possible)
+    let (epub_title, epub_author) = epub_metadata(path)?;
 
     // Prefer the user-edited title from the desktop library, fall back to EPUB metadata.
     let title = title_override
         .filter(|t| !t.trim().is_empty())
-        .or_else(|| doc.get_title())
+        .or(epub_title)
         .unwrap_or_else(|| {
             path.file_stem()
                 .and_then(|s| s.to_str())
@@ -121,7 +171,7 @@ fn book_summary_from_path(
     // Prefer the user-edited author from the desktop library, fall back to EPUB metadata.
     let author = author_override
         .filter(|a| !a.trim().is_empty())
-        .or_else(|| doc.mdata("creator").map(|item| item.value.clone()))
+        .or(epub_author)
         .unwrap_or_else(|| "Unknown".to_string());
 
     let cover_url = Some(format!("/api/books/{}/cover", id));
@@ -193,6 +243,21 @@ pub fn generate_book_id(path: &Path) -> String {
 /// then falling back to scanning `library_path` directory.
 /// Returns the path to the epub file, or None if not found.
 pub fn find_epub_by_id(library_path: &Path, book_id: &str) -> Option<PathBuf> {
+    if let Ok(cache) = path_cache().lock() {
+        if let Some(path) = cache.get(book_id) {
+            if path.exists() {
+                return Some(path.clone());
+            }
+        }
+    }
+    let found = find_epub_by_id_uncached(library_path, book_id)?;
+    if let Ok(mut cache) = path_cache().lock() {
+        cache.insert(book_id.to_string(), found.clone());
+    }
+    Some(found)
+}
+
+fn find_epub_by_id_uncached(library_path: &Path, book_id: &str) -> Option<PathBuf> {
     // First: check the desktop app's library JSON
     let library_json_path = library_path.parent()
         .unwrap_or(library_path)
@@ -535,6 +600,17 @@ pub fn get_chapter(library_path: &Path, book_id: &str, chapter_index: u32) -> Re
     let epub_path = find_epub_by_id(library_path, book_id)
         .ok_or_else(|| format!("Book not found: {}", book_id))?;
 
+    let cache_key: ChapterKey = (book_id.to_string(), chapter_index, file_mtime(&epub_path));
+    if let Ok(mut cache) = chapter_cache().lock() {
+        if let Some(pos) = cache.iter().position(|(k, _)| *k == cache_key) {
+            // Move to the back (most recently used)
+            let entry = cache.remove(pos).unwrap();
+            let response = entry.1.clone();
+            cache.push_back(entry);
+            return Ok(response);
+        }
+    }
+
     let mut doc = EpubDoc::new(&epub_path)
         .map_err(|e| format!("Failed to open epub: {}", e))?;
 
@@ -562,11 +638,21 @@ pub fn get_chapter(library_path: &Path, book_id: &str, chapter_index: u32) -> Re
     // Parse content into paragraphs
     let paragraphs = extract_paragraphs(&content, book_id, chapter_index);
 
-    Ok(ChapterResponse {
+    let response = ChapterResponse {
         chapter_index,
+        total_chapters: num_chapters as u32,
         title,
         paragraphs,
-    })
+    };
+
+    if let Ok(mut cache) = chapter_cache().lock() {
+        if cache.len() >= CHAPTER_CACHE_CAPACITY {
+            cache.pop_front();
+        }
+        cache.push_back((cache_key, response.clone()));
+    }
+
+    Ok(response)
 }
 
 /// Attempts to find the chapter title from the TOC.
@@ -665,7 +751,7 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
         }
 
         // Skip empty paragraphs — but preserve their native id for the next paragraph
-        let text = strip_all_tags(inner_html);
+        let text = decode_html_entities(&strip_all_tags(inner_html));
         let trimmed_text = text.trim();
         if trimmed_text.is_empty() {
             let opening_tag = &content[tag_start..tag_end];
@@ -833,42 +919,226 @@ fn strip_disallowed_tags(html: &str) -> String {
             if let Some(tag_end) = html[pos..].find('>') {
                 let tag_content = &html[pos..pos + tag_end + 1];
 
-                if is_allowed_tag(tag_content) {
-                    result.push_str(tag_content);
+                // Allowed tags are rebuilt from scratch with only whitelisted
+                // attributes, so event handlers (onclick, …) and `javascript:`
+                // URLs from an untrusted EPUB never reach the client's DOM.
+                if let Some(safe) = sanitize_tag(tag_content) {
+                    result.push_str(&safe);
                 }
                 // Otherwise, skip the tag but keep going (text content is preserved)
 
                 pos += tag_end + 1;
             } else {
-                // Malformed tag at end of string, skip the '<'
+                // Malformed tag at end of string: escape the '<' so it can't open a tag
+                result.push_str("&lt;");
                 pos += 1;
             }
         } else {
-            result.push(html[pos..].chars().next().unwrap());
-            pos += html[pos..].chars().next().unwrap().len_utf8();
+            let ch = html[pos..].chars().next().unwrap();
+            if ch == '>' {
+                result.push_str("&gt;");
+            } else {
+                result.push(ch);
+            }
+            pos += ch.len_utf8();
         }
     }
 
     result
 }
 
+/// Tag names kept in the sanitised paragraph HTML.
+const ALLOWED_INLINE_TAGS: [&str; 4] = ["em", "strong", "a", "span"];
+
+/// Extracts the lowercase tag name and whether the tag is a closing tag.
+fn tag_name_of(tag: &str) -> (String, bool) {
+    let inner = tag.trim_start_matches('<').trim_end_matches('>').trim();
+    let (closing, rest) = match inner.strip_prefix('/') {
+        Some(r) => (true, r.trim_start()),
+        None => (false, inner),
+    };
+    let name: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    (name, closing)
+}
+
 /// Checks if a tag string is in the allowed set.
 /// Allowed: <em>, </em>, <strong>, </strong>, <a ...>, </a>, <span ...>, </span>
+#[cfg_attr(not(test), allow(dead_code))]
 fn is_allowed_tag(tag: &str) -> bool {
-    let inner = tag.trim_start_matches('<').trim_end_matches('>').trim();
+    let (name, _) = tag_name_of(tag);
+    ALLOWED_INLINE_TAGS.contains(&name.as_str())
+}
 
-    // Check closing tags
-    if let Some(name) = inner.strip_prefix('/') {
-        let name = name.trim().to_ascii_lowercase();
-        return matches!(name.as_str(), "em" | "strong" | "a" | "span");
+/// Parses `name="value"` / `name='value'` / `name=value` / bare `name` attributes.
+fn parse_attributes(s: &str) -> Vec<(String, String)> {
+    let mut attrs = Vec::new();
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        while i < chars.len() && (chars[i].is_whitespace() || chars[i] == '/') {
+            i += 1;
+        }
+        let start = i;
+        while i < chars.len() && !chars[i].is_whitespace() && chars[i] != '=' && chars[i] != '/' {
+            i += 1;
+        }
+        if start == i {
+            i += 1;
+            continue;
+        }
+        let name: String = chars[start..i].iter().collect::<String>().to_ascii_lowercase();
+        while i < chars.len() && chars[i].is_whitespace() {
+            i += 1;
+        }
+        let mut value = String::new();
+        if i < chars.len() && chars[i] == '=' {
+            i += 1;
+            while i < chars.len() && chars[i].is_whitespace() {
+                i += 1;
+            }
+            if i < chars.len() && (chars[i] == '"' || chars[i] == '\'') {
+                let quote = chars[i];
+                i += 1;
+                let vstart = i;
+                while i < chars.len() && chars[i] != quote {
+                    i += 1;
+                }
+                value = chars[vstart..i].iter().collect();
+                i += 1;
+            } else {
+                let vstart = i;
+                while i < chars.len() && !chars[i].is_whitespace() {
+                    i += 1;
+                }
+                value = chars[vstart..i].iter().collect();
+            }
+        }
+        attrs.push((name, value));
     }
+    attrs
+}
 
-    // Check opening tags — extract just the tag name (before any attributes)
-    let name = inner.split_whitespace().next().unwrap_or("").to_ascii_lowercase();
-    // Handle self-closing like <br/>
-    let name = name.trim_end_matches('/');
+/// Returns true when an `href` is safe to keep: absolute http(s)/mailto links
+/// and in-document fragments. Scriptable schemes (`javascript:`, `data:`,
+/// `vbscript:`, …) are dropped. Relative links into other EPUB files are kept
+/// (they are intercepted client-side) only when they contain no scheme.
+fn is_safe_href(href: &str) -> bool {
+    let decoded = decode_html_entities(href);
+    let normalized: String = decoded
+        .chars()
+        .filter(|c| !c.is_whitespace() && !c.is_control())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if normalized.starts_with("http://")
+        || normalized.starts_with("https://")
+        || normalized.starts_with("mailto:")
+        || normalized.starts_with('#')
+    {
+        return true;
+    }
+    // Relative path (e.g. "chapter2.xhtml#n5"): allowed only if it has no scheme.
+    let before_sep = normalized.split(['/', '?', '#']).next().unwrap_or("");
+    !normalized.is_empty() && !before_sep.contains(':')
+}
 
-    matches!(name, "em" | "strong" | "a" | "span")
+/// Escapes a value for use inside a double-quoted HTML attribute.
+fn escape_attr(v: &str) -> String {
+    v.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// Rebuilds an allowed tag keeping only safe attributes.
+/// Returns `None` when the tag is not in the allowed set.
+fn sanitize_tag(tag: &str) -> Option<String> {
+    let (name, closing) = tag_name_of(tag);
+    if !ALLOWED_INLINE_TAGS.contains(&name.as_str()) {
+        return None;
+    }
+    if closing {
+        return Some(format!("</{}>", name));
+    }
+    let inner = tag.trim_start_matches('<').trim_end_matches('>').trim();
+    let attr_src = inner.get(name.len()..).unwrap_or("");
+    let mut out = format!("<{}", name);
+    for (attr, value) in parse_attributes(attr_src) {
+        let keep = match attr.as_str() {
+            "id" | "class" | "lang" | "dir" | "title" => true,
+            "href" => name == "a" && is_safe_href(&value),
+            _ => false,
+        };
+        if keep {
+            // Values are entity-encoded in the XHTML source: decode first so
+            // re-escaping does not double-encode them.
+            out.push_str(&format!(" {}=\"{}\"", attr, escape_attr(&decode_html_entities(&value))));
+        }
+    }
+    out.push('>');
+    Some(out)
+}
+
+/// Decodes the HTML/XML character references commonly found in EPUB text
+/// (`&amp;`, `&nbsp;`, `&#8217;`, `&#x2019;`, …). Unknown references are kept verbatim.
+pub fn decode_html_entities(s: &str) -> String {
+    if !s.contains('&') {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(amp) = rest.find('&') {
+        out.push_str(&rest[..amp]);
+        let after = &rest[amp + 1..];
+        let semi = after.find(';').filter(|&i| i > 0 && i <= 10);
+        let decoded = semi.and_then(|i| {
+            let ent = &after[..i];
+            let ch = if let Some(num) = ent.strip_prefix('#') {
+                if let Some(hex) = num.strip_prefix('x').or_else(|| num.strip_prefix('X')) {
+                    u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
+                } else {
+                    num.parse::<u32>().ok().and_then(char::from_u32)
+                }
+            } else {
+                match ent {
+                    "amp" => Some('&'),
+                    "lt" => Some('<'),
+                    "gt" => Some('>'),
+                    "quot" => Some('"'),
+                    "apos" => Some('\''),
+                    "nbsp" => Some('\u{00A0}'),
+                    "hellip" => Some('…'),
+                    "mdash" => Some('—'),
+                    "ndash" => Some('–'),
+                    "lsquo" => Some('‘'),
+                    "rsquo" => Some('’'),
+                    "ldquo" => Some('“'),
+                    "rdquo" => Some('”'),
+                    "laquo" => Some('«'),
+                    "raquo" => Some('»'),
+                    "shy" => Some('\u{00AD}'),
+                    "copy" => Some('©'),
+                    _ => None,
+                }
+            };
+            ch.map(|c| (c, i))
+        });
+        match decoded {
+            Some((c, i)) => {
+                out.push(c);
+                rest = &after[i + 1..];
+            }
+            None => {
+                out.push('&');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Strips ALL HTML tags from the content, returning plain text.
@@ -989,6 +1259,66 @@ mod tests {
     fn strip_disallowed_tags_removes_br_and_img() {
         let input = "text<br/>more<img src=\"x\"/>end";
         assert_eq!(strip_disallowed_tags(input), "textmoreend");
+    }
+
+    #[test]
+    fn strip_disallowed_tags_drops_event_handlers() {
+        let input = r##"<span onmouseover="alert(1)" class="x">t</span><a href="#n1" onclick='steal()'>n</a>"##;
+        assert_eq!(
+            strip_disallowed_tags(input),
+            r##"<span class="x">t</span><a href="#n1">n</a>"##
+        );
+    }
+
+    #[test]
+    fn strip_disallowed_tags_drops_script_urls() {
+        for bad in [
+            r#"<a href="javascript:alert(1)">x</a>"#,
+            r#"<a href=" JaVaScRiPt:alert(1)">x</a>"#,
+            r#"<a href="jav&#x61;script:alert(1)">x</a>"#,
+            r#"<a href="data:text/html,foo">x</a>"#,
+            r#"<a href=vbscript:msgbox>x</a>"#,
+        ] {
+            assert_eq!(strip_disallowed_tags(bad), "<a>x</a>", "input: {}", bad);
+        }
+    }
+
+    #[test]
+    fn strip_disallowed_tags_keeps_relative_epub_links() {
+        let input = r#"<a href="chapter2.xhtml#n5">note</a>"#;
+        assert_eq!(strip_disallowed_tags(input), r#"<a href="chapter2.xhtml#n5">note</a>"#);
+    }
+
+    #[test]
+    fn strip_disallowed_tags_escapes_attribute_breakouts() {
+        let input = r#"<span title='a"onclick="x'>t</span>"#;
+        assert_eq!(strip_disallowed_tags(input), r#"<span title="a&quot;onclick=&quot;x">t</span>"#);
+    }
+
+    #[test]
+    fn strip_disallowed_tags_does_not_confuse_prefixed_tag_names() {
+        // <abbr>, <emph> start like allowed tags but are not allowed
+        assert_eq!(strip_disallowed_tags("<abbr title=\"x\">A</abbr>"), "A");
+        assert_eq!(strip_disallowed_tags("<emph>e</emph>"), "e");
+    }
+
+    #[test]
+    fn decode_html_entities_handles_named_and_numeric() {
+        assert_eq!(decode_html_entities("Tom &amp; Jerry"), "Tom & Jerry");
+        assert_eq!(decode_html_entities("it&#8217;s &#x2014; ok"), "it\u{2019}s \u{2014} ok");
+        assert_eq!(decode_html_entities("a&nbsp;b"), "a\u{00A0}b");
+        assert_eq!(decode_html_entities("&lt;b&gt;"), "<b>");
+        // Unknown or unterminated references are left as-is
+        assert_eq!(decode_html_entities("&bogus; & AT&T"), "&bogus; & AT&T");
+    }
+
+    #[test]
+    fn extract_paragraphs_decodes_entities_in_text() {
+        let paras = extract_paragraphs("<p>Fish &amp; chips&#8230;</p>", "b", 0);
+        assert_eq!(paras.len(), 1);
+        assert_eq!(paras[0].text, "Fish & chips\u{2026}");
+        // html keeps the original (valid) encoding
+        assert_eq!(paras[0].html, "Fish &amp; chips&#8230;");
     }
 
     #[test]

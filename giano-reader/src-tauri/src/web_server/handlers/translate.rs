@@ -12,9 +12,46 @@ use crate::web_server::translator::{translate, translate_v2, TranslateError};
 
 use super::books::AppState;
 
-const SUPPORTED_LANGS: &[&str] = &[
-    "it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi",
+/// Translation target languages (code, native name). Single source of truth for
+/// the server; kept identical to the desktop picker (`FLAG_MAP` in main.js)
+/// and to the PWA offline list (`STATIC_LANGUAGES` in web-client translate.ts).
+pub const LANGUAGES: &[(&str, &str)] = &[
+    ("it", "Italiano"),
+    ("en", "English"),
+    ("fr", "Français"),
+    ("de", "Deutsch"),
+    ("es", "Español"),
+    ("pt", "Português"),
+    ("ru", "Русский"),
+    ("zh", "中文"),
+    ("ja", "日本語"),
+    ("ko", "한국어"),
+    ("ar", "العربية"),
+    ("fa", "فارسی"),
+    ("hi", "हिन्दी"),
+    ("bn", "বাংলা"),
+    ("id", "Bahasa Indonesia"),
+    ("th", "ไทย"),
+    ("vi", "Tiếng Việt"),
+    ("fil", "Filipino"),
+    ("sq", "Shqip"),
+    ("sv", "Svenska"),
+    ("uk", "Українська"),
+    ("sl", "Slovenščina"),
 ];
+
+pub fn is_supported_lang(code: &str) -> bool {
+    LANGUAGES.iter().any(|(c, _)| *c == code)
+}
+
+pub fn supported_lang_codes() -> Vec<&'static str> {
+    LANGUAGES.iter().map(|(c, _)| *c).collect()
+}
+
+/// Upper bounds for a single translate request (the PWA sends at most 12
+/// paragraphs at a time); larger requests are rejected to limit abuse.
+pub const MAX_TEXTS_PER_REQUEST: usize = 100;
+pub const MAX_CHARS_PER_REQUEST: usize = 50_000;
 
 #[derive(Deserialize)]
 pub struct TranslateRequest {
@@ -44,14 +81,14 @@ pub struct Language {
 /// Validates:
 /// - `texts` must be present and a JSON array of strings
 /// - `sourceLang` and `targetLang` must be present
-/// - `targetLang` must be one of the 12 supported BCP-47 codes
+/// - `targetLang` must be one of the supported BCP-47 codes (`LANGUAGES`)
 ///
 /// Returns 200 with `{ translations: [...] }` on success.
 /// Returns 400 on validation failure.
 /// Returns 502 on translation engine network failure.
 /// Returns 500 on translation engine not configured.
 pub async fn post_translate(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Json(body): Json<TranslateRequest>,
 ) -> impl IntoResponse {
     // Validate sourceLang
@@ -83,7 +120,7 @@ pub async fn post_translate(
     };
 
     // Validate targetLang is a supported language
-    if !SUPPORTED_LANGS.contains(&target_lang.as_str()) {
+    if !is_supported_lang(&target_lang) {
         return (
             StatusCode::BAD_REQUEST,
             Json(ApiError {
@@ -141,6 +178,20 @@ pub async fn post_translate(
         }
     }
 
+    let total_chars: usize = texts.iter().map(|t| t.chars().count()).sum();
+    if texts.len() > MAX_TEXTS_PER_REQUEST || total_chars > MAX_CHARS_PER_REQUEST {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(ApiError {
+                error: format!(
+                    "texts: at most {} items and {} characters per request",
+                    MAX_TEXTS_PER_REQUEST, MAX_CHARS_PER_REQUEST
+                ),
+            }),
+        )
+            .into_response();
+    }
+
     // Empty array short-circuit: return 200 with empty translations
     if texts.is_empty() {
         return (
@@ -157,7 +208,7 @@ pub async fn post_translate(
 
     let result = if mode == "basic" {
         // Load Google Cloud API key from preferences
-        let prefs = match _state.store.get_preferences() {
+        let prefs = match state.store.get_preferences() {
             Ok(p) => p,
             Err(_) => {
                 return (
@@ -228,23 +279,12 @@ pub async fn post_translate(
 
 /// GET /api/translate/languages
 ///
-/// Returns the list of 12 supported translation languages.
+/// Returns the list of supported translation languages.
 pub async fn get_languages() -> impl IntoResponse {
-    let languages = vec![
-        Language { code: "it".to_string(), name: "Italian".to_string() },
-        Language { code: "en".to_string(), name: "English".to_string() },
-        Language { code: "fr".to_string(), name: "French".to_string() },
-        Language { code: "de".to_string(), name: "German".to_string() },
-        Language { code: "es".to_string(), name: "Spanish".to_string() },
-        Language { code: "pt".to_string(), name: "Portuguese".to_string() },
-        Language { code: "ru".to_string(), name: "Russian".to_string() },
-        Language { code: "zh".to_string(), name: "Chinese".to_string() },
-        Language { code: "ja".to_string(), name: "Japanese".to_string() },
-        Language { code: "ar".to_string(), name: "Arabic".to_string() },
-        Language { code: "fil".to_string(), name: "Filipino".to_string() },
-        Language { code: "sq".to_string(), name: "Albanian".to_string() },
-        Language { code: "vi".to_string(), name: "Vietnamese".to_string() },
-    ];
+    let languages: Vec<Language> = LANGUAGES
+        .iter()
+        .map(|(code, name)| Language { code: code.to_string(), name: name.to_string() })
+        .collect();
 
     (StatusCode::OK, Json(languages))
 }
@@ -271,10 +311,7 @@ mod tests {
         )))
         .unwrap();
 
-        let state = Arc::new(AppState {
-            library_path: PathBuf::from(std::env::temp_dir()),
-            store,
-        });
+        let state = Arc::new(AppState::new(PathBuf::from(std::env::temp_dir()), store));
 
         Router::new()
             .route("/api/translate", post(post_translate))
@@ -283,7 +320,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_languages_returns_12_entries() {
+    async fn test_get_languages_matches_shared_list() {
         let app = create_test_app();
 
         let response = app
@@ -302,11 +339,11 @@ mod tests {
             .await
             .unwrap();
         let languages: Vec<Language> = serde_json::from_slice(&body).unwrap();
-        assert_eq!(languages.len(), 12);
+        assert_eq!(languages.len(), LANGUAGES.len());
+        assert_eq!(languages.len(), 22);
         assert_eq!(languages[0].code, "it");
-        assert_eq!(languages[0].name, "Italian");
-        assert_eq!(languages[11].code, "sq");
-        assert_eq!(languages[11].name, "Albanian");
+        assert_eq!(languages[0].name, "Italiano");
+        assert!(languages.iter().any(|l| l.code == "fa"));
     }
 
     #[tokio::test]

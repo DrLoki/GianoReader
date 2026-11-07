@@ -1,7 +1,7 @@
 import { getPreferences } from './api/preferences';
 import { getStoredPassword, resetUnauthorizedFlag } from './api/client';
 import { setLocale } from './i18n/index';
-import type { Preferences } from './types';
+import type { Preferences, ReadingState } from './types';
 import { isOfflineMode, getLocalPreferences } from './api/local-db';
 import './styles/base.css';
 import './styles/themes.css';
@@ -26,6 +26,10 @@ export function applyPreferences(prefs: Preferences): void {
 }
 
 async function init(): Promise<void> {
+  // The app always starts on the library: drop a stale "reading" entry left
+  // by a reload so the back button behaves predictably.
+  if (history.state?.screen === 'reading') history.replaceState(null, '');
+
   let prefs: Preferences;
   if (isOfflineMode()) {
     prefs = getLocalPreferences();
@@ -83,26 +87,82 @@ document.addEventListener('disconnected', () => {
   }
 });
 
-// Register navigation event listener
-document.addEventListener('navigate', (e: Event) => {
+type ReadingScreenEl = HTMLElement & {
+  setBook: (id: string, st: ReadingState) => void;
+  getBookId: () => string;
+  getCurrentState?: () => ReadingState;
+  flushState?: () => void;
+};
+
+const EMPTY_STATE: ReadingState = { currentChapter: 0, paragraphId: null, scrollOffset: 0, progress: 0 };
+
+/** Set when a new service worker took over: applied on the next return to the library. */
+let updatePending = false;
+
+function currentReadingScreen(): ReadingScreenEl | null {
+  return document.querySelector('#app reading-screen') as ReadingScreenEl | null;
+}
+
+function mountReading(bookId: string, state: ReadingState): void {
   const app = document.getElementById('app');
   if (!app) return;
+  currentReadingScreen()?.flushState?.();
+  app.innerHTML = '';
+  const readingScreen = document.createElement('reading-screen') as ReadingScreenEl;
+  readingScreen.setBook(bookId, state);
+  app.appendChild(readingScreen);
+}
 
+function showLibrary(): void {
+  // Save the position of the book being closed before it is unmounted
+  currentReadingScreen()?.flushState?.();
+  if (updatePending) {
+    // A new version was installed while reading: load it now
+    window.location.reload();
+    return;
+  }
+  mountLibrary();
+}
+
+// Register navigation event listener.
+// Opening a book pushes a history entry so the Android/browser back button
+// returns to the library instead of closing the app.
+document.addEventListener('navigate', (e: Event) => {
   const detail = (e as CustomEvent).detail;
   const { screen, bookId, state } = detail || {};
 
   if (screen === 'reading' && bookId) {
-    app.innerHTML = '';
-    const readingScreen = document.createElement('reading-screen') as HTMLElement & {
-      setBook: (id: string, st: any) => void;
-    };
-    readingScreen.setBook(bookId, state || { currentChapter: 0, paragraphId: null, scrollOffset: 0, progress: 0 });
-    app.appendChild(readingScreen);
+    mountReading(bookId, state || EMPTY_STATE);
+    if (history.state?.screen !== 'reading') {
+      history.pushState({ screen: 'reading', bookId }, '');
+    } else {
+      history.replaceState({ screen: 'reading', bookId }, '');
+    }
   } else if (screen === 'library') {
-    app.innerHTML = '';
-    const libraryScreen = document.createElement('library-screen');
-    app.appendChild(libraryScreen);
+    if (history.state?.screen === 'reading') {
+      // Pop the reading entry; the popstate handler shows the library
+      history.back();
+    } else {
+      showLibrary();
+    }
   }
+});
+
+window.addEventListener('popstate', (e: PopStateEvent) => {
+  if (e.state?.screen === 'reading') {
+    // Forward navigation back into a book: there is no saved state to
+    // restore here, so stay on the library and drop the entry.
+    history.replaceState(null, '');
+  }
+  const reading = currentReadingScreen();
+  const sheets = document.querySelectorAll('toc-sheet, settings-sheet, bookmarks-sheet');
+  if (reading && sheets.length > 0) {
+    // Back with a sheet open closes the sheet only and keeps the book open
+    sheets.forEach((el) => el.remove());
+    history.pushState({ screen: 'reading', bookId: reading.getBookId() }, '');
+    return;
+  }
+  if (reading) showLibrary();
 });
 
 // Register open-settings event listener
@@ -120,19 +180,13 @@ document.addEventListener('locale-changed', () => {
   if (!app) return;
 
   // Detect what's currently mounted and re-mount it
-  const readingScreen = app.querySelector('reading-screen') as HTMLElement & {
-    getBookId: () => string;
-  } | null;
+  const readingScreen = currentReadingScreen();
 
   if (readingScreen) {
-    // Re-navigate to reading screen with current state
+    // Re-mount the reading screen at the exact same position
     const bookId = readingScreen.getBookId();
-    app.innerHTML = '';
-    const newReading = document.createElement('reading-screen') as HTMLElement & {
-      setBook: (id: string, st: any) => void;
-    };
-    newReading.setBook(bookId, { currentChapter: 0, paragraphId: null, scrollOffset: 0, progress: 0 });
-    app.appendChild(newReading);
+    const state = readingScreen.getCurrentState?.() ?? EMPTY_STATE;
+    mountReading(bookId, state);
   } else {
     // Re-mount library screen
     app.innerHTML = '';
@@ -152,3 +206,26 @@ document.addEventListener('password-accepted', () => {
   resetUnauthorizedFlag();
   mountLibrary();
 });
+
+// ── Service worker ───────────────────────────────────────────────────────────
+// Registered here rather than with an inline <script>, which the server's
+// Content-Security-Policy (script-src 'self') does not allow.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('Service worker registration failed:', err);
+    });
+    // A new version activated (sw.js uses skipWaiting + clients.claim). The
+    // page still runs the old bundle: reload right away on the library, or
+    // as soon as the reader goes back to it, so nobody loses their place.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return; // first install, nothing to update
+      if (currentReadingScreen()) {
+        updatePending = true;
+      } else {
+        window.location.reload();
+      }
+    });
+  });
+}

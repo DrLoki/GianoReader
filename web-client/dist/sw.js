@@ -8,13 +8,13 @@
 // and the full list of files emitted into dist/. The defaults keep the file
 // valid when served by the Vite dev server.
 
-const BUILD_VERSION = '8048ceac52b1';
+const BUILD_VERSION = '8363351cc13c';
 const CACHE_NAME = `giano-reader-${BUILD_VERSION}`;
 
 const PRECACHE_URLS = [
   "/",
+  "/assets/index-_efoP2Jv.js",
   "/assets/index-xRpeU4Wy.css",
-  "/assets/index-xw-hOCIj.js",
   "/favicon.ico",
   "/icons/book-bookmark.svg",
   "/icons/chevron-left.svg",
@@ -33,9 +33,24 @@ const PRECACHE_URLS = [
 ];
 
 // Minimal last-resort page: only shown if the app shell was never cached
-// (e.g. very first visit happens while already offline).
-const OFFLINE_PAGE = `<!DOCTYPE html>
-<html lang="it">
+// (e.g. very first visit happens while already offline). Localised for the
+// most common UI languages, English otherwise.
+const OFFLINE_MESSAGES = {
+  it: "L'app non è ancora disponibile offline.<br/>Connettiti al server almeno una volta per completare l'installazione, poi riprova.",
+  en: 'The app is not available offline yet.<br/>Connect to the server at least once to finish installing it, then try again.',
+  es: 'La app aún no está disponible sin conexión.<br/>Conéctate al servidor al menos una vez para completar la instalación y vuelve a intentarlo.',
+  fr: "L'application n'est pas encore disponible hors ligne.<br/>Connectez-vous au serveur au moins une fois pour terminer l'installation, puis réessayez.",
+  de: 'Die App ist noch nicht offline verfügbar.<br/>Verbinde dich mindestens einmal mit dem Server, um die Installation abzuschließen, und versuche es dann erneut.',
+  pt: 'O app ainda não está disponível offline.<br/>Conecte-se ao servidor pelo menos uma vez para concluir a instalação e tente novamente.',
+};
+
+function offlinePage(request) {
+  const header = (request && request.headers && request.headers.get('accept-language')) || '';
+  const lang = header.slice(0, 2).toLowerCase();
+  const message = OFFLINE_MESSAGES[lang] || OFFLINE_MESSAGES.en;
+  const htmlLang = OFFLINE_MESSAGES[lang] ? lang : 'en';
+  return `<!DOCTYPE html>
+<html lang="${htmlLang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -49,11 +64,11 @@ const OFFLINE_PAGE = `<!DOCTYPE html>
 <body>
   <div>
     <h1>Giano Reader</h1>
-    <p>L'app non è ancora disponibile offline.<br/>
-       Connettiti al server almeno una volta per completare l'installazione, poi riprova.</p>
+    <p>${message}</p>
   </div>
 </body>
 </html>`;
+}
 
 self.addEventListener('install', (event) => {
   // Activate the new SW immediately, without waiting for old clients to close
@@ -103,7 +118,7 @@ async function handleNavigation(request) {
       (await caches.match('/index.html')) ||
       (await caches.match('/'));
     if (cached) return cached;
-    return new Response(OFFLINE_PAGE, {
+    return new Response(offlinePage(request), {
       status: 200,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });

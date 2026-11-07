@@ -29,6 +29,8 @@ pub struct TocEntry {
 #[serde(rename_all = "camelCase")]
 pub struct ChapterResponse {
     pub chapter_index: u32,
+    /// Number of spine items in the book, so clients can tell when the end is reached.
+    pub total_chapters: u32,
     pub title: String,
     pub paragraphs: Vec<Paragraph>,
 }

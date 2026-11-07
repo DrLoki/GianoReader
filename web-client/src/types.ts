@@ -19,6 +19,8 @@ export interface TocEntry {
 
 export interface ChapterResponse {
   chapterIndex: number;
+  /** Number of spine items in the book (absent from very old servers). */
+  totalChapters?: number;
   title: string;
   paragraphs: Paragraph[];
 }
@@ -54,7 +56,7 @@ export interface Preferences {
   fontSize: number;
   cloudflareWorkerSubdomain?: string;
   translationMode?: string;        // 'free' | 'basic' | 'pro'
-  gcloudApiKey?: string;           // read from server, not editable in PWA
+  gcloudKeySet?: boolean;          // true if the server has a Google Cloud key (the key itself is never sent)
   passwordSet?: boolean;           // true if server has a password configured
 }
 

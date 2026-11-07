@@ -80,7 +80,7 @@ describe('reading-screen', () => {
     it('content area fills remaining viewport height', () => {
       const style = el.querySelector('style')?.textContent ?? '';
       expect(style).toContain('top: 0');
-      expect(style).toContain('bottom: 99px');
+      expect(style).toContain('bottom: calc(99px + env(safe-area-inset-bottom, 0px))');
     });
 
     it('renders FAB group with Bookmark button', () => {

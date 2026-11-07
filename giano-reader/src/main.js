@@ -1682,35 +1682,35 @@ if (webServerPasswordInput) {
     if (webServerError) webServerError.classList.add('hidden');
   }
 
+  /**
+   * Push the Web Server secrets (Google Cloud key, access password) to the
+   * Rust persistence store through a Tauri command. The HTTP API refuses these
+   * fields, so a LAN client can never change them. Runs whether or not the
+   * server is active: the values are ready the next time it starts.
+   */
+  async function syncSecretsToServer(secrets) {
+    if (!(window.__TAURI__ || window.__TAURI_INTERNALS__)) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_web_server_secrets', secrets);
+    } catch (err) {
+      console.warn('[web-server] secrets sync failed:', err);
+    }
+  }
+
   /** Sync API keys from desktop localStorage to the embedded web server preferences. */
   function syncApiKeysToServer() {
-    if (!webServerToggle || !webServerToggle.checked) return;
     const s = loadSettings();
-    const port = s.webServerPort || 8888;
-    const body = {};
-    if (s.gcloudApiKey) body.gcloudApiKey = s.gcloudApiKey;
-    // Only send if there's something to sync
-    if (Object.keys(body).length === 0) return;
-    fetch(`http://127.0.0.1:${port}/api/preferences`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).catch(() => { /* ignore sync errors silently */ });
+    // Empty string clears a key removed in the desktop settings
+    syncSecretsToServer({ password: null, gcloudApiKey: s.gcloudApiKey || '' });
   }
   // Expose globally so settings handlers can call it
   window._syncApiKeysToServer = syncApiKeysToServer;
 
   /** Sync password from desktop localStorage to the embedded web server preferences. */
   function syncPasswordToServer() {
-    if (!webServerToggle || !webServerToggle.checked) return;
     const s = loadSettings();
-    const port = s.webServerPort || 8888;
-    const body = { password: s.webServerPassword || '' };
-    fetch(`http://127.0.0.1:${port}/api/preferences`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).catch(() => { /* ignore sync errors silently */ });
+    syncSecretsToServer({ password: s.webServerPassword || '', gcloudApiKey: null });
   }
   // Expose globally so password input handler can call it
   window._syncPasswordToServer = syncPasswordToServer;
@@ -1946,6 +1946,25 @@ async function showAlert(msg) {
   } else {
     alert(msg);
   }
+}
+
+// Notifica silenziosa e non bloccante (a differenza di showAlert, che apre un
+// dialog nativo con il suono di sistema e va chiuso a mano). Sparisce da sola.
+let _noticeTimer = null;
+function showNotice(msg, durationMs = 2000) {
+  let el = document.getElementById('app-notice');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-notice';
+    el.className = 'app-notice hidden';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(_noticeTimer);
+  _noticeTimer = setTimeout(() => el.classList.add('hidden'), durationMs);
 }
 
 // Estrae un messaggio leggibile da qualsiasi tipo di errore (string, Error, oggetto Tauri)
@@ -4211,7 +4230,7 @@ addBookmarkBtn.addEventListener('click', async () => {
   bms.push(bm);
   await saveBookmarks(bms);
   await renderBookmarks();
-  showAlert(ui('bookmarkAdded'));
+  showNotice(ui('bookmarkAdded'));
 });
 
 // Renderizza la lista segnalibri nella modale

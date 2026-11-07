@@ -293,6 +293,32 @@ export async function getLocalBookToc(id: string): Promise<TocEntry[]> {
   });
 }
 
+/**
+ * Number of chapters stored for a local book (highest stored index + 1), so
+ * the reader knows where the book ends. Returns undefined if it can't tell.
+ */
+async function getLocalChapterCount(bookId: string): Promise<number | undefined> {
+  try {
+    const { store } = await getStore('chapters', 'readonly');
+    const prefix = `${bookId}:`;
+    const range = IDBKeyRange.bound(prefix, `${prefix}￿`);
+    return await new Promise((resolve) => {
+      const req = store.getAllKeys(range);
+      req.onsuccess = () => {
+        let max = -1;
+        for (const key of req.result as IDBValidKey[]) {
+          const n = parseInt(String(key).slice(prefix.length), 10);
+          if (Number.isFinite(n) && n > max) max = n;
+        }
+        resolve(max >= 0 ? max + 1 : undefined);
+      };
+      req.onerror = () => resolve(undefined);
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getLocalChapter(bookId: string, chapterIndex: number): Promise<ChapterResponse> {
   const { store } = await getStore('chapters', 'readonly');
   return new Promise((resolve, reject) => {
@@ -300,10 +326,13 @@ export async function getLocalChapter(bookId: string, chapterIndex: number): Pro
     request.onsuccess = () => {
       const res = request.result;
       if (res) {
-        resolve({
-          chapterIndex: res.chapterIndex,
-          title: `Chapter ${res.chapterIndex + 1}`,
-          paragraphs: res.paragraphs,
+        getLocalChapterCount(bookId).then((totalChapters) => {
+          resolve({
+            chapterIndex: res.chapterIndex,
+            ...(totalChapters !== undefined ? { totalChapters } : {}),
+            title: `Chapter ${res.chapterIndex + 1}`,
+            paragraphs: res.paragraphs,
+          });
         });
       } else if (!isLocalId(bookId)) {
         getLocalChapter(`offline-${bookId}`, chapterIndex).then(resolve, () => {
@@ -445,12 +474,19 @@ function safeInnerHtml(el: HTMLElement): string {
     Array.from(a.attributes).forEach((attr) => {
       if (attr.name !== 'href') a.removeAttribute(attr.name);
     });
-    a.setAttribute('data-epub-href', href);
+    // javascript:/data: URLs are dropped; relative and http(s) links are kept
+    // for the reading screen's link handler
+    if (!/^\s*(javascript|data|vbscript):/i.test(href)) {
+      a.setAttribute('data-epub-href', href);
+    }
     a.removeAttribute('href');
-    a.style.cursor = 'pointer';
   });
+  // Keep only harmless attributes: drops every on* handler, style, src, etc.
+  const SAFE_ATTRS = new Set(['id', 'class', 'lang', 'dir', 'title', 'data-epub-href']);
   clone.querySelectorAll('*').forEach((n) => {
-    ['onclick', 'onmouseover', 'onerror', 'onload'].forEach((ev) => n.removeAttribute(ev));
+    Array.from(n.attributes).forEach((attr) => {
+      if (!SAFE_ATTRS.has(attr.name.toLowerCase())) n.removeAttribute(attr.name);
+    });
   });
   return clone.innerHTML;
 }

@@ -74,6 +74,20 @@ fn get_server_status(
     })
 }
 
+/// Sets the Web Server secrets (access password and Google Cloud API key).
+/// This is the only way to change them: the HTTP API rejects these fields so a
+/// LAN client cannot remove the password or replace the key. `None` leaves a
+/// value unchanged; an empty string clears it. Works whether or not the server
+/// is running, since it writes straight to the persistence store.
+#[tauri::command]
+fn set_web_server_secrets(
+    password: Option<String>,
+    gcloud_api_key: Option<String>,
+    app_state: tauri::State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    web_server::handlers::prefs::set_secrets(&app_state.store, password, gcloud_api_key)
+}
+
 #[tauri::command]
 fn open_browser_url(url: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
@@ -113,6 +127,7 @@ pub fn run() {
             start_web_server,
             stop_web_server,
             get_server_status,
+            set_web_server_secrets,
             open_browser_url
         ])
         .setup(|app| {
@@ -147,10 +162,7 @@ pub fn run() {
                 )) as Box<dyn std::error::Error>
             })?;
 
-            let app_state = Arc::new(AppState {
-                library_path,
-                store,
-            });
+            let app_state = Arc::new(AppState::new(library_path, store));
             app.manage(app_state);
 
             #[cfg(debug_assertions)]
