@@ -17,6 +17,9 @@
   "library.filterReading": "Đang đọc",
   "library.filterRead": "Đã đọc",
   "library.noResults": "Không có kết quả cho \"{query}\"",
+  "rating.label": "Đánh giá",
+  "rating.filterAll": "Tất cả đánh giá",
+  "rating.none": "Chưa đánh giá",
 
   "reading.tabOriginal": "Bản gốc",
   "reading.tabTranslated": "Bản dịch",

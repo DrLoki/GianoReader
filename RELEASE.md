@@ -2,12 +2,31 @@
 
 This is a **security and reliability release**. It closes several ways a crafted EPUB could run code inside the desktop app, hardens the LAN web server used by the mobile PWA, and fixes bookmarks created from the phone being lost when the desktop app saves.
 
+It also adds **book ratings** (1 to 5 stars, editable from the desktop and from the phone) and **Brazilian Portuguese** as a separate language.
+
 > [!IMPORTANT]
 > Upgrading is strongly recommended if you open EPUB files from untrusted sources or use Web Server mode on a shared network.
 
 ---
 
 ## 📝 Changelog (v0.9.4 → v0.9.5)
+
+### ⭐ Book Ratings
+
+- **Rate your books from 1 to 5 stars**: In the desktop app, open the book details panel (ⓘ) and click a star. Click the current star again to remove the rating. Rated books show their stars on the Library card.
+- **Rate from the phone**: In the PWA, tap the stars under a book in the library. If saving fails, the previous rating comes back and a message is shown. Books imported on the phone or downloaded for offline use keep their rating on the phone.
+- **Filter by rating**: Both the desktop Library and the PWA have a rating filter next to the status filter: all ratings, an exact star count, or *Not rated*.
+- **Synced with the desktop library**: Ratings set from the phone are saved in the desktop library file, and ratings set on the desktop show up on the phone. Before every save, the desktop takes the newer rating from disk, so a rating set from the phone is not overwritten by later desktop edits. Ratings can only be set from the phone for books that are in the desktop Library.
+- **API**: New password-protected endpoint `PUT /api/books/{id}/rating` (body `{ "rating": 1-5 }`, or `null` to clear). The server changes only the rating fields of the matching library entry and writes the file atomically. It does not write if the file cannot be read.
+
+### 🇧🇷 Brazilian Portuguese
+
+- **New language `pt-BR`** for both translation and the interface, on desktop and in the PWA, with a Brazilian flag.
+- **Two Portuguese variants**: The existing *Português* is now **Português (Portugal)**. Its interface text was rewritten in European Portuguese (*ficheiro*, *Definições*, *Transferir*…), and the previous Brazilian wording moved to *Português (Brasil)*.
+- **Different translations for each variant**: Google treats `pt` as Brazilian Portuguese, so the European variant is now requested as `pt-PT` (FREE, BASIC, PRO and the PWA offline translator). Before, the Portuguese option always produced Brazilian Portuguese.
+
+> [!NOTE]
+> If you use Portuguese with Brazilian spelling, switch the translation and interface language to **Português (Brasil)**.
 
 ### 🔒 Desktop App Security
 
@@ -44,6 +63,8 @@ This is a **security and reliability release**. It closes several ways a crafted
 - **Progress and links**: Whole-book progress is calculated from chapter and scroll position. Footnote and cross-chapter links are resolved through the TOC.
 - **Password prompt**: Password prompt and offline translation fixes.
 - **App version in Settings**: The PWA Settings panel now shows the app version (Connection section).
+- **Refresh translation**: A new button translates the current chapter again, bypassing the cache, which helps when a paragraph came back untranslated.
+- **Steadier scrolling**: The card reading view no longer jumps when the browser tries to scroll the container on its own.
 
 ### 🏷️ Single Source for the Version Number
 
@@ -53,6 +74,8 @@ This is a **security and reliability release**. It closes several ways a crafted
 
 - New Vitest suites for the sanitizer (`html-sanitizer.test.js`) and bookmark merging (`bookmarks-sync.test.js`).
 - New Rust tests for URL validation, auth lockout, sanitizer and entity decoding.
+- New tests for book ratings: rating merge and filters (`library-sync.test.js`, `utils/rating.test.ts`), PWA library stars and filter (`library-screen.rating.test.ts`), local storage of ratings, and the Rust endpoint and atomic library write (`library_rating.rs`, `handlers/books.rs`).
+- New Rust test for the Portuguese language codes sent to Google.
 - Known issue: `i18n-locale.property.test.js` still reports missing keys in the `sv`, `uk` and `sl` locales. Run `node .antigravity/translate_i18n.mjs` to fill them.
 
 ---

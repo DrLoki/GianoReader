@@ -7,6 +7,8 @@ import {
   getLocalBookToc,
   getLocalReadingState,
   putLocalReadingState,
+  setLocalBookRating,
+  getLocalBooks,
 } from '../local-db';
 
 describe('local-db module', () => {
@@ -75,5 +77,22 @@ describe('local-db module', () => {
     const state = await getLocalReadingState(serverBookId);
     expect(state.progress).toBe(50);
     expect(state.scrollOffset).toBe(100);
+  });
+
+  it('stores, clears and ignores unknown ids for book ratings', async () => {
+    const bookId = 'local-book-rating';
+    await saveLocalBook(bookId, 'Rated', 'Author', null, [], [{ chapterIndex: 0, paragraphs: [] }]);
+
+    await setLocalBookRating(bookId, 4);
+    let book = (await getLocalBooks()).find((b) => b.id === bookId);
+    expect(book?.rating).toBe(4);
+    expect(book?.title).toBe('Rated');
+
+    await setLocalBookRating(bookId, null);
+    book = (await getLocalBooks()).find((b) => b.id === bookId);
+    expect(book?.rating).toBeNull();
+
+    await expect(setLocalBookRating('local-book-missing', 2)).resolves.toBeUndefined();
+    expect((await getLocalBooks()).some((b) => b.id === 'local-book-missing')).toBe(false);
   });
 });

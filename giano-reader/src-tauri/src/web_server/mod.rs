@@ -7,6 +7,7 @@ use local_ip_address::local_ip;
 
 pub mod epub_parser;
 pub mod handlers;
+pub mod library_rating;
 pub mod middleware;
 pub mod models;
 pub mod persistence;
@@ -205,8 +206,9 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/books/{id}/toc", get(handlers::books::get_toc))
         // Chapters
         .route("/books/{id}/chapter/{chapterIndex}", get(handlers::chapters::get_chapter))
-        // Reading state
+        // Reading state and rating
         .route("/books/{id}/state", get(handlers::state::get_reading_state).put(handlers::state::put_reading_state))
+        .route("/books/{id}/rating", put(handlers::books::put_rating))
         // Bookmarks
         .route("/books/{id}/bookmarks", get(handlers::bookmarks::list_bookmarks).post(handlers::bookmarks::create_bookmark))
         .route("/books/{id}/bookmarks/{bookmarkId}", delete(handlers::bookmarks::delete_bookmark))

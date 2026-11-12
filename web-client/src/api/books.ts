@@ -1,6 +1,7 @@
 import { apiFetch } from './client';
 import type { BookSummary, TocEntry } from '../types';
-import { isOfflineMode, isLocalId, getLocalBooks, getLocalBookToc } from './local-db';
+import { isOfflineMode, isLocalId, getLocalBooks, getLocalBookToc, setLocalBookRating } from './local-db';
+import { normalizeRating } from '../utils/rating';
 
 /**
  * Fetches the full book list.
@@ -67,3 +68,39 @@ export async function getToc(id: string): Promise<TocEntry[]> {
   return response.json() as Promise<TocEntry[]>;
 }
 
+/**
+ * Sets (1–5) or clears (null) a book's rating and returns the stored value.
+ *
+ * - Server books: `PUT /api/books/:id/rating`, saved in the desktop library.
+ * - Local books (imported EPUBs, offline copies): saved in IndexedDB. For an
+ *   offline copy of a server book the server is also updated when online
+ *   (best effort: the local value is kept if the server cannot be reached).
+ */
+export async function setBookRating(id: string, rating: number | null): Promise<number | null> {
+  const value = normalizeRating(rating);
+
+  if (isLocalId(id)) {
+    await setLocalBookRating(id, value);
+    if (id.startsWith('offline-') && !isOfflineMode()) {
+      try {
+        await putServerRating(id.slice('offline-'.length), value);
+      } catch (err) {
+        console.warn('Rating saved locally only:', err);
+      }
+    }
+    return value;
+  }
+
+  return putServerRating(id, value);
+}
+
+async function putServerRating(id: string, rating: number | null): Promise<number | null> {
+  const response = await apiFetch(`/api/books/${encodeURIComponent(id)}/rating`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating }),
+  });
+  if (!response.ok) throw new Error(`Rating not saved: ${response.status}`);
+  const data = (await response.json()) as { rating?: unknown };
+  return normalizeRating(data.rating);
+}

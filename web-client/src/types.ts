@@ -7,6 +7,8 @@ export interface BookSummary {
   coverUrl: string | null;
   progress: number; // 0–100
   status?: 'to-read' | 'reading' | 'read' | null;
+  /** 1–5 stars, null/absent when not rated. */
+  rating?: number | null;
 }
 
 export interface TocEntry {

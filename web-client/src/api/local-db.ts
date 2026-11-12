@@ -772,4 +772,26 @@ export async function downloadBookForOffline(
   await saveLocalBook(localId, title, author, coverUrl, toc, chapters);
 }
 
-
+/**
+ * Sets (or clears, with null) the rating of a book stored in IndexedDB
+ * (imported EPUB or offline copy). Unknown ids are ignored.
+ */
+export async function setLocalBookRating(id: string, rating: number | null): Promise<void> {
+  const db = await initDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('books', 'readwrite');
+    const store = tx.objectStore('books');
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const book = getReq.result;
+      if (book) {
+        book.rating = rating;
+        store.put(book);
+      }
+    };
+    getReq.onerror = () => reject(getReq.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}

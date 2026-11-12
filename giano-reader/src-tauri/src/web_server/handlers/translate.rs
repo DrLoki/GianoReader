@@ -21,7 +21,8 @@ pub const LANGUAGES: &[(&str, &str)] = &[
     ("fr", "Français"),
     ("de", "Deutsch"),
     ("es", "Español"),
-    ("pt", "Português"),
+    ("pt", "Português (Portugal)"),
+    ("pt-BR", "Português (Brasil)"),
     ("ru", "Русский"),
     ("zh", "中文"),
     ("ja", "日本語"),
@@ -340,7 +341,7 @@ mod tests {
             .unwrap();
         let languages: Vec<Language> = serde_json::from_slice(&body).unwrap();
         assert_eq!(languages.len(), LANGUAGES.len());
-        assert_eq!(languages.len(), 22);
+        assert_eq!(languages.len(), 23);
         assert_eq!(languages[0].code, "it");
         assert_eq!(languages[0].name, "Italiano");
         assert!(languages.iter().any(|l| l.code == "fa"));

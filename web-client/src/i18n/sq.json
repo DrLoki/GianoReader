@@ -17,6 +17,9 @@
   "library.filterReading": "Duke lexuar",
   "library.filterRead": "Lexuar",
   "library.noResults": "Nuk ka rezultate për \"{query}\"",
+  "rating.label": "Vlerësimi",
+  "rating.filterAll": "Të gjitha vlerësimet",
+  "rating.none": "Pa vlerësim",
 
   "reading.tabOriginal": "Origjinali",
   "reading.tabTranslated": "Përkthimi",

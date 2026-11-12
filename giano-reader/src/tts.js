@@ -17,6 +17,7 @@ export const LANG_TO_BCP47 = {
   de: 'de-DE',
   es: 'es-ES',
   pt: 'pt-PT',
+  'pt-BR': 'pt-BR',
   ru: 'ru-RU',
   zh: 'zh-CN',
   ja: 'ja-JP',

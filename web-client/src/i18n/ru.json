@@ -17,6 +17,9 @@
   "library.filterReading": "Читаю",
   "library.filterRead": "Прочитано",
   "library.noResults": "Нет результатов для \"{query}\"",
+  "rating.label": "Оценка",
+  "rating.filterAll": "Все оценки",
+  "rating.none": "Без оценки",
 
   "reading.tabOriginal": "Оригинал",
   "reading.tabTranslated": "Перевод",

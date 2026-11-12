@@ -113,7 +113,8 @@ Giano Reader supports TTS for all languages with available system voices:
 | French | fr-FR | ✅ | ✅ | ✅ |
 | German | de-DE | ✅ | ✅ | ✅ |
 | Spanish | es-ES | ✅ | ✅ | ✅ |
-| Portuguese | pt-PT | ✅ | ✅ | ✅ |
+| Portuguese (Portugal) | pt-PT | ✅ | ✅ | ✅ |
+| Portuguese (Brazil) | pt-BR | ✅ | ✅ | ✅ |
 | Russian | ru-RU | ✅ | ✅ | ✅ |
 | Chinese | zh-CN | ✅ | ✅ | ✅ |
 | Japanese | ja-JP | ✅ | ✅ | ✅ |

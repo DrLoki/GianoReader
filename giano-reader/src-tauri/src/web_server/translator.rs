@@ -240,7 +240,7 @@ async fn translate_chunk_v2(
 
     let mut body = serde_json::json!({
         "q": q,
-        "target": target_lang,
+        "target": google_lang_code(target_lang),
         "format": "text"
     });
 
@@ -365,6 +365,18 @@ pub async fn translate_chunk_raw(
     translate_chunk(client, text, source_lang, target_lang).await
 }
 
+/// Maps an internal language code to the code Google Translate expects.
+/// For Google, `pt` means Brazilian Portuguese: our `pt` (Portugal) is sent as
+/// `pt-PT` and our `pt-BR` as `pt`. Keep in sync with `toGoogleLangCode` in
+/// the desktop `translator.js` and the PWA `translate.ts`.
+pub fn google_lang_code(lang: &str) -> &str {
+    match lang {
+        "pt" => "pt-PT",
+        "pt-BR" => "pt",
+        other => other,
+    }
+}
+
 /// Sends a single batch to the Google Translate endpoint and returns the translated text.
 async fn translate_chunk(
     client: &Client,
@@ -375,7 +387,7 @@ async fn translate_chunk(
     let url = format!(
         "https://translate.googleapis.com/translate_a/single?client=gtx&sl={}&tl={}&dt=t&q={}",
         source_lang,
-        target_lang,
+        google_lang_code(target_lang),
         urlencoding_encode(text),
     );
 
@@ -436,6 +448,14 @@ fn urlencoding_encode(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_google_lang_code_portuguese_variants() {
+        assert_eq!(google_lang_code("pt"), "pt-PT");
+        assert_eq!(google_lang_code("pt-BR"), "pt");
+        assert_eq!(google_lang_code("it"), "it");
+        assert_eq!(google_lang_code("fil"), "fil");
+    }
 
     #[test]
     fn test_build_batches_empty() {

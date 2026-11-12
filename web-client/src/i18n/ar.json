@@ -17,6 +17,9 @@
   "library.filterReading": "أقرأ الآن",
   "library.filterRead": "مقروء",
   "library.noResults": "لا نتائج لـ\"{query}\"",
+  "rating.label": "التقييم",
+  "rating.filterAll": "كل التقييمات",
+  "rating.none": "بدون تقييم",
 
   "reading.tabOriginal": "الأصل",
   "reading.tabTranslated": "الترجمة",

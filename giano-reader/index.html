@@ -34,7 +34,8 @@
           <option value="es">🇪🇸 Español</option>
           <option value="fr">🇫🇷 Français</option>
           <option value="bn">🇧🇩 Bengali</option>
-          <option value="pt">🇵🇹 Português</option>
+          <option value="pt">🇵🇹 Português (Portugal)</option>
+          <option value="pt-BR">🇧🇷 Português (Brasil)</option>
           <option value="ru">🇷🇺 Русский</option>
           <option value="ja">🇯🇵 日本語</option>
           <option value="id">🇮🇩 Indonesian</option>
@@ -313,7 +314,8 @@
             <option value="es">🇪🇸 Español</option>
             <option value="fr">🇫🇷 Français</option>
             <option value="bn">🇧🇩 Bengali</option>
-            <option value="pt">🇵🇹 Português</option>
+            <option value="pt">🇵🇹 Português (Portugal)</option>
+            <option value="pt-BR">🇧🇷 Português (Brasil)</option>
             <option value="ru">🇷🇺 Русский</option>
             <option value="ja">🇯🇵 日本語</option>
             <option value="id">🇮🇩 Indonesian</option>
@@ -493,6 +495,15 @@
           <option value="reading">Reading</option>
           <option value="read">Read</option>
         </select>
+        <select id="lib-rating-filter" aria-label="Rating">
+          <option value="">All ratings</option>
+          <option value="5">★★★★★</option>
+          <option value="4">★★★★☆</option>
+          <option value="3">★★★☆☆</option>
+          <option value="2">★★☆☆☆</option>
+          <option value="1">★☆☆☆☆</option>
+          <option value="none">Not rated</option>
+        </select>
       </div>
       <div id="lib-status" class="hidden"></div>
       <div id="lib-grid"></div>
@@ -588,6 +599,16 @@
               <option value="reading" id="detail-status-reading">Reading</option>
               <option value="read" id="detail-status-read">Read</option>
             </select>
+          </div>
+          <div class="detail-field">
+            <label id="detail-rating-label">Rating</label>
+            <div id="detail-rating" class="star-rating" role="radiogroup" aria-labelledby="detail-rating-label">
+              <button type="button" class="star-btn" data-value="1" role="radio" aria-checked="false" title="1/5">★</button>
+              <button type="button" class="star-btn" data-value="2" role="radio" aria-checked="false" title="2/5">★</button>
+              <button type="button" class="star-btn" data-value="3" role="radio" aria-checked="false" title="3/5">★</button>
+              <button type="button" class="star-btn" data-value="4" role="radio" aria-checked="false" title="4/5">★</button>
+              <button type="button" class="star-btn" data-value="5" role="radio" aria-checked="false" title="5/5">★</button>
+            </div>
           </div>
           <div class="detail-field">
             <label for="detail-description">Description</label>

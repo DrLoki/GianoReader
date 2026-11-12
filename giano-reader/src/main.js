@@ -4,6 +4,7 @@ import { t, RTL_LANGS } from './i18n.js';
 import { clampSearchDepth } from './settings-utils.js';
 import { sanitizeTree, isExternalHttpUrl, isSafeResourceUrl, escapeHtmlText } from './html-sanitizer.js';
 import { bookmarkKey, mergeBookmarkLists } from './bookmarks-sync.js';
+import { normalizeRating, setEntryRating, matchesRatingFilter, ratingStars, mergeLibraryRatings } from './library-sync.js';
 
 // Versione dell'app, iniettata da Vite a build time leggendo package.json
 // (vedi vite.config.js): non va più aggiornata a mano nel codice.
@@ -236,7 +237,7 @@ viewerWrapper.addEventListener('mouseout', e => {
 // ── Custom flag dropdown ───────────────────────────────────────────────────
 const FLAG_MAP = {
   it: 'it', en: 'gb', fr: 'fr', de: 'de', es: 'es',
-  pt: 'pt', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
+  pt: 'pt', 'pt-BR': 'br', ru: 'ru', zh: 'cn', ja: 'jp', ar: 'sa',
   fil: 'ph', sq: 'al', hi: 'in', ko: 'kr', th: 'th',
   bn: 'in', id: 'id', sv: 'se', uk: 'ua', sl: 'si',
   fa: 'ir', vi: 'vn',
@@ -629,6 +630,14 @@ function applyUiLang(lang) {
     if (opts[2]) opts[2].textContent = t(lang, 'statusReading');
     if (opts[3]) opts[3].textContent = t(lang, 'statusRead');
   }
+  // Rating filter: le opzioni a stelle non vanno tradotte
+  const _libRatingFilter = document.getElementById('lib-rating-filter');
+  if (_libRatingFilter) {
+    const allOpt = _libRatingFilter.querySelector('option[value=""]');
+    const noneOpt = _libRatingFilter.querySelector('option[value="none"]');
+    if (allOpt) allOpt.textContent = t(lang, 'libFilterAllRatings');
+    if (noneOpt) noneOpt.textContent = t(lang, 'ratingNone');
+  }
   // Search depth label
   const _searchDepthLabel = document.getElementById('search-depth-label');
   if (_searchDepthLabel) _searchDepthLabel.textContent = t(lang, 'searchDepth');
@@ -982,7 +991,7 @@ function populateTTSVoices() {
 function getLangBcp47Prefix(langCode) {
   const map = {
     it: 'it-IT', en: 'en-US', fr: 'fr-FR', de: 'de-DE',
-    es: 'es-ES', pt: 'pt-PT', ru: 'ru-RU', zh: 'zh-CN',
+    es: 'es-ES', pt: 'pt-PT', 'pt-BR': 'pt-BR', ru: 'ru-RU', zh: 'zh-CN',
     ja: 'ja-JP', ar: 'ar-SA', fil: 'fil-PH', sq: 'sq-AL',
     hi: 'hi-IN', ko: 'ko-KR', th: 'th-TH', bn: 'bn-BD',
     id: 'id-ID'
@@ -4688,6 +4697,14 @@ async function loadLibrary() {
   return _cachedLibrary;
 }
 async function saveLibrary(entries) {
+  // Il server web scrive nello stesso file le valutazioni date dalla PWA:
+  // prima di salvare si recuperano quelle più recenti dal disco (library-sync.js).
+  if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+    try {
+      const onDisk = await PersistentStorage.get(LIBRARY_KEY, null);
+      mergeLibraryRatings(entries, onDisk);
+    } catch (e) { console.warn('[Library] rating merge skipped:', e); }
+  }
   _cachedLibrary = entries;
   await PersistentStorage.set(LIBRARY_KEY, entries);
 }
@@ -4976,6 +4993,10 @@ async function renderLibraryGrid(query = '', statusFilter = '', appendMore = fal
   if (statusFilter) {
     filtered = filtered.filter(e => e.status === statusFilter);
   }
+  const ratingFilter = document.getElementById('lib-rating-filter')?.value || '';
+  if (ratingFilter) {
+    filtered = filtered.filter(e => matchesRatingFilter(e, ratingFilter));
+  }
   const grid = document.getElementById('lib-grid');
   const placeholder = document.getElementById('lib-placeholder');
   if (!grid || !placeholder) return;
@@ -5060,6 +5081,15 @@ async function renderLibraryGrid(query = '', statusFilter = '', appendMore = fal
     authorEl.style.flex = '1';
     authorEl.style.minWidth = '0';
     authorRow.appendChild(authorEl);
+    const rating = normalizeRating(entry.rating);
+    if (rating) {
+      const ratingEl = document.createElement('span');
+      ratingEl.className = 'lib-rating';
+      ratingEl.textContent = ratingStars(rating);
+      ratingEl.title = `${rating}/5`;
+      ratingEl.setAttribute('aria-label', `${ui('detailRating')}: ${rating}/5`);
+      authorRow.appendChild(ratingEl);
+    }
     if (entry.status) {
       const badge = document.createElement('span');
       badge.className = `lib-status-badge lib-status-badge--${entry.status}`;
@@ -5129,6 +5159,7 @@ async function openBookDetail(entryId) {
   document.querySelector('label[for="detail-pubdate"]').textContent = ui('detailYear');
   document.querySelector('label[for="detail-language"]').textContent = ui('detailLanguage');
   document.querySelector('label[for="detail-status"]').textContent = ui('detailStatus');
+  document.getElementById('detail-rating-label').textContent = ui('detailRating');
   document.querySelector('label[for="detail-description"]').textContent = ui('detailDescription');
   document.querySelector('label[for="detail-notes"]').textContent = ui('detailNotes');
   document.getElementById('book-detail-save-label').textContent = ui('detailSave');
@@ -5147,6 +5178,7 @@ async function openBookDetail(entryId) {
   document.getElementById('detail-pubdate').value = entry.pubdate || '';
   document.getElementById('detail-language').value = entry.language || '';
   document.getElementById('detail-status').value = entry.status || '';
+  setDetailRating(entry.rating);
   document.getElementById('detail-description').value = entry.description ? entry.description.replace(/<[^>]+>/g, '') : '';
   document.getElementById('detail-notes').value = entry.notes || '';
   const mb = entry.fileSize ? (entry.fileSize / (1024 * 1024)).toFixed(2) : '?';
@@ -5162,6 +5194,7 @@ async function openBookDetail(entryId) {
     entry.pubdate = document.getElementById('detail-pubdate').value.trim();
     entry.language = document.getElementById('detail-language').value.trim();
     entry.status = document.getElementById('detail-status').value;
+    setEntryRating(entry, getDetailRating());
     entry.description = document.getElementById('detail-description').value.trim();
     entry.notes = document.getElementById('detail-notes').value.trim();
     const idx = lib.findIndex(e => e.id === entryId);
@@ -5312,6 +5345,7 @@ const libGrid = document.getElementById('lib-grid');
 const libPlaceholder = document.getElementById('lib-placeholder');
 const libSearchInput = document.getElementById('lib-search-input');
 const libStatusFilter = document.getElementById('lib-status-filter');
+const libRatingFilter = document.getElementById('lib-rating-filter');
 
 function getLibFilters() {
   return {
@@ -5324,6 +5358,9 @@ libraryBtn.addEventListener('click', async () => {
   libraryModal.classList.remove('hidden');
   libSearchInput.value = '';
   if (libStatusFilter) libStatusFilter.value = '';
+  if (libRatingFilter) libRatingFilter.value = '';
+  // Rilegge il file: le valutazioni date dalla PWA arrivano dal server web
+  _cachedLibrary = null;
   await renderLibraryGrid();
 });
 
@@ -5371,6 +5408,33 @@ if (libStatusFilter) {
     await renderLibraryGrid(query, status);
   });
 }
+if (libRatingFilter) {
+  libRatingFilter.addEventListener('change', async () => {
+    const { query, status } = getLibFilters();
+    await renderLibraryGrid(query, status);
+  });
+}
+
+// Book detail rating (1–5 stars): un clic sulla stella attiva azzera la valutazione
+const detailRatingEl = document.getElementById('detail-rating');
+function setDetailRating(value) {
+  const rating = normalizeRating(value);
+  detailRatingEl.dataset.value = rating ? String(rating) : '';
+  detailRatingEl.querySelectorAll('.star-btn').forEach(btn => {
+    const n = Number(btn.dataset.value);
+    btn.classList.toggle('star-btn--on', rating !== null && n <= rating);
+    btn.setAttribute('aria-checked', String(n === rating));
+  });
+}
+function getDetailRating() {
+  return normalizeRating(Number(detailRatingEl.dataset.value));
+}
+detailRatingEl.addEventListener('click', e => {
+  const btn = e.target.closest('.star-btn');
+  if (!btn) return;
+  const n = Number(btn.dataset.value);
+  setDetailRating(getDetailRating() === n ? null : n);
+});
 
 // Book detail modal close
 const bookDetailModal = document.getElementById('book-detail-modal');

@@ -17,6 +17,9 @@
   "library.filterReading": "在读",
   "library.filterRead": "已读",
   "library.noResults": "未找到\"{query}\"的结果",
+  "rating.label": "评分",
+  "rating.filterAll": "所有评分",
+  "rating.none": "未评分",
 
   "reading.tabOriginal": "原文",
   "reading.tabTranslated": "译文",

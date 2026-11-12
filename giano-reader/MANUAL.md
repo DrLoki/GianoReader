@@ -243,6 +243,7 @@ If you have previously exported your Library (or want to transfer it from anothe
 
 - **Search** by title or author using the search field at the top of the modal.
 - **Filter by status** using the dropdown menu (All / To read / Reading / Read).
+- **Filter by rating** using the second dropdown: a star count (exact match, e.g. ★★★☆☆ shows only 3-star books) or *Not rated*.
 - Click a **card** to open the book directly in the reader.
 
 ---
@@ -253,6 +254,7 @@ Each card has an **ⓘ** button that opens the book details panel. From here you
 
 - Edit title, author, publisher, year, language.
 - Set the **reading status**: To read / Reading / Read.
+- Give the book a **rating** from 1 to 5 stars. Click the current star again to remove the rating. Rated books show their stars on the Library card.
 - Add freeform **personal notes**.
 - View file information (name, size, estimated pages).
 - **Delete** the book from the Library (does not delete the actual file from disk).
@@ -343,6 +345,7 @@ The mobile web interface provides:
 - **Card UI reading** — swipe or tap between Original and Translated text cards.
 - **Lazy translation** — paragraphs are translated on-the-fly as you scroll, using the same Google Translate engine (FREE mode) or Google Cloud Translation API (BASIC mode).
 - **Bookmarks** — save and navigate bookmarks from your phone.
+- **Ratings** — tap the stars under a book in the library to rate it (tap the current star again to clear it), and filter the library by rating. Ratings set from the phone are saved in the desktop library, and ratings set on the desktop show up on the phone.
 - **Settings** — change theme (light/dark/sepia), font size, translation language, and UI language.
 - **Reading progress sync** — your position is saved automatically and restored on reconnect.
 
@@ -446,7 +449,7 @@ Open Settings by clicking the **gear** icon in the sidebar.
 
 | Setting | Description |
 | --- | --- |
-| **Interface language** | UI text language (22 languages available with automatic i18n alignment) |
+| **Interface language** | UI text language (23 languages available with automatic i18n alignment) |
 | **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
 | **Font** | Font family for reading text |
 | **Font size** | Slider from 12px to 32px |

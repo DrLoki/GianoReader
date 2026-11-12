@@ -14,7 +14,7 @@ const VALID_THEMES: &[&str] = &["light", "dark", "sepia"];
 const VALID_TRANSLATION_MODES: &[&str] = &["free", "basic", "pro"];
 
 /// Valid UI language values.
-const VALID_UI_LANGUAGES: &[&str] = &["it", "en", "fr", "de", "es", "pt", "ru", "zh", "ja", "ar", "fil", "sq", "vi"];
+const VALID_UI_LANGUAGES: &[&str] = &["it", "en", "fr", "de", "es", "pt", "pt-BR", "ru", "zh", "ja", "ar", "fil", "sq", "vi"];
 
 /// Request body for PUT /api/preferences.
 /// All fields are optional to support partial updates.

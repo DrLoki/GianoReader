@@ -67,8 +67,8 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 
 ## 🌍 Supported Languages
 
-Giano Reader supports 22 interface languages:
-English, Chinese, Hindi, Spanish, French, Bengali, Portuguese, Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Filipino, Arabic, Persian, Vietnamese, Albanian, Swedish, Ukrainian, Slovenian.
+Giano Reader supports 23 interface languages:
+English, Chinese, Hindi, Spanish, French, Bengali, Portuguese (Portugal), Portuguese (Brazil), Russian, Japanese, Indonesian, German, Korean, Italian, Thai, Filipino, Arabic, Persian, Vietnamese, Albanian, Swedish, Ukrainian, Slovenian.
 
 ---
 
@@ -130,13 +130,13 @@ giano-reader/
 │   │   ├── upload.svg
 │   │   └── download.svg
 │   └── flags/              # SVG flag images for language dropdowns
-│       ├── it.svg, gb.svg, fr.svg, de.svg, es.svg, pt.svg
+│       ├── it.svg, gb.svg, fr.svg, de.svg, es.svg, pt.svg, br.svg
 │       ├── ru.svg, cn.svg, jp.svg, sa.svg, ir.svg, vn.svg, ph.svg, al.svg
 ├── src/
 │   ├── main.js             # All frontend logic: reader, UI, bookmarks, library, scroll sync
 │   ├── tts.js              # Text-to-Speech engine (FREE/PRO, multi-model, audio download)
 │   ├── translator.js       # Google Translate integration (chunked, lazy)
-│   ├── i18n.js             # UI translations (22 languages); exports t(lang, key, vars)
+│   ├── i18n.js             # UI translations (23 languages); exports t(lang, key, vars)
 │   ├── settings-utils.js   # Pure utility functions (no DOM); used by main.js and tests
 │   └── style.css           # All styles (dark mode via body.dark)
 └── src-tauri/

@@ -4,6 +4,7 @@ import fr from './fr.json';
 import de from './de.json';
 import es from './es.json';
 import pt from './pt.json';
+import ptBR from './pt-BR.json';
 import ru from './ru.json';
 import zh from './zh.json';
 import ja from './ja.json';
@@ -13,7 +14,7 @@ import sq from './sq.json';
 import vi from './vi.json';
 
 const locales: Record<string, Record<string, string>> = {
-  en, it, fr, de, es, pt, ru, zh, ja, ar, fil, sq, vi,
+  en, it, fr, de, es, pt, 'pt-BR': ptBR, ru, zh, ja, ar, fil, sq, vi,
 };
 
 let activeLocale: string = 'en';

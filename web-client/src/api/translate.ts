@@ -7,7 +7,8 @@ const STATIC_LANGUAGES = [
   { code: 'es', name: 'Español' },
   { code: 'fr', name: 'Français' },
   { code: 'de', name: 'Deutsch' },
-  { code: 'pt', name: 'Português' },
+  { code: 'pt', name: 'Português (Portugal)' },
+  { code: 'pt-BR', name: 'Português (Brasil)' },
   { code: 'ru', name: 'Русский' },
   { code: 'zh', name: '中文' },
   { code: 'ja', name: '日本語' },
@@ -27,6 +28,17 @@ const STATIC_LANGUAGES = [
 ];
 
 const CHAR_LIMIT = 4500;
+
+/**
+ * Internal language codes that Google spells differently. For Google, `pt`
+ * is Brazilian Portuguese, so our `pt` (Portugal) becomes `pt-PT` and our
+ * `pt-BR` becomes `pt`. Keep in sync with `google_lang_code` in translator.rs.
+ */
+const GOOGLE_LANG_CODES: Record<string, string> = { pt: 'pt-PT', 'pt-BR': 'pt' };
+
+export function toGoogleLangCode(lang: string): string {
+  return GOOGLE_LANG_CODES[lang] ?? lang;
+}
 
 function getWorkerUrl(): string {
   try {
@@ -60,7 +72,7 @@ async function translateChunkOffline(text: string, sourceLang: string, targetLan
     throw new Error('OFFLINE_NO_INTERNET');
   }
   const sl = sourceLang || 'auto';
-  const url = `${baseUrl}?client=gtx&sl=${sl}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+  const url = `${baseUrl}?client=gtx&sl=${sl}&tl=${toGoogleLangCode(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Translation proxy error: ${res.status}`);
   const data = await res.json();

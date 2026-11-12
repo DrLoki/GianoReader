@@ -8,12 +8,12 @@
 // and the full list of files emitted into dist/. The defaults keep the file
 // valid when served by the Vite dev server.
 
-const BUILD_VERSION = 'c63dac44639b';
+const BUILD_VERSION = '483e6f6ee592';
 const CACHE_NAME = `giano-reader-${BUILD_VERSION}`;
 
 const PRECACHE_URLS = [
   "/",
-  "/assets/index-CyoGW2e5.js",
+  "/assets/index-VZqTf1vP.js",
   "/assets/index-xRpeU4Wy.css",
   "/favicon.ico",
   "/icons/book-bookmark.svg",
@@ -41,12 +41,14 @@ const OFFLINE_MESSAGES = {
   es: 'La app aún no está disponible sin conexión.<br/>Conéctate al servidor al menos una vez para completar la instalación y vuelve a intentarlo.',
   fr: "L'application n'est pas encore disponible hors ligne.<br/>Connectez-vous au serveur au moins une fois pour terminer l'installation, puis réessayez.",
   de: 'Die App ist noch nicht offline verfügbar.<br/>Verbinde dich mindestens einmal mit dem Server, um die Installation abzuschließen, und versuche es dann erneut.',
-  pt: 'O app ainda não está disponível offline.<br/>Conecte-se ao servidor pelo menos uma vez para concluir a instalação e tente novamente.',
+  pt: 'A aplicação ainda não está disponível offline.<br/>Ligue-se ao servidor pelo menos uma vez para concluir a instalação e tente novamente.',
+  'pt-BR': 'O app ainda não está disponível offline.<br/>Conecte-se ao servidor pelo menos uma vez para concluir a instalação e tente novamente.',
 };
 
 function offlinePage(request) {
   const header = (request && request.headers && request.headers.get('accept-language')) || '';
-  const lang = header.slice(0, 2).toLowerCase();
+  const tag = header.split(',')[0].trim().toLowerCase();
+  const lang = tag.startsWith('pt-br') ? 'pt-BR' : tag.slice(0, 2);
   const message = OFFLINE_MESSAGES[lang] || OFFLINE_MESSAGES.en;
   const htmlLang = OFFLINE_MESSAGES[lang] ? lang : 'en';
   return `<!DOCTYPE html>

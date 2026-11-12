@@ -326,7 +326,8 @@ class SettingsSheet extends HTMLElement {
             <option value="fr" ${this.currentPrefs.uiLanguage === 'fr' ? 'selected' : ''}>Français</option>
             <option value="de" ${this.currentPrefs.uiLanguage === 'de' ? 'selected' : ''}>Deutsch</option>
             <option value="es" ${this.currentPrefs.uiLanguage === 'es' ? 'selected' : ''}>Español</option>
-            <option value="pt" ${this.currentPrefs.uiLanguage === 'pt' ? 'selected' : ''}>Português</option>
+            <option value="pt" ${this.currentPrefs.uiLanguage === 'pt' ? 'selected' : ''}>Português (Portugal)</option>
+            <option value="pt-BR" ${this.currentPrefs.uiLanguage === 'pt-BR' ? 'selected' : ''}>Português (Brasil)</option>
             <option value="ru" ${this.currentPrefs.uiLanguage === 'ru' ? 'selected' : ''}>Русский</option>
             <option value="zh" ${this.currentPrefs.uiLanguage === 'zh' ? 'selected' : ''}>中文</option>
             <option value="ja" ${this.currentPrefs.uiLanguage === 'ja' ? 'selected' : ''}>日本語</option>

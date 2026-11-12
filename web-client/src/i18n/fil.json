@@ -17,6 +17,9 @@
   "library.filterReading": "Binabasa",
   "library.filterRead": "Nabasa na",
   "library.noResults": "Walang resulta para sa \"{query}\"",
+  "rating.label": "Rating",
+  "rating.filterAll": "Lahat ng rating",
+  "rating.none": "Walang rating",
 
   "reading.tabOriginal": "Orihinal",
   "reading.tabTranslated": "Salin",

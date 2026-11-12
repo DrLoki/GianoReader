@@ -19,6 +19,24 @@ function loadSettings() {
 const CHAR_LIMIT = 4500;
 
 /**
+ * Codici lingua interni che Google codifica diversamente.
+ * Per Google "pt" è il portoghese brasiliano: il nostro "pt" (bandiera
+ * portoghese) va inviato come "pt-PT", il nostro "pt-BR" come "pt".
+ * Tenere allineato con `google_lang_code` in src-tauri translator.rs.
+ */
+const GOOGLE_LANG_CODES = { pt: 'pt-PT', 'pt-BR': 'pt' };
+
+/** Converte un codice lingua interno nel codice atteso da Google Translate. */
+export function toGoogleLangCode(lang) {
+  return GOOGLE_LANG_CODES[lang] ?? lang;
+}
+
+/** Codice lingua da passare agli LLM (PRO): rende esplicita la variante europea. */
+function toLlmLangCode(lang) {
+  return lang === 'pt' ? 'pt-PT' : lang;
+}
+
+/**
  * Traduce un singolo blocco di testo tramite OpenRouter (PRO).
  */
 async function translateChunkPro(text, targetLang, apiKey, model, signal) {
@@ -45,7 +63,7 @@ async function translateChunkPro(text, targetLang, apiKey, model, signal) {
       messages: [
         {
           role: 'system',
-          content: `You are an expert literary translator. Translate the text into the language code: "${targetLang}".
+          content: `You are an expert literary translator. Translate the text into the language code: "${toLlmLangCode(targetLang)}".
 Maintain the exact original paragraph structure and do not merge paragraphs. Paragraphs are separated by double newlines (\\n\\n).
 CRITICAL: Return ONLY the translated text, preserving the exact paragraph count and double newlines. Do not include any introductory or concluding text, explanations, or conversational filler.`
         },
@@ -131,7 +149,7 @@ async function translateChunk(text, targetLang) {
       throw new Error(`Translation error: ${err?.message || err}`);
     }
   } else {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${toGoogleLangCode(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Translation error: ${res.status}`);
     const data = await res.json();
@@ -169,7 +187,7 @@ async function translateChunkBasic(paragraphs, targetLang, apiKey, signal) {
 
   const body = {
     q: paragraphs,
-    target: targetLang,
+    target: toGoogleLangCode(targetLang),
     format: 'text'
   };
 

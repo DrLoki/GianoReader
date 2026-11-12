@@ -17,6 +17,9 @@
   "library.filterReading": "Reading",
   "library.filterRead": "Read",
   "library.noResults": "No results for \"{query}\"",
+  "rating.label": "Rating",
+  "rating.filterAll": "All ratings",
+  "rating.none": "Not rated",
 
   "reading.tabOriginal": "Original",
   "reading.tabTranslated": "Translated",

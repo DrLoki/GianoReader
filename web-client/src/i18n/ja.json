@@ -17,6 +17,9 @@
   "library.filterReading": "読書中",
   "library.filterRead": "読了",
   "library.noResults": "「{query}」の結果はありません",
+  "rating.label": "評価",
+  "rating.filterAll": "すべての評価",
+  "rating.none": "未評価",
 
   "reading.tabOriginal": "原文",
   "reading.tabTranslated": "翻訳",

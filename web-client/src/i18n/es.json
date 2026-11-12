@@ -17,6 +17,9 @@
   "library.filterReading": "Leyendo",
   "library.filterRead": "Leído",
   "library.noResults": "Sin resultados para \"{query}\"",
+  "rating.label": "Valoración",
+  "rating.filterAll": "Todas las valoraciones",
+  "rating.none": "Sin valorar",
 
   "reading.tabOriginal": "Original",
   "reading.tabTranslated": "Traducido",

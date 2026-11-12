@@ -17,6 +17,9 @@
   "library.filterReading": "En cours",
   "library.filterRead": "Lu",
   "library.noResults": "Aucun résultat pour \"{query}\"",
+  "rating.label": "Note",
+  "rating.filterAll": "Toutes les notes",
+  "rating.none": "Non noté",
 
   "reading.tabOriginal": "Original",
   "reading.tabTranslated": "Traduit",

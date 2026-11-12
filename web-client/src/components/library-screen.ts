@@ -1,4 +1,4 @@
-import { getBooks, getCoverUrl, getToc } from '../api/books';
+import { getBooks, getCoverUrl, getToc, setBookRating } from '../api/books';
 import { getBookmarks, deleteBookmark } from '../api/bookmarks';
 import { getReadingState } from '../api/state';
 import { showToast } from './toast';
@@ -12,7 +12,9 @@ import {
   downloadBookForOffline,
   removeOfflineBook,
   deleteLocalBook,
+  setLocalBookRating,
 } from '../api/local-db';
+import { MAX_RATING, normalizeRating, matchesRatingFilter, nextRating, type RatingFilter } from '../utils/rating';
 import { iconGear, iconUpload, iconStar, iconXmark, iconTrash } from '../icons';
 
 
@@ -36,6 +38,7 @@ class LibraryScreen extends HTMLElement {
   private activeTab: 'library' | 'bookmarks' = 'library';
   private searchQuery: string = '';
   private statusFilter: StatusFilter = '';
+  private ratingFilter: RatingFilter = '';
   private offlineCachedIds: Set<string> = new Set();
   private downloadingIds: Set<string> = new Set();
 
@@ -95,6 +98,15 @@ class LibraryScreen extends HTMLElement {
               autocomplete="off"
               spellcheck="false"
             >
+            <select class="filter-rating-select" aria-label="${escapeAttr(t('rating.label'))}">
+              <option value="">${t('rating.filterAll')}</option>
+              <option value="5">★★★★★</option>
+              <option value="4">★★★★☆</option>
+              <option value="3">★★★☆☆</option>
+              <option value="2">★★☆☆☆</option>
+              <option value="1">★☆☆☆☆</option>
+              <option value="none">${t('rating.none')}</option>
+            </select>
           </div>
           <div class="filter-chips" role="group" aria-label="${t('library.filterAll')}">
             <button class="chip chip-active" data-status="" aria-pressed="true">${t('library.filterAll')}</button>
@@ -165,6 +177,12 @@ class LibraryScreen extends HTMLElement {
     const searchInput = this.querySelector('.filter-search-input') as HTMLInputElement;
     searchInput?.addEventListener('input', () => {
       this.searchQuery = searchInput.value;
+      if (this.activeTab === 'library') this.applyFilters();
+    });
+
+    const ratingSelect = this.querySelector('.filter-rating-select') as HTMLSelectElement | null;
+    ratingSelect?.addEventListener('change', () => {
+      this.ratingFilter = ratingSelect.value as RatingFilter;
       if (this.activeTab === 'library') this.applyFilters();
     });
 
@@ -254,6 +272,10 @@ class LibraryScreen extends HTMLElement {
       filtered = filtered.filter((b) => b.status === this.statusFilter);
     }
 
+    if (this.ratingFilter) {
+      filtered = filtered.filter((b) => matchesRatingFilter(b.rating, this.ratingFilter));
+    }
+
     this.showLibrary(filtered, q);
   }
 
@@ -307,6 +329,14 @@ class LibraryScreen extends HTMLElement {
       });
     });
 
+    content.querySelectorAll<HTMLButtonElement>('.rating-star').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const bookId = btn.closest<HTMLElement>('.book-rating')?.dataset.bookId;
+        if (bookId) this.handleRate(bookId, Number(btn.dataset.value));
+      });
+    });
+
     content.querySelectorAll<HTMLImageElement>('.book-cover').forEach((img) => {
       img.addEventListener('error', () => {
         img.src = LibraryScreen.placeholderSvg;
@@ -327,6 +357,44 @@ class LibraryScreen extends HTMLElement {
           this.handleDeleteLocalBook(bookId);
         }
       });
+    });
+  }
+
+  /**
+   * Handles a tap on a card star: updates the card at once, saves, and puts
+   * the previous rating back if saving fails.
+   */
+  private async handleRate(bookId: string, star: number): Promise<void> {
+    const book = this.books.find((b) => b.id === bookId);
+    if (!book) return;
+    const previous = normalizeRating(book.rating);
+    const next = nextRating(previous, star);
+    book.rating = next;
+    this.refreshCardRating(bookId);
+    try {
+      book.rating = await setBookRating(bookId, next);
+    } catch (err) {
+      console.error('Failed to save rating:', err);
+      book.rating = previous;
+      showToast(t('toast.errorGeneric'), 'error');
+    }
+    this.refreshCardRating(bookId);
+    // With a rating filter active the book may no longer belong in the list
+    if (this.ratingFilter && !matchesRatingFilter(book.rating, this.ratingFilter)) {
+      this.applyFilters();
+    }
+  }
+
+  /** Updates the star buttons of one card without re-rendering the grid. */
+  private refreshCardRating(bookId: string): void {
+    const book = this.books.find((b) => b.id === bookId);
+    const container = this.querySelector(`.book-rating[data-book-id="${bookId}"]`);
+    if (!book || !container) return;
+    const rating = normalizeRating(book.rating);
+    container.querySelectorAll<HTMLButtonElement>('.rating-star').forEach((btn) => {
+      const n = Number(btn.dataset.value);
+      btn.classList.toggle('rating-star--on', rating !== null && n <= rating);
+      btn.setAttribute('aria-checked', String(n === rating));
     });
   }
 
@@ -352,6 +420,10 @@ class LibraryScreen extends HTMLElement {
         toc,
         (done, total) => this.updateDownloadProgress(bookId, done, total),
       );
+      const rating = normalizeRating(book.rating);
+      if (rating !== null) {
+        await setLocalBookRating(`offline-${bookId}`, rating).catch(() => undefined);
+      }
       this.offlineCachedIds.add(bookId);
       showToast(t('offline.cached'), 'success');
     } catch (err) {
@@ -573,12 +645,26 @@ class LibraryScreen extends HTMLElement {
         <div class="book-info">
           <p class="book-title">${escapeHtml(book.title)}</p>
           <p class="book-author">${escapeHtml(book.author)}</p>
+          ${this.renderRating(book)}
           <p class="book-progress">${escapeHtml(progressText)}</p>
           ${offlineControl}
           ${deleteControl}
         </div>
       </div>
     `;
+  }
+
+  /** Five tappable stars; tapping the current rating clears it. */
+  private renderRating(book: BookSummary): string {
+    const rating = normalizeRating(book.rating);
+    const label = escapeAttr(t('rating.label'));
+    let stars = '';
+    for (let n = 1; n <= MAX_RATING; n++) {
+      const on = rating !== null && n <= rating;
+      stars += `<button type="button" class="rating-star${on ? ' rating-star--on' : ''}" data-value="${n}"
+        role="radio" aria-checked="${n === rating}" aria-label="${label}: ${n}/${MAX_RATING}">★</button>`;
+    }
+    return `<div class="book-rating" role="radiogroup" aria-label="${label}" data-book-id="${book.id}">${stars}</div>`;
   }
 
   /** Renders the offline download/remove control + progress bar placeholder for a server book card. */
@@ -775,6 +861,25 @@ class LibraryScreen extends HTMLElement {
     .filter-search-input::-webkit-search-cancel-button {
       -webkit-appearance: auto;
       cursor: pointer;
+    }
+
+    .filter-rating-select {
+      flex-shrink: 0;
+      height: 40px;
+      max-width: 42%;
+      margin-left: 8px;
+      padding: 0 10px;
+      border: 1px solid var(--border-color, #444);
+      border-radius: 20px;
+      background: var(--surface, #2a2a2a);
+      color: var(--text-color, #e0e0e0);
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .filter-rating-select:focus {
+      border-color: var(--accent, #c0392b);
     }
 
     /* ── Status chips ────────────────────────────── */
@@ -979,6 +1084,38 @@ class LibraryScreen extends HTMLElement {
       font-size: 0.7rem;
       color: var(--accent, #c0392b);
       font-weight: 500;
+    }
+
+    /* ── Rating stars ──────────────────────────── */
+    .book-rating {
+      display: flex;
+      margin: 0 -4px;
+    }
+
+    .rating-star {
+      flex: 1;
+      max-width: 28px;
+      min-height: 28px;
+      padding: 0;
+      border: none;
+      background: none;
+      font-size: 1.05rem;
+      line-height: 1;
+      color: var(--text-muted, #999);
+      opacity: 0.4;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .rating-star--on {
+      color: #f5b301;
+      opacity: 1;
+    }
+
+    .rating-star:focus-visible {
+      outline: 2px solid var(--accent, #c0392b);
+      outline-offset: -2px;
+      border-radius: 4px;
     }
 
     /* ── Offline download control ──────────────── */

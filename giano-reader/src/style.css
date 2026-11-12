@@ -1250,7 +1250,8 @@ body.theme-sepia {
 #lib-search-input:focus { border-color: var(--accent); }
 #lib-search-input::placeholder { color: var(--text-muted); }
 
-#lib-status-filter {
+#lib-status-filter,
+#lib-rating-filter {
   flex-shrink: 0;
   padding: 7px 28px 7px 10px;
   border: 1px solid var(--border);
@@ -1267,8 +1268,35 @@ body.theme-sepia {
   background-repeat: no-repeat;
   background-position: right 9px center;
 }
-#lib-status-filter:focus { border-color: var(--accent); }
-#lib-status-filter option { background: var(--bg); color: var(--text); }
+#lib-status-filter:focus,
+#lib-rating-filter:focus { border-color: var(--accent); }
+#lib-status-filter option,
+#lib-rating-filter option { background: var(--bg); color: var(--text); }
+
+/* Book rating (1–5 stars) */
+:root { --rating-star: #f5b301; }
+.lib-rating {
+  flex-shrink: 0;
+  color: var(--rating-star);
+  font-size: 0.78rem;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.star-rating { display: flex; gap: 2px; }
+.star-btn {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0.45;
+  transition: color 0.1s, opacity 0.1s, transform 0.1s;
+}
+.star-btn:hover { transform: scale(1.15); }
+.star-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.star-btn--on { color: var(--rating-star); opacity: 1; }
 
 /* List layout */
 #lib-grid {

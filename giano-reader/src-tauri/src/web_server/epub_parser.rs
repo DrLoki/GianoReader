@@ -108,6 +108,7 @@ pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSumm
                             &path,
                             store,
                             entry.status.clone(),
+                            entry.rating,
                             entry.title.clone(),
                             entry.author.clone(),
                         ) {
@@ -144,6 +145,9 @@ struct LibraryEntry {
     author: Option<String>,
     #[serde(default)]
     status: Option<String>,
+    /// Invalid values (0, 7, "4", …) are ignored rather than failing the parse.
+    #[serde(default, deserialize_with = "super::library_rating::deserialize_rating")]
+    rating: Option<u8>,
 }
 
 /// Creates a BookSummary from an epub file path.
@@ -155,6 +159,7 @@ fn book_summary_from_path(
     path: &Path,
     store: &PersistenceStore,
     status: Option<String>,
+    rating: Option<u8>,
     title_override: Option<String>,
     author_override: Option<String>,
 ) -> Option<BookSummary> {
@@ -195,6 +200,7 @@ fn book_summary_from_path(
         cover_url,
         progress,
         status,
+        rating,
     })
 }
 
@@ -227,7 +233,7 @@ fn list_books_from_directory(library_path: &Path, store: &PersistenceStore) -> V
             _ => continue,
         }
 
-        if let Some(book) = book_summary_from_path(&path, store, None, None, None) {
+        if let Some(book) = book_summary_from_path(&path, store, None, None, None, None) {
             books.push(book);
         }
     }
