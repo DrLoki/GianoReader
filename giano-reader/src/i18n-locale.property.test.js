@@ -58,3 +58,26 @@ describe('Property 5: New locale completeness — every key in `en` exists in ea
     );
   });
 });
+
+describe('every locale matches `en`', () => {
+  const enKeys = Object.keys(translations.en);
+  const locales = Object.keys(translations).filter((l) => l !== 'en');
+  const placeholders = (s) => (s.match(/\{[^{}]*\}/g) || []).sort();
+
+  it.each(locales)('%s has exactly the keys of en', (locale) => {
+    const keys = Object.keys(translations[locale]);
+    expect(enKeys.filter((k) => !keys.includes(k))).toEqual([]);
+    expect(keys.filter((k) => !enKeys.includes(k))).toEqual([]);
+  });
+
+  // The translation script can translate a placeholder name ("{added}" → "{已添加}"),
+  // which then is not replaced at runtime.
+  it.each(locales)('%s keeps the {placeholders} of en', (locale) => {
+    const wrong = enKeys.filter((k) => {
+      const value = translations[locale][k];
+      return typeof value === 'string'
+        && placeholders(value).join() !== placeholders(translations.en[k]).join();
+    });
+    expect(wrong).toEqual([]);
+  });
+});

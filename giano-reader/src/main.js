@@ -5,6 +5,7 @@ import { clampSearchDepth } from './settings-utils.js';
 import { sanitizeTree, isExternalHttpUrl, isSafeResourceUrl, escapeHtmlText } from './html-sanitizer.js';
 import { bookmarkKey, mergeBookmarkLists } from './bookmarks-sync.js';
 import { normalizeRating, setEntryRating, matchesRatingFilter, ratingStars, mergeLibraryRatings } from './library-sync.js';
+import { StorageReadError, readJsonFile, writeJsonFileAtomic } from './storage-file.js';
 
 // Versione dell'app, iniettata da Vite a build time leggendo package.json
 // (vedi vite.config.js): non va più aggiornata a mano nel codice.
@@ -399,15 +400,18 @@ const PersistentStorage = {
   async get(key, defaultValue = []) {
     if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
       try {
-        const { readTextFile, exists } = await import('@tauri-apps/plugin-fs');
+        const fs = await import('@tauri-apps/plugin-fs');
         const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
         const dir = await appLocalDataDir();
         const path = await join(dir, `${key}.json`);
-        if (await exists(path)) {
-          const content = await readTextFile(path);
-          return JSON.parse(content);
-        }
-      } catch (e) { console.warn(`[Storage] error loading ${key} from FS:`, e); }
+        const file = await readJsonFile(fs, path);
+        if (file.found) return file.value;
+      } catch (e) {
+        // File presente ma illeggibile: non va trattato come "nessun dato",
+        // altrimenti il salvataggio successivo lo sovrascriverebbe vuoto.
+        if (e instanceof StorageReadError) throw e;
+        console.warn(`[Storage] error loading ${key} from FS:`, e);
+      }
     }
     // Fallback a IndexedDB con migrazione da localStorage se presente
     try {
@@ -429,12 +433,12 @@ const PersistentStorage = {
   async set(key, value) {
     if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
       try {
-        const { writeTextFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');
+        const fs = await import('@tauri-apps/plugin-fs');
         const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
         const dir = await appLocalDataDir();
-        if (!(await exists(dir))) await mkdir(dir, { recursive: true });
+        if (!(await fs.exists(dir))) await fs.mkdir(dir, { recursive: true });
         const path = await join(dir, `${key}.json`);
-        await writeTextFile(path, JSON.stringify(value, null, 2));
+        await writeJsonFileAtomic(fs, path, value);
         // Pulisce anche IndexedDB e localStorage se salvato con successo su file
         try {
           localStorage.removeItem(key);
@@ -460,6 +464,19 @@ const PersistentStorage = {
     }
   }
 };
+
+// Avvisa (una sola volta per file) che un file dati esiste ma non è leggibile.
+// Restituisce true se l'errore era di questo tipo ed è stato gestito.
+const _reportedStorageErrors = new Set();
+function reportStorageReadError(e) {
+  if (!(e instanceof StorageReadError)) return false;
+  console.error('[Storage]', e);
+  if (!_reportedStorageErrors.has(e.path)) {
+    _reportedStorageErrors.add(e.path);
+    showAlert(t(loadSettings().uiLang || 'en', 'storageReadError', { file: e.path }));
+  }
+  return true;
+}
 
 function loadSettings() {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch { return {}; }
@@ -4205,7 +4222,13 @@ let _knownBookmarkKeys = new Set();
 // Legge sempre dal disco: il server web può aggiungere o rimuovere segnalibri
 // mentre l'app desktop è aperta (non usare una cache in memoria).
 async function loadBookmarks() {
-  const stored = await PersistentStorage.get(BOOKMARKS_KEY, []);
+  let stored;
+  try {
+    stored = await PersistentStorage.get(BOOKMARKS_KEY, []);
+  } catch (e) {
+    if (!reportStorageReadError(e)) throw e;
+    return [];
+  }
   const bms = Array.isArray(stored) ? stored : [];
   _knownBookmarkKeys = new Set(bms.map(bookmarkKey));
   return bms;
@@ -4213,7 +4236,14 @@ async function loadBookmarks() {
 // Salva unendo la lista locale con quella su disco (vedi bookmarks-sync.js),
 // così i segnalibri creati/rimossi dal telefono non vengono sovrascritti.
 async function saveBookmarks(bms) {
-  const onDisk = await PersistentStorage.get(BOOKMARKS_KEY, []);
+  let onDisk;
+  try {
+    onDisk = await PersistentStorage.get(BOOKMARKS_KEY, []);
+  } catch (e) {
+    // File illeggibile: non si salva, per non sovrascrivere i segnalibri su disco
+    if (!reportStorageReadError(e)) throw e;
+    return bms;
+  }
   const merged = mergeBookmarkLists(bms, onDisk, _knownBookmarkKeys);
   await PersistentStorage.set(BOOKMARKS_KEY, merged);
   _knownBookmarkKeys = new Set(merged.map(bookmarkKey));
@@ -4693,7 +4723,13 @@ let _cachedLibrary = null;
 
 async function loadLibrary() {
   if (_cachedLibrary) return _cachedLibrary;
-  _cachedLibrary = await PersistentStorage.get(LIBRARY_KEY, []);
+  try {
+    _cachedLibrary = await PersistentStorage.get(LIBRARY_KEY, []);
+  } catch (e) {
+    // File illeggibile: lista vuota non messa in cache, così si riprova alla prossima lettura
+    if (!reportStorageReadError(e)) throw e;
+    return [];
+  }
   return _cachedLibrary;
 }
 async function saveLibrary(entries) {
@@ -4703,7 +4739,14 @@ async function saveLibrary(entries) {
     try {
       const onDisk = await PersistentStorage.get(LIBRARY_KEY, null);
       mergeLibraryRatings(entries, onDisk);
-    } catch (e) { console.warn('[Library] rating merge skipped:', e); }
+    } catch (e) {
+      // File illeggibile: non si salva, per non sovrascrivere la libreria su disco
+      if (reportStorageReadError(e)) {
+        _cachedLibrary = entries;
+        return;
+      }
+      console.warn('[Library] rating merge skipped:', e);
+    }
   }
   _cachedLibrary = entries;
   await PersistentStorage.set(LIBRARY_KEY, entries);

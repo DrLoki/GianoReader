@@ -253,7 +253,7 @@ async fn translate_chunk_v2(
         .json(&body)
         .send()
         .await
-        .map_err(|e| TranslateError::NetworkFailure(e.to_string()))?;
+        .map_err(|e| TranslateError::NetworkFailure(network_error_text(e)))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -275,7 +275,10 @@ async fn translate_chunk_v2(
     }
 
     let data: TranslateV2Response = response.json().await.map_err(|e| {
-        TranslateError::NetworkFailure(format!("Failed to parse v2 response: {}", e))
+        TranslateError::NetworkFailure(format!(
+            "Failed to parse v2 response: {}",
+            network_error_text(e)
+        ))
     })?;
 
     Ok(data
@@ -286,13 +289,27 @@ async fn translate_chunk_v2(
         .collect())
 }
 
-/// Truncates an error string for display.
+/// Text of a `reqwest` error without the request URL.
+///
+/// The error's `Display` appends the URL, and the Cloud Translation v2 URL
+/// carries the API key in its query string (the free endpoint carries the text
+/// being translated). This message is returned to web clients, so the URL must
+/// never be part of it.
+fn network_error_text(e: reqwest::Error) -> String {
+    e.without_url().to_string()
+}
+
+/// Truncates an error string for display, at most `max_len` bytes, never
+/// splitting a multi-byte character.
 fn truncate_error(s: &str, max_len: usize) -> &str {
     if s.len() <= max_len {
-        s
-    } else {
-        &s[..max_len]
+        return s;
     }
+    let mut end = max_len;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
 }
 
 /// Attempts to split `translated` back into `count` pieces using the `"\n\n"`
@@ -395,7 +412,7 @@ async fn translate_chunk(
         .get(&url)
         .send()
         .await
-        .map_err(|e| TranslateError::NetworkFailure(e.to_string()))?;
+        .map_err(|e| TranslateError::NetworkFailure(network_error_text(e)))?;
 
     if !response.status().is_success() {
         return Err(TranslateError::NetworkFailure(format!(
@@ -407,7 +424,12 @@ async fn translate_chunk(
     let data: Value = response
         .json()
         .await
-        .map_err(|e| TranslateError::NetworkFailure(format!("Failed to parse response: {}", e)))?;
+        .map_err(|e| {
+            TranslateError::NetworkFailure(format!(
+                "Failed to parse response: {}",
+                network_error_text(e)
+            ))
+        })?;
 
     // Response structure: data[0] is an array of segments, each segment[0] is translated text
     let segments = data
@@ -455,6 +477,32 @@ mod tests {
         assert_eq!(google_lang_code("pt-BR"), "pt");
         assert_eq!(google_lang_code("it"), "it");
         assert_eq!(google_lang_code("fil"), "fil");
+    }
+
+    #[test]
+    fn test_truncate_error_respects_char_boundaries() {
+        assert_eq!(truncate_error("short", 200), "short");
+        assert_eq!(truncate_error("abcdef", 3), "abc");
+        // "è" is 2 bytes: cutting at byte 2 would split it
+        assert_eq!(truncate_error("aèb", 2), "a");
+        assert_eq!(truncate_error("日本語", 4), "日");
+        assert_eq!(truncate_error("日本語", 2), "");
+    }
+
+    #[tokio::test]
+    async fn test_network_error_text_hides_url_and_api_key() {
+        // Port 1 on localhost refuses the connection: a real reqwest send error
+        let err = Client::new()
+            .get("http://127.0.0.1:1/translate?key=SECRET-API-KEY")
+            .send()
+            .await
+            .expect_err("connection to port 1 should fail");
+        assert!(err.to_string().contains("SECRET-API-KEY"), "precondition: Display includes the URL");
+
+        let text = network_error_text(err);
+        assert!(!text.contains("SECRET-API-KEY"), "leaked: {text}");
+        assert!(!text.contains("127.0.0.1"), "leaked: {text}");
+        assert!(!text.is_empty());
     }
 
     #[test]

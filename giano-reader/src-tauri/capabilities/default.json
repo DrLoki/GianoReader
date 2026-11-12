@@ -79,6 +79,22 @@
       ]
     },
     {
+      "identifier": "fs:allow-rename",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/*.desktop.tmp"
+        }
+      ]
+    },
+    {
       "identifier": "fs:allow-mkdir",
       "allow": [
         {
