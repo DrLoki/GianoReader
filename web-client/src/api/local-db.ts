@@ -535,9 +535,9 @@ function escapeHtml(str: string): string {
 
 async function extractParagraphs(body: HTMLElement, bookId: string, chapterIndex: number): Promise<any[]> {
   const rawBlocks = body.querySelectorAll?.(TEXT_BLOCK_SELECTOR);
-  // Un blocco che contiene altri blocchi (<li><p>…</p></li>, liste annidate,
-  // <blockquote> di paragrafi) contribuisce solo con il testo suo proprio: i
-  // blocchi interni sono già selezionati singolarmente e verrebbero duplicati.
+  // A block that contains other blocks (<li><p>…</p></li>, nested lists,
+  // <blockquote> of paragraphs) contributes only its own text: the
+  // inner blocks are already selected individually and would be duplicated.
   const blocks = rawBlocks ? Array.from(rawBlocks) : rawBlocks;
   if (blocks && blocks.length > 0) {
     const r: any[] = [];
@@ -567,7 +567,7 @@ async function extractParagraphs(body: HTMLElement, bookId: string, chapterIndex
     }
     if (r.length) return r;
   }
-  // Fallback: split per newline
+  // Fallback: split by newline
   const lines = (body.textContent || '')
     .split('\n')
     .map((l) => l.trim())

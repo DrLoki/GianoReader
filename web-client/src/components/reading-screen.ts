@@ -542,7 +542,7 @@ class ReadingScreen extends HTMLElement {
 
     // Listen for chapter navigation from the TOC sheet
     sheet.addEventListener('navigate-chapter', ((e: CustomEvent<{ chapterIndex: number; fragment?: string }>) => {
-      // Se c'è un anchor fragment (es. #c5), impostalo come target di scroll
+      // If there is an anchor fragment (e.g. #c5), set it as the scroll target
       this.initialState = {
         ...this.initialState,
         currentChapter: e.detail.chapterIndex,

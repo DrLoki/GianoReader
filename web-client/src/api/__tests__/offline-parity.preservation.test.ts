@@ -78,7 +78,7 @@ function extractParagraphs(body: HTMLElement): any[] {
     });
     if (r.length) return r;
   }
-  // Fallback: split per newline
+  // Fallback: split by newline
   return (body.textContent || '')
     .split('\n')
     .map((l) => l.trim())

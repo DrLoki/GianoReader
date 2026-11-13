@@ -9,7 +9,7 @@ import { translations, t } from './i18n.js';
 // ── Pure functions under test (extracted / replicated for isolation) ───────
 
 /**
- * Classifica la dimensione di un file rispetto ai limiti configurati.
+ * Classifies a file's size against the configured limits.
  * @param {number} fileSizeBytes
  * @param {number} maxFileSizeMB
  * @param {number} warnFileSizeMB
@@ -23,7 +23,7 @@ function sizeGuard(fileSizeBytes, maxFileSizeMB, warnFileSizeMB) {
 }
 
 /**
- * Calcola il limite ottimale dalla RAM totale.
+ * Computes the optimal limit from the total RAM.
  * @param {number} totalRamMb
  * @returns {number}
  */
@@ -32,7 +32,7 @@ function computeOptimalLimit(totalRamMb) {
 }
 
 /**
- * Verifica se un errore è di tipo OOM.
+ * Checks whether an error is of the OOM type.
  * @param {*} err
  * @returns {boolean}
  */
@@ -79,7 +79,7 @@ const NEW_I18N_KEYS = [
 // Property-Based Tests
 // ─────────────────────────────────────────────────────────────────────────
 
-// Feature: large-epub-handling, Property 1: Size_Guard classifica correttamente tutte le dimensioni
+// Feature: large-epub-handling, Property 1: Size_Guard correctly classifies all sizes
 describe('Property 1: sizeGuard classifies all file sizes correctly', () => {
   it('returns block/warn/ok based on thresholds for any valid triple', () => {
     // Feature: large-epub-handling, Property 1
@@ -106,7 +106,7 @@ describe('Property 1: sizeGuard classifies all file sizes correctly', () => {
   });
 });
 
-// Feature: large-epub-handling, Property 2: I messaggi di errore contengono tutte le informazioni richieste
+// Feature: large-epub-handling, Property 2: Error messages contain all the required information
 describe('Property 2: error messages contain all required information', () => {
   it('fileTooLargeMsg contains name, sizeMB, and maxMB', () => {
     // Feature: large-epub-handling, Property 2
@@ -145,7 +145,7 @@ describe('Property 2: error messages contain all required information', () => {
   });
 });
 
-// Feature: large-epub-handling, Property 3: Il clamping di warnFileSizeMB è corretto per tutti gli input
+// Feature: large-epub-handling, Property 3: The clamping of warnFileSizeMB is correct for all inputs
 describe('Property 3: warnFileSizeMB clamping is correct for all inputs', () => {
   it('when warn >= max, clamping produces max - 1 (respecting minimum of 10)', () => {
     // Feature: large-epub-handling, Property 3
@@ -170,7 +170,7 @@ describe('Property 3: warnFileSizeMB clamping is correct for all inputs', () => 
   });
 });
 
-// Feature: large-epub-handling, Property 4: Persistenza e lettura dei settings è un round-trip
+// Feature: large-epub-handling, Property 4: Persisting and reading the settings is a round-trip
 describe('Property 4: settings persistence is a round-trip', () => {
   it('saveSettings({maxFileSizeMB, warnFileSizeMB}) then loadSettings() returns same values', () => {
     // Feature: large-epub-handling, Property 4
@@ -193,7 +193,7 @@ describe('Property 4: settings persistence is a round-trip', () => {
   });
 });
 
-// Feature: large-epub-handling, Property 5: Il calcolo del limite ottimale è corretto per tutti i valori di RAM
+// Feature: large-epub-handling, Property 5: The optimal limit computation is correct for all RAM values
 describe('Property 5: computeOptimalLimit formula is correct for all RAM values', () => {
   it('computeOptimalLimit(x) === Math.min(Math.floor(x / 4), 500) for any x >= 0', () => {
     // Feature: large-epub-handling, Property 5
@@ -211,7 +211,7 @@ describe('Property 5: computeOptimalLimit formula is correct for all RAM values'
   });
 });
 
-// Feature: large-epub-handling, Property 6: Il rilevamento OOM è corretto per tutti i messaggi di errore
+// Feature: large-epub-handling, Property 6: OOM detection is correct for all error messages
 describe('Property 6: isOomError detects OOM patterns correctly', () => {
   it('returns true for strings containing OOM patterns (case-insensitive)', () => {
     // Feature: large-epub-handling, Property 6
@@ -250,7 +250,7 @@ describe('Property 6: isOomError detects OOM patterns correctly', () => {
   });
 });
 
-// Feature: large-epub-handling, Property 7: book è sempre null dopo un errore in loadEpub
+// Feature: large-epub-handling, Property 7: book is always null after an error in loadEpub
 describe('Property 7: book is always null after an error in loadEpub', () => {
   it('after any error thrown during ePub() init, book variable is set to null', () => {
     // Feature: large-epub-handling, Property 7
@@ -310,7 +310,7 @@ describe('Property 7: book is always null after an error in loadEpub', () => {
   });
 });
 
-// Feature: large-epub-handling, Property 8: Le variabili di stato vengono resettate dopo book.destroy()
+// Feature: large-epub-handling, Property 8: The state variables are reset after book.destroy()
 describe('Property 8: state variables are reset after book.destroy()', () => {
   it('currentSpineItems, currentChapterParagraphs, currentFilePath are reset after destroy sequence', () => {
     // Feature: large-epub-handling, Property 8
@@ -346,7 +346,7 @@ describe('Property 8: state variables are reset after book.destroy()', () => {
   });
 });
 
-// Feature: large-epub-handling, Property 9: spineItem.unload() viene chiamato su tutti i capitoli non correnti
+// Feature: large-epub-handling, Property 9: spineItem.unload() is called on all non-current chapters
 describe('Property 9: spineItem.unload() is called on all non-current items', () => {
   it('after displayChapter(index), unload() is called on all items with index !== currentIndex', () => {
     // Feature: large-epub-handling, Property 9
@@ -428,7 +428,7 @@ describe('Property 9: spineItem.unload() is called on all non-current items', ()
   });
 });
 
-// Feature: large-epub-handling, Property 10: Le traduzioni i18n sono complete per tutte le lingue e le nuove chiavi
+// Feature: large-epub-handling, Property 10: The i18n translations are complete for all languages and the new keys
 describe('Property 10: i18n translations are complete for all languages and new keys', () => {
   it('t(lang, key) never returns the key itself for any supported lang and new key', () => {
     // Feature: large-epub-handling, Property 10
@@ -447,7 +447,7 @@ describe('Property 10: i18n translations are complete for all languages and new 
   });
 });
 
-// Feature: large-epub-handling, Property 11: Il fallback i18n usa sempre l'inglese per chiavi mancanti
+// Feature: large-epub-handling, Property 11: The i18n fallback always uses English for missing keys
 describe('Property 11: i18n fallback always uses English for missing keys', () => {
   it('t(lang, unknownKey) === t("en", unknownKey) for any lang and unknown key', () => {
     // Feature: large-epub-handling, Property 11

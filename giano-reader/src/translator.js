@@ -1,9 +1,9 @@
 /**
  * translator.js
  *
- * Traduzione tramite l'endpoint pubblico non ufficiale di Google Translate.
- * Non richiede chiave API; adatto solo a uso personale.
- * Per uso commerciale o ad alto volume usare l'API ufficiale Google Cloud Translation.
+ * Translation through Google Translate's unofficial public endpoint.
+ * Requires no API key; suitable for personal use only.
+ * For commercial or high-volume use, use the official Google Cloud Translation API.
  */
 
 import { FREE_BYTE_LIMIT, utf8Length, splitByByteLimit } from './text-limits.js';
@@ -17,29 +17,29 @@ function loadSettings() {
   }
 }
 
-/** Limite di caratteri per singola richiesta (~5000 è il massimo di Google). */
+/** Character limit per single request (~5000 is Google's maximum). */
 const CHAR_LIMIT = 4500;
 
 /**
- * Codici lingua interni che Google codifica diversamente.
- * Per Google "pt" è il portoghese brasiliano: il nostro "pt" (bandiera
- * portoghese) va inviato come "pt-PT", il nostro "pt-BR" come "pt".
- * Tenere allineato con `google_lang_code` in src-tauri translator.rs.
+ * Internal language codes that Google encodes differently.
+ * For Google "pt" is Brazilian Portuguese: our "pt" (Portuguese
+ * flag) must be sent as "pt-PT", our "pt-BR" as "pt".
+ * Keep in sync with `google_lang_code` in src-tauri translator.rs.
  */
 const GOOGLE_LANG_CODES = { pt: 'pt-PT', 'pt-BR': 'pt' };
 
-/** Converte un codice lingua interno nel codice atteso da Google Translate. */
+/** Converts an internal language code into the code expected by Google Translate. */
 export function toGoogleLangCode(lang) {
   return GOOGLE_LANG_CODES[lang] ?? lang;
 }
 
-/** Codice lingua da passare agli LLM (PRO): rende esplicita la variante europea. */
+/** Language code to pass to the LLMs (PRO): makes the European variant explicit. */
 function toLlmLangCode(lang) {
   return lang === 'pt' ? 'pt-PT' : lang;
 }
 
 /**
- * Traduce un singolo blocco di testo tramite OpenRouter (PRO).
+ * Translates a single block of text through OpenRouter (PRO).
  */
 async function translateChunkPro(text, targetLang, apiKey, model, signal) {
   const url = 'https://openrouter.ai/api/v1/chat/completions';
@@ -116,20 +116,20 @@ Return ONLY the translated text. Do not include any introductory or concluding t
 }
 
 /**
- * Traduce un singolo blocco di testo verso la lingua target.
+ * Translates a single block of text into the target language.
  *
- * In ambiente Tauri (desktop) la richiesta viene delegata al comando Rust
- * `translate_free`, che usa `reqwest` lato backend: questo evita che la
- * richiesta sia soggetta alle policy CORS del webview, le quali possono far
- * apparire come "bloccato da CORS" un errore di rate-limit (HTTP 429) di
- * Google Translate — la risposta di errore di Google non include l'header
- * Access-Control-Allow-Origin, quindi il browser/webview la segnala come
- * violazione CORS anche se il vero problema è il rate limiting.
- * In browser/PWA (nessun runtime Tauri) si usa `fetch()` diretto come prima.
+ * In a Tauri environment (desktop) the request is delegated to the Rust command
+ * `translate_free`, which uses `reqwest` on the backend: this prevents the
+ * request from being subject to the webview's CORS policies, which can make
+ * a rate-limit error (HTTP 429) from Google Translate appear as
+ * "blocked by CORS" — Google's error response does not include the
+ * Access-Control-Allow-Origin header, so the browser/webview reports it as
+ * a CORS violation even though the real problem is rate limiting.
+ * In a browser/PWA (no Tauri runtime) a direct `fetch()` is used as before.
  *
- * @param {string} text       - Testo da tradurre (già suddiviso in chunk).
- * @param {string} targetLang - Codice lingua BCP-47 (es. "it", "en", "fr").
- * @returns {Promise<string>} Testo tradotto.
+ * @param {string} text       - Text to translate (already split into chunks).
+ * @param {string} targetLang - BCP-47 language code (e.g. "it", "en", "fr").
+ * @returns {Promise<string>} Translated text.
  */
 async function translateChunk(text, targetLang) {
   console.log(`[GianoReader FREE] Starting translation request...`);
@@ -152,9 +152,9 @@ async function translateChunk(text, targetLang) {
       throw new Error(`Translation error: ${err?.message || err}`);
     }
   } else {
-    // Un testo oltre il limite (un singolo paragrafo molto lungo) viene diviso:
-    // l'endpoint rifiuta gli URL troppo lunghi (vedi text-limits.js). In Tauri
-    // la stessa suddivisione avviene nel comando Rust.
+    // A text over the limit (a single very long paragraph) is split:
+    // the endpoint rejects URLs that are too long (see text-limits.js). In Tauri
+    // the same splitting happens in the Rust command.
     const translatedPieces = [];
     for (const piece of splitByByteLimit(text)) {
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${toGoogleLangCode(targetLang)}&dt=t&q=${encodeURIComponent(piece)}`;
@@ -171,22 +171,22 @@ async function translateChunk(text, targetLang) {
   return result;
 }
 
-/** Limite di caratteri per batch nella modalità Basic (Cloud Translation v2). */
+/** Character limit per batch in Basic mode (Cloud Translation v2). */
 const CHAR_LIMIT_BASIC = 25000;
 
-/** Limite massimo di stringhe per singola richiesta v2. */
+/** Maximum number of strings per single v2 request. */
 const MAX_SEGMENTS_BASIC = 128;
 
 /**
- * Traduce un array di paragrafi tramite Google Cloud Translation API v2 (BASIC).
- * Usa l'array nativo `q[]` dell'API — nessun join con \n\n necessario.
- * Max 128 stringhe per richiesta.
+ * Translates an array of paragraphs through the Google Cloud Translation API v2 (BASIC).
+ * Uses the API's native `q[]` array — no join with \n\n needed.
+ * Max 128 strings per request.
  *
- * @param {string[]} paragraphs  - Array di testi da tradurre (un elemento per paragrafo, max 128).
- * @param {string}   targetLang  - Codice lingua BCP-47 target.
+ * @param {string[]} paragraphs  - Array of texts to translate (one element per paragraph, max 128).
+ * @param {string}   targetLang  - Target BCP-47 language code.
  * @param {string}   apiKey      - Google Cloud API Key.
- * @param {AbortSignal} [signal] - Segnale di abort.
- * @returns {Promise<string[]>}  Array di testi tradotti (stessa lunghezza dell'input).
+ * @param {AbortSignal} [signal] - Abort signal.
+ * @returns {Promise<string[]>}  Array of translated texts (same length as the input).
  */
 async function translateChunkBasic(paragraphs, targetLang, apiKey, signal) {
   const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
@@ -242,14 +242,14 @@ async function translateChunkBasic(paragraphs, targetLang, apiKey, signal) {
 }
 
 /**
- * Traduce un array di paragrafi raggruppandoli in batch da ~CHAR_LIMIT caratteri.
- * I paragrafi vengono separati da `\n\n` all'interno di ogni batch e il risultato
- * viene risplittato per riallineare le traduzioni ai paragrafi originali.
+ * Translates an array of paragraphs grouping them into batches of ~CHAR_LIMIT characters.
+ * The paragraphs are separated by `\n\n` inside each batch and the result
+ * is re-split to realign the translations with the original paragraphs.
  *
- * @param {string[]} paragraphs - Array di testi da tradurre.
- * @param {string}   targetLang - Codice lingua target.
- * @param {AbortSignal} [signal] - Segnale di abort per interrompere la traduzione.
- * @returns {Promise<string[]>} Array di testi tradotti (stessa lunghezza dell'input).
+ * @param {string[]} paragraphs - Array of texts to translate.
+ * @param {string}   targetLang - Target language code.
+ * @param {AbortSignal} [signal] - Abort signal to interrupt the translation.
+ * @returns {Promise<string[]>} Array of translated texts (same length as the input).
  */
 export async function translateParagraphs(paragraphs, targetLang, signal) {
   const results = new Array(paragraphs.length).fill('');
@@ -302,9 +302,9 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
   }
 
   // FREE / PRO mode: batch by joined text length (separated by \n\n).
-  // PRO conta i caratteri; FREE conta i byte UTF-8, perché il testo viaggia
-  // nell'URL e con alfabeti non latini 4500 caratteri superano il limite
-  // dell'endpoint (vedi text-limits.js).
+  // PRO counts characters; FREE counts UTF-8 bytes, because the text travels
+  // in the URL and with non-Latin alphabets 4500 characters exceed the limit
+  // of the endpoint (see text-limits.js).
   const batches = [];
   let batchStart = 0;
   let batchText = '';
@@ -325,9 +325,9 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
   }
   if (batchText) batches.push({ start: batchStart, end: paragraphs.length, text: batchText });
 
-  // PRO: ogni paragrafo viaggia con un marcatore numerato (vedi pro-segments.js),
-  // così la risposta si riallinea per numero anche se il modello unisce o
-  // spezza le righe, senza dover ritradurre i paragrafi uno per uno.
+  // PRO: each paragraph travels with a numbered marker (see pro-segments.js),
+  // so the response is realigned by number even if the model merges or
+  // splits lines, without having to re-translate the paragraphs one by one.
   const translateOnePro = async (text) => {
     const raw = await translateChunkPro(buildNumberedBatch([text]), targetLang, apiKey, model, signal);
     const parsed = parseNumberedBatch(raw, 1);
@@ -345,14 +345,14 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
 
       let parts = parseNumberedBatch(raw, count);
       if (!parts) {
-        // Marcatori non rispettati: prova con le righe vuote, come in passato
+        // Markers not respected: try with blank lines, as in the past
         const byBlankLine = stripSegmentMarkers(raw).split(/\n\n+/).map(p => p.trim()).filter(Boolean);
         if (byBlankLine.length === count) parts = byBlankLine;
       }
       if (parts) {
         for (let j = 0; j < count; j++) results[batch.start + j] = parts[j];
       } else {
-        // Ultima risorsa: un paragrafo per richiesta
+        // Last resort: one paragraph per request
         for (let j = 0; j < count; j++) {
           if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
           results[batch.start + j] = (await translateOnePro(slice[j])).trim();
@@ -364,7 +364,7 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
     const translated = await translateChunk(batch.text, targetLang);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    // Risplittiamo per doppio newline per riallineare ai paragrafi originali
+    // Re-split by double newline to realign with the original paragraphs
     const parts = translated.split(/\n\n+/);
     const count = batch.end - batch.start;
 
@@ -373,10 +373,10 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
         results[batch.start + j] = (parts[j] || '').trim();
       }
     } else {
-      // Il motore di traduzione non ha preservato esattamente i separatori
-      // \n\n (capita spesso con frasi brevi/dialoghi, es. "-i miss you"),
-      // quindi non possiamo fidarci dello split: ritraduciamo ogni paragrafo
-      // del batch singolarmente per non perdere/disallineare il testo.
+      // The translation engine did not preserve the \n\n separators exactly
+      // (it often happens with short sentences/dialogues, e.g. "-i miss you"),
+      // so we cannot trust the split: we re-translate each paragraph
+      // of the batch individually so as not to lose/misalign the text.
       for (let j = 0; j < count; j++) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const idx = batch.start + j;

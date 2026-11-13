@@ -11,6 +11,80 @@ It also adds **book ratings** (1 to 5 stars, editable from the desktop and from 
 
 ## 📝 Changelog (v0.9.5 → v0.10.0)
 
+### 💾 Saved Translations
+
+- **Translations are kept per book**: Every translated paragraph is saved on your computer, in one file per book (`translations/` in the app data folder; IndexedDB in browser mode). Translations are stored separately for each target language and engine (FREE, BASIC, PRO).
+- **No repeated requests**: Going back to a chapter, reopening the book or restarting the app shows the saved translation at once, with no new requests and no new costs for BASIC and PRO.
+- **Edited books keep their translations**: Paragraphs are matched by their text, so if you edit the book file, the paragraphs that did not change keep their translation.
+- **Cleanup**: The saved translations of a book are deleted when the book is deleted from the library. The book details panel shows which translations are saved and how complete they are.
+
+### 📚 Book Translation Window
+
+- **New "Book translation" button** (the "A文" icon in the translation panel header). It shows how much of the book is translated in the current language and engine, with paragraph and chapter counts, the characters still to translate, a progress bar for each chapter (click one to open it) and the other saved languages or engines.
+- **Complete translation**: Translates in the background every paragraph not yet translated, while you keep reading. **Stop** ends it and keeps what was done. With BASIC and PRO, the number of characters is shown and must be confirmed first, since these engines use your paid key. With FREE, requests are spaced out to avoid the endpoint's rate limit.
+- **Download translated book**: Saves an EPUB with the translated text. For an EPUB, the copy keeps the original layout, styles, images and table of contents (formatting inside a paragraph, such as italic or links, is not kept). For a PDF, a new simple EPUB is created with one section per chapter or page. Paragraphs not translated yet stay in the original language, and you are asked to confirm when the book is not fully translated.
+- **Retranslate chapter** translates the chapter on screen again and replaces its saved translation. **Delete saved translations** removes them for the current language and engine.
+
+### 🌍 Translation Reliability
+
+- **Automatic retries**: A failed block (network error, rate limit) is tried again twice, after 1.5 and 4 seconds, before the original text is shown.
+- **Long paragraphs with FREE**: The free Google endpoint only accepts GET requests and rejects URLs over about 16 KB. Batches are now limited to 4500 UTF-8 **bytes** (not characters), and a single longer paragraph is split at a word or sentence boundary and sent in several requests. Before, a very long paragraph, or text in a non-Latin script, could fail to translate. The same rule applies on the desktop, on the web server and in the PWA offline translator.
+- **PRO paragraph alignment**: Paragraphs sent to an LLM are numbered (`⟦1⟧`, `⟦2⟧`…), so the answer is matched back by number instead of by blank lines. A model that merges or splits paragraphs no longer shifts the translation out of place.
+- **Fast scrolling**: Chunks are translated as soon as they come into view, or are about to, even when a fast scroll jumps over several of them. Before, scrolling fast could leave the rest of the chapter showing the original text as a placeholder. A chapter that is already fully saved is shown translated at once.
+- **Clearer status**: The ✓ in the panel header appears only when every chunk has finished, and ⚠ appears if one failed.
+- **Nested blocks**: A block that contains other blocks (`<li><p>…</p></li>`, nested lists, a `<blockquote>` of paragraphs) now contributes only its own text, so text is no longer repeated. Chapters with no block tags (text directly in `<div>` or `<pre>`) are split into one paragraph per line instead of coming out empty. The desktop, the server and the PWA follow the same rule.
+
+### 📂 Faster Library Scan
+
+- **Incremental scan**: Scanning a folder again skips the books already in the library, recognised by path, size and modification date. The summary now reads *"X added, Y updated, Z unchanged"*. PDF files are scanned too.
+- **Edited files are analysed again**: Metadata, cover and page count are read again when a file changed. What you entered yourself is kept: reading status, notes, rating and any field you edited in the book details, such as a corrected title.
+- **A scan never removes books**: Books on a drive that is not connected stay in the library. Use the library check command to remove missing files.
+- **Lighter scans**: Results are saved in groups, so an interruption does not lose the work done. PDF documents are released right after their metadata is read, and the cover of the book being opened is reused instead of opening the EPUB twice.
+
+### 📄 PDF
+
+- **Sharp, lighter pages**: Page canvases are painted at the screen's pixel density (up to 2×), so text is sharp on HiDPI screens. Only pages near the viewport are painted, and pages far away are freed, which saves memory on long documents.
+- **Table of contents**: An outline entry now leads to the chapter that contains its start page. Before, entries could point to the wrong chapter when the outline was not in page order.
+- **Page labels** such as "Page N / Total" are shown in the interface language when a PDF is read by pages.
+
+### 🛡️ Data Safety
+
+- **Unreadable data files are never overwritten**: If the library or bookmarks file exists but cannot be read, the app shows a warning (once per file) and does not save over it. Before, it was treated as empty and the next save could replace it with an empty list.
+- **Atomic writes**: Data files are written to a temporary file and then renamed, so a crash during a save cannot leave a half-written file.
+- **Opening an invalid file**: A new EPUB or PDF is checked before the current book is closed. A damaged file no longer leaves the reader on a broken book.
+- **Fast navigation**: Pressing the arrows quickly no longer lets a slow chapter load overwrite the newer one. Theme, font or zoom changes made in quick succession no longer add a duplicate iframe or canvases.
+- **Window position**: The window position and size are saved half a second after you move or resize it, not only on close, which did not always finish in time. Leaving maximized mode restores the previous position.
+- **Progress bar**: Chapter lengths are saved in the library entry, so they are not read again at every opening while the file is unchanged.
+
+### 🔒 Security
+
+- **BASIC requires a server password**: Without a password, any device on the network can reach the web server, so it now answers BASIC requests with the FREE engine. Set a password to use BASIC (your paid Google Cloud key) from the phone. Settings shows a reminder when a key is configured without a password.
+- **Password stored as a digest**: The web server password is saved as a salted SHA-256 digest instead of plain text. A password saved by an older version is still accepted and converted on the next change of the server secrets.
+- **No API key in error messages**: Translation errors returned by the server no longer include the request URL, which could contain the Google Cloud key or the text being translated.
+- **Stricter inline styles**: The sanitizer keeps only an allowlist of text and box formatting properties in a book's inline styles. Anything that can load a resource or cover the app's own interface (`background`, `position`, `z-index`…) is removed, and CSS escapes can no longer get around the filter.
+- **QR code made locally**: The web server's QR code is drawn on your computer instead of by `api.qrserver.com`, so it works offline and your LAN address is not sent to an outside service. That host was removed from the CSP.
+- **Filesystem permissions**: The app can only rename files in its data folder and delete only its temporary files and saved translations.
+
+### 🌐 Web Server & PWA
+
+- **LAN address only**: The QR code and the shown address always use the computer's IP address. The `<computer-name>.local` address was dropped because Android does not resolve it.
+- **Lighter covers**: The PWA library grid now gets the small cover thumbnail kept by the desktop library (about 200 px wide) instead of the full image from the EPUB, which could weigh several MB per book.
+- **Bookmarks from the phone open on the desktop**: Bookmarks created in the PWA now store the book's file path and title, and the scroll position of the paragraph. The desktop can open them at the right place. A bookmark is reported as saved only if the file was actually written.
+- **Reliable offline download**: A network or server error in the middle of a download now stops it with an error instead of saving a truncated book. A book with no readable chapter is not saved.
+- **Clear errors**: API calls that get an error status now fail with a message instead of reading the error as if it were data.
+- **Offline import over plain HTTP**: Book import no longer depends on `crypto.subtle`, which browsers do not provide on `http://<LAN address>` pages.
+
+### 🛠️ Build & CI
+
+- **Tests on every push**: A new `tests.yml` workflow runs the Vitest suites of both projects, the PWA type check and `cargo test` on pushes to `main` and on pull requests. A release is built only from a commit whose tests pass.
+- **New dependencies**: `jszip` (translated EPUB export) and `qrcode-generator` (local QR code).
+- **Removed unused code**: The old `intermediate-json`, `protocol-messages` and `translation-batcher` modules and their tests.
+
+### 🧪 Testing
+
+- New Vitest suites: `translation-cache`, `book-export`, `library-scan`, `lazy-chunks`, `pro-segments`, `retry`, `storage-file`, `qr-code`, `text-limits`, `text-blocks`, `pdf-lazy-render`, `pdf-toc-mapping` and `tts-pause-prefetch`. On the PWA side: `sha256`, `text-limits` and `text-blocks`.
+- New Rust tests for password hashing and conversion of an old plain-text password, BASIC gating, byte-limit splitting, UTF-8-safe error truncation, error messages with the URL removed, and the bookmark scroll position.
+- The Chinese locale had renamed placeholders (`libScanDone`), which broke the scan summary. They are fixed, and a test now checks that every locale uses the same placeholders as English.
 
 
 ## 📝 Changelog (v0.9.4 → v0.9.5)

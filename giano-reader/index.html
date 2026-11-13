@@ -65,7 +65,7 @@
         <ul id="toc-list"></ul>
       </nav>
 
-      <!-- Segnalibri in fondo alla sidebar -->
+      <!-- Bookmarks at the bottom of the sidebar -->
       <div id="bookmarks-bar">
         <button id="bookmarks-open-btn" title="Open bookmarks"><img src="/icons/book-bookmark.svg" class="icon"
             alt="" /> Bookmarks</button>
@@ -75,7 +75,7 @@
     </aside>
 
     <main id="reader-area">
-      <!-- Unica testata per i bottoni dell'interfaccia -->
+      <!-- Single header for the interface buttons -->
       <div id="reader-header">
         <div id="reader-header-left">
           <span id="original-header-label">Original</span>
@@ -214,7 +214,7 @@
         </button>
       </div>
 
-      <!-- Layout sempre affiancato -->
+      <!-- Always side-by-side layout -->
       <div id="viewer-wrapper">
         <div id="original-panel">
           <div id="original-viewer" class="text-panel"></div>
@@ -228,13 +228,13 @@
           <div class="spinner"></div>
           <p id="loading-text">Loading...</p>
         </div>
-        <!-- Placeholder visibile quando nessun libro è aperto -->
+        <!-- Placeholder visible when no book is open -->
         <div id="no-book-placeholder">
           <img src="/logo.png" alt="Giano Reader" />
         </div>
       </div>
 
-      <!-- Barra navigazione capitoli in fondo -->
+      <!-- Chapter navigation bar at the bottom -->
       <div id="progress-bar-wrap">
         <button id="prev-btn" disabled>&#8592;</button>
         <div id="progress-track">
@@ -251,7 +251,7 @@
 
   <div id="epub-hidden-mount" aria-hidden="true"></div>
 
-  <!-- Modal: segnalibri -->
+  <!-- Modal: bookmarks -->
   <div id="bookmarks-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
     aria-labelledby="bm-modal-title">
     <div class="modal-box modal-box--bookmarks">
@@ -276,7 +276,7 @@
     </div>
   </div>
 
-  <!-- Modal: traduzione del libro aperto (cache, completamento, download) -->
+  <!-- Modal: translation of the open book (cache, completion, download) -->
   <div id="book-translation-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
     aria-labelledby="bt-modal-title">
     <div class="modal-box modal-box--translation">
@@ -304,7 +304,7 @@
     </div>
   </div>
 
-  <!-- Modal: file segnalibro non trovato -->
+  <!-- Modal: bookmark file not found -->
   <div id="bookmark-missing-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
     aria-labelledby="bm-missing-modal-title">
     <div class="modal-box">

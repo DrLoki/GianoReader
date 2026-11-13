@@ -84,7 +84,7 @@ function makeBookmarkFunctions(storage) {
 }
 
 // ── Pure functions from main.js ──────────────────────────────────────────
-// NB: copie allineate a giano-reader/src/main.js (modello a segmenti con immagini).
+// NB: copies aligned with giano-reader/src/main.js (segment model with images).
 const INLINE_TAGS = new Set(['a', 'b', 'strong', 'i', 'em', 'u', 's', 'sub', 'sup', 'span', 'small', 'mark', 'code', 'abbr', 'q', 'cite', 'br', 'img']);
 
 function resolveImgSrc(rawSrc, imgResolver) {
@@ -282,13 +282,13 @@ function paragraphsToHtml(paragraphs) {
   }).join('');
 }
 
-// ── Scroll sync con offset (copia da main.js) ──────────────────────────────
+// ── Scroll sync with offset (copy from main.js) ───────────────────────────
 function computeSyncedPct(sourcePct, offsetPct) {
   const p = sourcePct + offsetPct;
   return Math.min(1, Math.max(0, p));
 }
-// L'offset è definito come right - left. Applica il sync da una sorgente
-// verso il target scegliendo il segno in base a quale pannello è la sorgente.
+// The offset is defined as right - left. Applies the sync from a source
+// to the target choosing the sign based on which panel is the source.
 function syncTargetPct(sourcePct, offsetPct, isLeftSource) {
   return isLeftSource
     ? computeSyncedPct(sourcePct, offsetPct)
@@ -296,7 +296,7 @@ function syncTargetPct(sourcePct, offsetPct, isLeftSource) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 1. APERTURA LIBRO SEMPLICE
+// 1. OPENING A SIMPLE BOOK
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Apertura libro semplice', () => {
   it('extractParagraphs estrae paragrafi da un body HTML con <p>', () => {
@@ -391,12 +391,12 @@ describe('Apertura libro semplice', () => {
     const body = document.createElement('div');
     body.innerHTML = '<p>Testo con <img src="Images/inline.png"/> immagine inline</p>';
     const result = extractParagraphs(body);
-    // Un solo segmento testo; l'img è nell'html originale e come inlineImage+token
+    // A single text segment; the img is in the original html and as inlineImage+token
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe('text');
     expect(result[0].html).toContain('<img');
     expect(result[0].inlineImages).toHaveLength(1);
-    expect(result[0].text).toMatch(/\u27E6IMG0\u27E7/); // token presente nel testo da tradurre
+    expect(result[0].text).toMatch(/\u27E6IMG0\u27E7/); // token present in the text to translate
     expect(result[0].text).toContain('Testo con');
     expect(result[0].text).toContain('immagine inline');
   });
@@ -413,7 +413,7 @@ describe('Apertura libro semplice', () => {
 
   it('applyInlineFormatting reinserisce l\'immagine inline al posto del token tradotto', () => {
     const seg = { html: 'The paragraph button <img src="blob:xyz"/> can be used', inlineImages: ['<img src="blob:xyz" class="inline-img">'] };
-    // Il traduttore preserva il token nella traduzione
+    // The translator preserves the token in the translation
     const out = applyInlineFormatting(seg.html, 'Il pulsante Paragrafo \u27E6IMG0\u27E7 può essere usato', seg.inlineImages);
     expect(out).toContain('<img src="blob:xyz"');
     expect(out).toContain('Il pulsante Paragrafo');
@@ -423,7 +423,7 @@ describe('Apertura libro semplice', () => {
 
   it('applyInlineFormatting appende l\'immagine se il traduttore perde il token', () => {
     const inlineImages = ['<img src="blob:xyz" class="inline-img">'];
-    // Traduzione senza token (motore l'ha rimosso) → immagine appesa in coda, mai persa
+    // Translation without a token (engine removed it) → image appended at the end, never lost
     const out = applyInlineFormatting('a <img src="blob:xyz"/> b', 'testo tradotto senza segnaposto', inlineImages);
     expect(out).toContain('<img src="blob:xyz"');
     expect(out).toContain('testo tradotto senza segnaposto');
@@ -449,9 +449,9 @@ describe('Apertura libro semplice', () => {
   it('resolveImgSrc rimappa src relativi in blob URL tramite il resolver', () => {
     const resolver = new Map([['Images/foo.jpg', 'blob:xyz'], ['foo.jpg', 'blob:xyz']]);
     expect(resolveImgSrc('Images/foo.jpg', resolver)).toBe('blob:xyz');
-    expect(resolveImgSrc('../Images/foo.jpg', resolver)).toBe('blob:xyz'); // match per basename
-    expect(resolveImgSrc('data:image/png;base64,AAA', resolver)).toBe('data:image/png;base64,AAA'); // già assoluto
-    expect(resolveImgSrc('Images/missing.jpg', resolver)).toBe('Images/missing.jpg'); // non trovato → invariato
+    expect(resolveImgSrc('../Images/foo.jpg', resolver)).toBe('blob:xyz'); // match by basename
+    expect(resolveImgSrc('data:image/png;base64,AAA', resolver)).toBe('data:image/png;base64,AAA'); // already absolute
+    expect(resolveImgSrc('Images/missing.jpg', resolver)).toBe('Images/missing.jpg'); // not found → unchanged
   });
 
   it('buildImageBlockHtml rimappa src e pulisce attributi pericolosi', () => {
@@ -543,7 +543,7 @@ describe('Apertura libro semplice', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 2. APERTURA SEGNALIBRO
+// 2. OPENING A BOOKMARK
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Apertura segnalibro', () => {
   let storage, fns;
@@ -759,7 +759,7 @@ describe('Cambio tema, font, dimensione carattere', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4. GENERAZIONE LIBRERIA CON IMPORT LIBRI
+// 4. LIBRARY GENERATION WITH BOOK IMPORT
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Generazione libreria con import libri', () => {
   let storage, fns;
@@ -908,7 +908,7 @@ describe('Generazione libreria con import libri', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 5. ASSOCIAZIONE PARAGRAFI (NUOVE FUNZIONALITÀ)
+// 5. PARAGRAPH PAIRING (NEW FEATURES)
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Associazione paragrafi (colori, numeri, hover)', () => {
   let storage, sFns;
@@ -929,7 +929,7 @@ describe('Associazione paragrafi (colori, numeri, hover)', () => {
     const originalViewer = document.createElement('div');
     const paragraphs = ['Paragrafo uno', 'Paragrafo due', 'Paragrafo tre'];
     
-    // Simula renderOriginal semplificato per il test
+    // Simulates a simplified renderOriginal for the test
     originalViewer.innerHTML = '';
     paragraphs.forEach((p, i) => {
       const pEl = document.createElement('p');
@@ -942,17 +942,17 @@ describe('Associazione paragrafi (colori, numeri, hover)', () => {
     const pEls = originalViewer.querySelectorAll('p');
     expect(pEls).toHaveLength(3);
     
-    // Verifica indici
+    // Check indices
     expect(pEls[0].dataset.idx).toBe('0');
     expect(pEls[1].dataset.idx).toBe('1');
     expect(pEls[2].dataset.idx).toBe('2');
 
-    // Verifica colori alternati
+    // Check alternating colors
     expect(pEls[0].classList.contains('pair-color-0')).toBe(true);
     expect(pEls[1].classList.contains('pair-color-1')).toBe(true);
     expect(pEls[2].classList.contains('pair-color-2')).toBe(true);
 
-    // Verifica numerazione interna
+    // Check internal numbering
     expect(pEls[0].querySelector('.para-num').textContent).toBe('1');
     expect(pEls[1].querySelector('.para-num').textContent).toBe('2');
     expect(pEls[2].querySelector('.para-num').textContent).toBe('3');
@@ -973,7 +973,7 @@ describe('Associazione paragrafi (colori, numeri, hover)', () => {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SYNC SCROLL CON OFFSET (vista originale EPUB / PDF)
+// SCROLL SYNC WITH OFFSET (EPUB original view / PDF)
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Scroll sync con offset', () => {
   it('computeSyncedPct somma l\'offset e limita a [0,1]', () => {
@@ -989,18 +989,18 @@ describe('Scroll sync con offset', () => {
   });
 
   it('con offset positivo (right più avanti) il delta è mantenuto in entrambe le direzioni', () => {
-    const offset = 0.2; // right è 0.2 più avanti di left
-    // Scrollo il pannello sinistro a 0.4 → destro va a 0.6
+    const offset = 0.2; // right is 0.2 ahead of left
+    // Scroll the left panel to 0.4 → right goes to 0.6
     expect(syncTargetPct(0.4, offset, true)).toBeCloseTo(0.6, 5);
-    // Scrollo il pannello destro a 0.6 → sinistro torna a 0.4 (delta preservato)
+    // Scroll the right panel to 0.6 → left goes back to 0.4 (delta preserved)
     expect(syncTargetPct(0.6, offset, false)).toBeCloseTo(0.4, 5);
   });
 
   it('riattivazione: l\'offset ricalcolato mantiene lo scarto corrente (no riallineamento)', () => {
-    // Utente disattiva il sync, allinea manualmente: left=0.5, right=0.3
+    // User turns off sync, aligns manually: left=0.5, right=0.3
     const leftPct = 0.5, rightPct = 0.3;
     const recomputedOffset = rightPct - leftPct; // -0.2
-    // Alla riattivazione, scrollando left resta lo scarto: left 0.5 → right 0.3
+    // On re-enabling, scrolling left keeps the offset: left 0.5 → right 0.3
     expect(syncTargetPct(leftPct, recomputedOffset, true)).toBeCloseTo(rightPct, 5);
     // E proseguendo: left 0.6 → right 0.4 (delta -0.2 mantenuto)
     expect(syncTargetPct(0.6, recomputedOffset, true)).toBeCloseTo(0.4, 5);

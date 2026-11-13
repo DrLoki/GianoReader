@@ -257,7 +257,7 @@ describe('importLibrary workflow', () => {
 
 // ── Property-Based Tests ──────────────────────────────────────────────────
 
-// Feature: book-library, Property 1: Rendering completo di ogni Book_Entry
+// Feature: book-library, Property 1: Complete rendering of every Book_Entry
 describe('Property 1: renderLibraryGrid renders exactly one card per entry', () => {
   it('each entry produces exactly one .lib-book-card with title, author, and img', () => {
     fc.assert(
@@ -281,7 +281,7 @@ describe('Property 1: renderLibraryGrid renders exactly one card per entry', () 
   });
 });
 
-// Feature: book-library, Property 2: Deduplicazione per filePath
+// Feature: book-library, Property 2: Deduplication by filePath
 describe('Property 2: addEntries deduplicates by filePath', () => {
   it('no filePath appears more than once after merge', () => {
     fc.assert(
@@ -311,7 +311,7 @@ describe('Property 2: addEntries deduplicates by filePath', () => {
   });
 });
 
-// Feature: book-library, Property 5: Round-trip persistenza libreria
+// Feature: book-library, Property 5: Library persistence round-trip
 describe('Property 5: round-trip persistence', () => {
   it('saveLibrary then loadLibrary produces equivalent array', () => {
     fc.assert(
@@ -367,7 +367,7 @@ describe('Property 6: import counts are correct', () => {
   });
 });
 
-// Feature: book-library, Property 7: Delete button per ogni entry
+// Feature: book-library, Property 7: Delete button for every entry
 describe('Property 7: delete button for each entry', () => {
   it('each non-empty library renders exactly one .lib-book-delete per entry', () => {
     fc.assert(
@@ -459,7 +459,7 @@ describe('Property 3: readDirRecursive returns exactly epub files', () => {
   });
 });
 
-// Feature: book-library, Property 4: Fallback metadata su errore di estrazione
+// Feature: book-library, Property 4: Metadata fallback on extraction error
 describe('Property 4: extractMetadata fallback on error', () => {
   it('returns entry with fileName as title and empty author when extraction fails', async () => {
     await fc.assert(
@@ -491,7 +491,7 @@ describe('Property 4: extractMetadata fallback on error', () => {
   });
 });
 
-// Feature: search-depth-setting, Property 5: completezza e correttezza delle traduzioni i18n
+// Feature: search-depth-setting, Property 5: completeness and correctness of the i18n translations
 describe('Property 5: completezza e correttezza delle traduzioni i18n (search-depth-setting)', () => {
   const SUPPORTED_LANGS = ['en', 'it', 'fr', 'de', 'es', 'pt', 'ru', 'zh', 'ja', 'ar', 'fil', 'sq'];
 
@@ -510,7 +510,7 @@ describe('Property 5: completezza e correttezza delle traduzioni i18n (search-de
   });
 });
 
-// Feature: search-depth-setting, Property 2: clamping dei valori fuori range
+// Feature: search-depth-setting, Property 2: clamping of out-of-range values
 describe('Property 2: clamping dei valori fuori range (search-depth-setting)', () => {
   it('clampSearchDepth always returns a value in [1, 10] for out-of-range inputs', () => {
     fc.assert(
@@ -544,7 +544,7 @@ function makeSettingsFunctions(storage) {
   return { loadSettings, saveSettings };
 }
 
-// Feature: search-depth-setting, Property 1: round-trip di persistenza del valore
+// Feature: search-depth-setting, Property 1: persistence round-trip of the value
 describe('Property 1: round-trip di persistenza del valore searchDepth (search-depth-setting)', () => {
   it('saveSettings({ searchDepth: v }) then loadSettings().searchDepth === v for any v in [1, 10]', () => {
     fc.assert(
@@ -563,7 +563,7 @@ describe('Property 1: round-trip di persistenza del valore searchDepth (search-d
   });
 });
 
-// Feature: search-depth-setting, Property 3: preservazione delle impostazioni esistenti
+// Feature: search-depth-setting, Property 3: preservation of existing settings
 describe('Property 3: preservazione delle impostazioni esistenti (search-depth-setting)', () => {
   it('saving searchDepth does not alter other settings fields', () => {
     fc.assert(
@@ -594,7 +594,7 @@ describe('Property 3: preservazione delle impostazioni esistenti (search-depth-s
   });
 });
 
-// Feature: search-depth-setting, Property 4: limite di profondità nella scansione
+// Feature: search-depth-setting, Property 4: depth limit in the scan
 describe('Property 4: limite di profondità nella scansione (search-depth-setting)', () => {
   /**
    * Generates a mock directory tree of the given depth.

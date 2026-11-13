@@ -1,25 +1,25 @@
 /**
- * Traduzione lazy per chunk guidata dalla visibilità.
+ * Lazy per-chunk translation driven by visibility.
  *
- * Osserva TUTTI gli elementi dei chunk non ancora tradotti (non una sola
- * "sentinella" alla volta): con uno scroll veloce la sentinella può essere
- * saltata in un solo frame, l'IntersectionObserver non scatta mai e i chunk
- * successivi restano come placeholder anche se sono già in cache.
+ * Observes ALL the elements of the chunks not yet translated (not just one
+ * "sentinel" at a time): with fast scrolling the sentinel can be
+ * skipped in a single frame, the IntersectionObserver never fires and the
+ * following chunks stay as placeholders even if they are already in the cache.
  *
- * I chunk visibili vengono messi in coda e tradotti uno alla volta (niente
- * raffiche di richieste, HTTP 429); il chunk visto per ultimo ha la precedenza,
- * così la parte che l'utente sta leggendo arriva per prima.
+ * Visible chunks are queued and translated one at a time (no
+ * bursts of requests, HTTP 429); the chunk seen last has priority,
+ * so the part the user is reading arrives first.
  */
 
 /**
- * Coda di chunk da tradurre in sequenza, ultimo arrivato per primo.
- * Pura (senza DOM), testabile.
+ * Queue of chunks to translate in sequence, last in first out.
+ * Pure (no DOM), testable.
  * @param {(chunkIdx: number) => Promise<void>} translateChunk
  * @param {{ aborted: boolean }} [signal]
  */
 export function createChunkQueue(translateChunk, signal) {
-  const pending = [];          // chunk in attesa (l'ultimo è il prossimo)
-  const queued = new Set();    // chunk in coda o già avviati
+  const pending = [];          // chunks waiting (the last one is the next)
+  const queued = new Set();    // chunks queued or already started
   let running = false;
 
   async function drain() {
@@ -28,7 +28,7 @@ export function createChunkQueue(translateChunk, signal) {
     try {
       while (pending.length && !(signal && signal.aborted)) {
         const chunkIdx = pending.pop();
-        try { await translateChunk(chunkIdx); } catch (_) { /* gestito da translateChunk */ }
+        try { await translateChunk(chunkIdx); } catch (_) { /* handled by translateChunk */ }
       }
     } finally {
       running = false;
@@ -36,27 +36,27 @@ export function createChunkQueue(translateChunk, signal) {
   }
 
   return {
-    /** Accoda un chunk (ignorato se già accodato o avviato). */
+    /** Queues a chunk (ignored if already queued or started). */
     push(chunkIdx) {
       if (queued.has(chunkIdx)) return;
       queued.add(chunkIdx);
       pending.push(chunkIdx);
       drain();
     },
-    /** Segna un chunk come già gestito (es. tradotto altrove). */
+    /** Marks a chunk as already handled (e.g. translated elsewhere). */
     markDone(chunkIdx) { queued.add(chunkIdx); },
     has(chunkIdx) { return queued.has(chunkIdx); },
   };
 }
 
 /**
- * Avvia l'osservazione lazy dei chunk.
+ * Starts the lazy observation of the chunks.
  * @param {object} opts
  * @param {Element} opts.root            contenitore scorrevole
- * @param {Array<Element|null|undefined>} opts.elements  elementi indicizzati per paragrafo
- * @param {number} opts.chunkSize        paragrafi per chunk
+ * @param {Array<Element|null|undefined>} opts.elements  elements indexed by paragraph
+ * @param {number} opts.chunkSize        paragraphs per chunk
  * @param {(chunkIdx: number) => Promise<void>} opts.translateChunk
- * @param {(chunkIdx: number) => boolean} [opts.isDone]  chunk già tradotti da non osservare
+ * @param {(chunkIdx: number) => boolean} [opts.isDone]  already translated chunks not to observe
  * @param {{ aborted: boolean }} [opts.signal]
  * @returns {IntersectionObserver|null}
  */

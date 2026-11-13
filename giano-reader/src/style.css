@@ -1,7 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 .hidden { display: none !important; }
 
-/* ── Variabili — dark di default ── */
+/* ── Variables — dark by default ── */
 :root {
   --bg:          #1a1a1a;
   --surface:     #242424;
@@ -111,7 +111,7 @@ body {
 /* ── Reader area ── */
 #reader-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
-/* ── Barra navigazione capitoli (footer) ── */
+/* ── Chapter navigation bar (footer) ── */
 #progress-bar-wrap {
   display: flex; align-items: center; gap: 8px;
   padding: 0 16px;
@@ -157,7 +157,7 @@ body {
 }
 #progress-track:hover #progress-thumb { transform: translate(-50%, -50%) scale(1.2); }
 
-/* Tacche capitoli */
+/* Chapter tick marks */
 #progress-ticks { position: absolute; inset: 0; pointer-events: none; }
 .progress-tick {
   position: absolute; top: 50%;
@@ -207,7 +207,7 @@ body {
   white-space: nowrap; min-width: 70px; text-align: right;
 }
 
-/* ── Viewer: sempre split ── */
+/* ── Viewer: always split ── */
 #viewer-wrapper { flex: 1; display: flex; position: relative; overflow: hidden; min-height: 0; }
 
 #original-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
@@ -334,7 +334,7 @@ body {
 
 #translation-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 #translation-status { font-style: italic; text-transform: none; letter-spacing: 0; }
-/* Percentuale in rosso quando la sincronizzazione dello scroll è disattivata */
+/* Red percentage when scroll sync is turned off */
 #translation-status.sync-off { color: #e74c3c; font-weight: 600; }
 
 /* ── PDF translation overlay ── */
@@ -356,7 +356,7 @@ body {
   color: #000;
 }
 
-/* ── Pannelli testo — stile identico ── */
+/* ── Text panels — identical style ── */
 .text-panel {
   flex: 1;
   overflow-y: auto;
@@ -387,7 +387,7 @@ body {
   color: var(--text-muted); font-style: italic; font-size: 0.9em;
 }
 
-/* ── Segmenti immagine (modalità testo, affiancamento) ── */
+/* ── Image segments (text mode, side by side) ── */
 .text-panel .segment-image {
   margin: 1em 0;
   text-align: center;
@@ -405,7 +405,7 @@ body {
   font-style: italic;
   margin-top: 0.4em;
 }
-/* Immagini inline (icone/glifi dentro il flusso del testo) */
+/* Inline images (icons/glyphs inside the text flow) */
 .text-panel img.inline-img {
   display: inline-block;
   vertical-align: middle;
@@ -453,7 +453,7 @@ body {
   overflow: hidden; visibility: hidden;
 }
 
-/* ── Segnalibri — barra in fondo alla sidebar ── */
+/* ── Bookmarks — bar at the bottom of the sidebar ── */
 #bookmarks-bar {
   display: flex; align-items: center; gap: 6px;
   padding: 0 16px;
@@ -485,8 +485,8 @@ body {
 #add-bookmark-btn:disabled { opacity: 0.35; cursor: default; }
 #add-bookmark-btn:not(:disabled):hover { background: #2a2a2a; color: #fff; }
 
-/* ── Modale segnalibri ── */
-/* ── Traduzione del libro (cache, completamento, download) ── */
+/* ── Bookmarks modal ── */
+/* ── Book translation (cache, completion, download) ── */
 .modal-box--translation {
   max-width: 640px; width: 95%;
   display: flex; flex-direction: column; gap: 10px;
@@ -616,7 +616,7 @@ body {
 }
 .modal-footer button:not(.btn-primary):not(.btn-danger):hover { background: #3a3a3a; color: #fff; }
 /* Book translation footer: text buttons, not icon squares */
-/* (selettori con :not() per battere la regola delle icone sopra, che ha più specificità) */
+/* (selectors with :not() to beat the icon rule above, which has higher specificity) */
 .modal-footer.bt-actions button,
 .modal-footer.bt-actions button:not(.btn-primary):not(.btn-danger) {
   width: auto; height: auto; min-height: 34px;
@@ -791,7 +791,7 @@ body.theme-sepia {
   --modal-secondary: #d6c9a8;
 }
 
-/* ── Sidebar header con gear ── */
+/* ── Sidebar header with gear ── */
 #sidebar-header #open-btn {
   flex: 1;
 }
@@ -1063,7 +1063,7 @@ body.theme-sepia {
   filter: var(--icon-filter-on-dark) !important;
 }
 
-/* add-bookmark: non-emphasized, icona muted — sidebar always dark */
+/* add-bookmark: non-emphasized, muted icon — sidebar always dark */
 #add-bookmark-btn .icon {
   filter: brightness(0) invert(0.7) !important;
 }
@@ -1089,7 +1089,7 @@ body.theme-sepia {
   filter: var(--icon-filter-on-dark) !important;
 }
 
-/* SVG inline nei view-toggle-btn: usa currentColor, niente filtro */
+/* inline SVG in the view-toggle-btn: uses currentColor, no filter */
 #toggle-pairing-btn svg.icon,
 #toggle-numbers-btn svg.icon,
 #hide-original-btn svg.icon,
@@ -1608,7 +1608,7 @@ html.rtl .lib-book-card { flex-direction: row-reverse; }
 .btn-danger svg { stroke: #c0392b !important; flex-shrink: 0; }
 .btn-danger:hover svg { stroke: #fff !important; }
 
-/* ── Associazione Paragrafi (Nuove Funzionalità) ── */
+/* ── Paragraph pairing (New Features) ── */
 :root {
   --pair-0: hsl(340, 70%, 35%);
   --pair-1: hsl(210, 80%, 35%);
@@ -1659,7 +1659,7 @@ html.rtl .text-panel p.para-highlight {
   border-radius: 4px 0 0 4px;
 }
 
-/* 3. Numeri di Paragrafo */
+/* 3. Paragraph Numbers */
 .para-num {
   display: none;
   font-size: 0.72em;
@@ -2243,7 +2243,7 @@ html.rtl .text-panel [data-segment-id].translation-error {
   flex-shrink: 0;
 }
 
-/* Notifica silenziosa non bloccante (es. "segnalibro aggiunto") */
+/* Silent non-blocking notification (e.g. "bookmark added") */
 .app-notice {
   position: fixed;
   left: 50%;
