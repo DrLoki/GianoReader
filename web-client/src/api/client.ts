@@ -35,6 +35,17 @@ export function resetUnauthorizedFlag(): void {
 }
 
 /**
+ * Throws when the server answered with an error status, so callers never parse
+ * an error body (e.g. `{"error":"unauthorized"}`) as if it were the data.
+ */
+export function ensureOk(response: Response, what: string): Response {
+  if (!response.ok) {
+    throw new Error(`${what} failed: HTTP ${response.status}`);
+  }
+  return response;
+}
+
+/**
  * Thin wrapper around the global `fetch` that detects network failures
  * and notifies the rest of the app via a DOM custom event.
  *

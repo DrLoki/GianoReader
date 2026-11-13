@@ -31,6 +31,14 @@ struct DesktopBookmark {
     pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
+/// The book a bookmark created from the PWA belongs to, as the desktop app
+/// stores it in its bookmark records.
+pub struct BookmarkBook {
+    pub file_path: String,
+    pub file_name: String,
+    pub title: String,
+}
+
 pub struct PersistenceStore {
     pub(crate) db: Db,
     /// Path to the desktop `giano-reader-bookmarks.json` file.
@@ -108,25 +116,22 @@ impl PersistenceStore {
 
     /// Writes the bookmark list back to the desktop JSON file atomically
     /// (write to a temp file then rename).
-    fn write_desktop_bookmarks(&self, bms: &[DesktopBookmark]) {
-        let json = match serde_json::to_string_pretty(bms) {
-            Ok(j) => j,
-            Err(e) => {
-                eprintln!("[persistence] Failed to serialize bookmarks: {}", e);
-                return;
-            }
-        };
+    ///
+    /// Returns an error when the file could not be written, so callers do not
+    /// report a bookmark as saved (or deleted) when nothing changed on disk.
+    fn write_desktop_bookmarks(&self, bms: &[DesktopBookmark]) -> Result<(), String> {
+        let json = serde_json::to_string_pretty(bms)
+            .map_err(|e| format!("failed to serialize bookmarks: {}", e))?;
         // Write to a temp file in the same directory, then rename for atomicity.
         let tmp = self.desktop_bookmarks_path.with_extension("json.tmp");
-        if let Err(e) = std::fs::write(&tmp, &json) {
-            eprintln!("[persistence] Failed to write tmp bookmark file: {}", e);
-            return;
-        }
+        std::fs::write(&tmp, &json)
+            .map_err(|e| format!("failed to write tmp bookmark file: {}", e))?;
         if let Err(e) = std::fs::rename(&tmp, &self.desktop_bookmarks_path) {
-            eprintln!("[persistence] Failed to rename bookmark file: {}", e);
             // Best-effort cleanup
             let _ = std::fs::remove_file(&tmp);
+            return Err(format!("failed to rename bookmark file: {}", e));
         }
+        Ok(())
     }
 
     /// Converts a `DesktopBookmark` to the REST `Bookmark` type.
@@ -223,6 +228,7 @@ impl PersistenceStore {
         chapter_index: u32,
         paragraph_id: &str,
         label: Option<String>,
+        book: Option<BookmarkBook>,
     ) -> Result<Bookmark, sled::Error> {
         let id = Uuid::new_v4().to_string();
         let created_at = Utc::now().to_rfc3339();
@@ -235,11 +241,18 @@ impl PersistenceStore {
             serde_json::Value::String(book_id.to_string()),
         );
 
+        // File path, file name and title let the desktop app list the bookmark
+        // under the book's name and open the book from it.
+        let (file_path, file_name, book_title) = match book {
+            Some(b) => (Some(b.file_path), Some(b.file_name), Some(b.title)),
+            None => (None, None, None),
+        };
+
         let desktop_bm = DesktopBookmark {
             id: serde_json::Value::String(id.clone()),
-            file_path: None,
-            file_name: None,
-            book_title: None,
+            file_path,
+            file_name,
+            book_title,
             chapter_index: Some(serde_json::Value::Number(
                 serde_json::Number::from(chapter_index),
             )),
@@ -255,7 +268,7 @@ impl PersistenceStore {
         let _guard = self.bookmarks_lock.lock().unwrap_or_else(|e| e.into_inner());
         let mut all = self.read_desktop_bookmarks_strict().map_err(to_sled_error)?;
         all.push(desktop_bm);
-        self.write_desktop_bookmarks(&all);
+        self.write_desktop_bookmarks(&all).map_err(to_sled_error)?;
 
         Ok(Bookmark {
             id,
@@ -285,7 +298,7 @@ impl PersistenceStore {
             return Ok(false);
         }
 
-        self.write_desktop_bookmarks(&all);
+        self.write_desktop_bookmarks(&all).map_err(to_sled_error)?;
         Ok(true)
     }
 

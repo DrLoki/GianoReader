@@ -6,6 +6,7 @@ import { sanitizeTree, isExternalHttpUrl, isSafeResourceUrl, escapeHtmlText } fr
 import { bookmarkKey, mergeBookmarkLists } from './bookmarks-sync.js';
 import { normalizeRating, setEntryRating, matchesRatingFilter, ratingStars, mergeLibraryRatings } from './library-sync.js';
 import { StorageReadError, readJsonFile, writeJsonFileAtomic } from './storage-file.js';
+import { TEXT_BLOCK_TAGS, ownTextSource } from './text-blocks.js';
 
 // Versione dell'app, iniettata da Vite a build time leggendo package.json
 // (vedi vite.config.js): non va più aggiornata a mano nel codice.
@@ -13,7 +14,7 @@ import { StorageReadError, readJsonFile, writeJsonFileAtomic } from './storage-f
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
 import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfWithOverlayPlaceholders } from './pdf.js';
 import { clearSegmentationCache } from './pdf-xycut-segmenter.js';
-import ttsController, { isProModeAvailable, makeDownloadFilename } from './tts.js';
+import ttsController, { isProModeAvailable, makeDownloadFilename, LANG_TO_BCP47 } from './tts.js';
 
 // ── Stato applicazione ─────────────────────────────────────────────────────
 let book = null;                    // istanza epubjs corrente
@@ -33,7 +34,6 @@ let currentViewMode = 'text';       // 'text' | 'original'
 let currentFileType = null;         // 'epub' | 'pdf'
 let pdfDoc = null;                  // PdfDocument instance (null when EPUB)
 let pdfNav = null;                  // PdfNavigator instance (null when EPUB)
-let pdfBufferCopy = null;           // Copy of PDF ArrayBuffer for hash computation
 let currentPdfHash = '';            // Stable hash for the current PDF (used for segmentation cache)
 
 const LAZY_CHUNK = 12; // paragrafi per chunk di traduzione lazy
@@ -338,6 +338,12 @@ function createFlagSelect(selectEl) {
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────
+// Contatori di "generazione": ogni nuova navigazione / nuovo rendering della
+// vista originale incrementa il proprio, e le operazioni asincrone ancora in
+// corso per quello precedente si accorgono di essere superate e si fermano.
+let displayGeneration = 0;
+let nativeRenderGeneration = 0;
+
 const SETTINGS_KEY = 'giano-reader-settings';
 const THEMES = ['dark', 'light', 'monokai', 'solarized-dark', 'nord', 'sepia'];
 
@@ -708,11 +714,7 @@ function updateTranslationModeSelect() {
     if (currentMode !== 'free') {
       s.translationMode = 'free';
       saveSettings(s);
-      if (currentChapterParagraphs && currentChapterParagraphs.length) {
-        const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
-        const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
-        translateCurrentChapter(scrollPct);
-      }
+      retranslateCurrentChapter();
     }
   } else {
     translationModeSelect.classList.remove('hidden');
@@ -1006,14 +1008,8 @@ function populateTTSVoices() {
  * BCP-47 prefix lookup for voice matching.
  */
 function getLangBcp47Prefix(langCode) {
-  const map = {
-    it: 'it-IT', en: 'en-US', fr: 'fr-FR', de: 'de-DE',
-    es: 'es-ES', pt: 'pt-PT', 'pt-BR': 'pt-BR', ru: 'ru-RU', zh: 'zh-CN',
-    ja: 'ja-JP', ar: 'ar-SA', fil: 'fil-PH', sq: 'sq-AL',
-    hi: 'hi-IN', ko: 'ko-KR', th: 'th-TH', bn: 'bn-BD',
-    id: 'id-ID'
-  };
-  return map[langCode] || null;
+  // Un'unica mappa, condivisa con il motore TTS (tts.js)
+  return LANG_TO_BCP47[langCode] || null;
 }
 
 /**
@@ -1026,13 +1022,13 @@ function updateTTSUI(state) {
   if (state.status === 'playing') {
     // Show pause icon
     ttsPlayBtn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="5" y="4" width="4" height="16"/><rect x="15" y="4" width="4" height="16"/></svg>';
-    ttsPlayBtn.title = 'Pause';
-    ttsPlayBtn.setAttribute('aria-label', 'Pause');
+    ttsPlayBtn.title = ui('tts_pause');
+    ttsPlayBtn.setAttribute('aria-label', ui('tts_pause'));
   } else {
     // Show play icon (idle or paused)
     ttsPlayBtn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6,4 20,12 6,20"/></svg>';
-    ttsPlayBtn.title = 'Play';
-    ttsPlayBtn.setAttribute('aria-label', 'Play');
+    ttsPlayBtn.title = ui('tts_play');
+    ttsPlayBtn.setAttribute('aria-label', ui('tts_play'));
   }
 
   // Update download button and progress on state changes
@@ -1148,7 +1144,7 @@ if (ttsPlayBtn) {
           });
           if (voices.length === 0) {
             // Build a helpful message with a link to the installation guide
-            const guideUrl = 'https://github.com/DrLoki/GianoReader/blob/main/INSTALL_TTS_VOICES.md';
+            const guideUrl = 'https://github.com/DrLoki/GianoReader/blob/main/giano-reader/INSTALL_TTS_VOICES.md';
             let msg = ui('tts_no_voice');
             const platform = navigator.platform || '';
             if (platform.startsWith('Win')) {
@@ -1645,11 +1641,7 @@ if (translationModeSelect) {
     saveSettings(s);
 
     // Trigger re-translation
-    if (currentChapterParagraphs && currentChapterParagraphs.length) {
-      const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
-      const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
-      translateCurrentChapter(scrollPct);
-    }
+    retranslateCurrentChapter();
   });
 }
 
@@ -2172,7 +2164,15 @@ progressTrack.addEventListener('mousemove', e => {
   if (!currentSpineItems.length) return;
   const rect = progressTrack.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  const idx = Math.round(ratio * (currentSpineItems.length - 1));
+  // Stessa mappatura del clic sulla barra: proporzionale alla lunghezza dei
+  // capitoli quando è nota, uniforme altrimenti.
+  let idx = Math.round(ratio * (currentSpineItems.length - 1));
+  if (chapterCumulativePct.length === currentSpineItems.length) {
+    idx = 0;
+    for (let i = chapterCumulativePct.length - 1; i >= 0; i--) {
+      if (ratio * 100 >= chapterCumulativePct[i]) { idx = i; break; }
+    }
+  }
   const tick = progressTicks.querySelector(`[data-idx="${idx}"]`);
   if (tick) showTooltip(tick, tick.dataset.label, parseFloat(tick.style.left));
 });
@@ -2340,17 +2340,18 @@ function extractTextWithInlineImages(el, imgResolver) {
 //   { type: 'image', html, id, alt }   → non tradotto, immagine speculare nei due pannelli
 // `imgResolver` (Map src→blobUrl) rimappa gli src immagine in URL persistenti.
 function extractParagraphs(body, imgResolver = null) {
-  const textSelectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
+  const textSelectors = TEXT_BLOCK_TAGS;
   const imageSelectors = ['figure', 'img', 'svg'];
   const allSelectors = [...textSelectors, ...imageSelectors];
   const rawBlocks = body.querySelectorAll?.(allSelectors.join(', '));
 
   // Filtra i blocchi annidati per evitare duplicazioni:
-  // - un <blockquote> non-foglia (che contiene altri blocchi) va escluso
   // - un <img> dentro un <figure> o dentro un blocco di testo va escluso (già coperto)
+  // - un blocco di testo che contiene altri blocchi (<li><p>…</p></li>, liste
+  //   annidate, <blockquote> di paragrafi) dà solo il testo suo proprio: vedi
+  //   ownTextSource più sotto
   const blocks = rawBlocks ? Array.from(rawBlocks).filter(el => {
     const tag = el.tagName.toLowerCase();
-    if (tag === 'blockquote') return !el.querySelector(textSelectors.join(', '));
     if (tag === 'img' || tag === 'svg') {
       // Escludi se è dentro una figure (la figure verrà presa come blocco) o dentro un blocco testo
       if (el.closest('figure')) return false;
@@ -2387,9 +2388,12 @@ function extractParagraphs(body, imgResolver = null) {
         return;
       }
       // Testo con token per le immagini inline (per riallineamento post-traduzione)
-      const { text, inlineImages } = extractTextWithInlineImages(el, imgResolver);
+      // Senza il testo dei blocchi annidati, che sono già blocchi a sé
+      const source = ownTextSource(el);
+      if (!source) return;
+      const { text, inlineImages } = extractTextWithInlineImages(source, imgResolver);
       if (!text && !inlineImages.length) return;
-      r.push({ type: 'text', text, html: safeInnerHtml(el, imgResolver), id: takeId(el), inlineImages });
+      r.push({ type: 'text', text, html: safeInnerHtml(source, imgResolver), id: takeId(el), inlineImages });
     });
     if (r.length) return r;
   }
@@ -2691,6 +2695,9 @@ function disableFontControls(disabled) {
 
 // ── Native view rendering ──────────────────────────────────────────────────
 async function renderNativeView() {
+  // Chiamata senza await da tema/font/zoom: due rendering ravvicinati non
+  // devono aggiungere entrambi il proprio contenuto (iframe o canvas doppi).
+  const myRender = ++nativeRenderGeneration;
   originalNative.innerHTML = '';
 
   // ── PDF canvas rendering ──────────────────────────────────────────────────
@@ -2704,9 +2711,13 @@ async function renderNativeView() {
       const pageNumbers = [];
       for (let i = range.start; i <= range.end; i++) pageNumbers.push(i);
 
-      await renderPdfCanvas(pdfDoc.proxy, pageNumbers, originalNative);
+      // Si interrompe (senza aggiungere altri canvas) se parte un rendering più recente
+      await renderPdfCanvas(pdfDoc.proxy, pageNumbers, originalNative,
+        () => myRender === nativeRenderGeneration);
+      if (myRender !== nativeRenderGeneration) return;
       disableFontControls(true);
     } catch (err) {
+      if (myRender !== nativeRenderGeneration) return;
       console.error('[native] PDF canvas rendering error:', err);
       originalNative.innerHTML = `<p class="placeholder">${ui('pdf_rendering_unavailable')}</p>`;
     }
@@ -2718,6 +2729,7 @@ async function renderNativeView() {
     try {
       const spineItem = currentSpineItems[currentSpineIndex];
       const html = await spineItem.render(book.load.bind(book));
+      if (myRender !== nativeRenderGeneration) return;
       const frame = document.createElement('iframe');
       frame.id = 'epub-native-frame';
       frame.className = 'native-frame';
@@ -2748,8 +2760,9 @@ async function renderNativeView() {
         if (currentViewMode === 'original' && !translationHidden) bindSyncScroll();
       });
       frame.srcdoc = themeStyle + html;
-      originalNative.appendChild(frame);
+      originalNative.replaceChildren(frame);
     } catch (err) {
+      if (myRender !== nativeRenderGeneration) return;
       console.error('[native] rendering error:', err);
       originalNative.innerHTML = `<p class="placeholder">${ui('errorChapter')}${errMsg(err)}</p>`;
     }
@@ -3100,7 +3113,8 @@ async function translatePdfOverlay(startPct = 0) {
 
     // Render PDF canvas with overlay placeholders
     const pagesData = await renderPdfWithOverlayPlaceholders(
-      pdfDoc.proxy, pageNumbers, translationViewer, currentPdfHash
+      pdfDoc.proxy, pageNumbers, translationViewer, currentPdfHash,
+      loadSettings().uiLang || 'en'
     );
 
     if (signal.aborted) return;
@@ -3281,6 +3295,19 @@ async function translateCurrentChapter(startPct = 0) {
   // Traduce un chunk specifico per indice
   const translatedChunks = new Set();
   translatedChunksRef = translatedChunks;
+  // Chunk conclusi (tradotti o falliti): lo stato "✓" compare solo quando tutti
+  // hanno finito, non quando sono stati soltanto avviati; "⚠" se qualcuno è fallito.
+  const finishedChunks = new Set();
+  const failedChunks = new Set();
+  const markChunkFinished = (chunkIdx, failed) => {
+    finishedChunks.add(chunkIdx);
+    if (failed) failedChunks.add(chunkIdx); else failedChunks.delete(chunkIdx);
+    if (finishedChunks.size >= totalChunks) {
+      setTranslationStatus(failedChunks.size ? '⚠' : '✓');
+    } else {
+      setTranslationStatus(`${Math.round((finishedChunks.size / totalChunks) * 100)}%`);
+    }
+  };
   async function translateChunk(chunkIdx) {
     if (signal.aborted || translatedChunks.has(chunkIdx) || chunkIdx < 0 || chunkIdx >= totalChunks) return;
     translatedChunks.add(chunkIdx);
@@ -3295,13 +3322,15 @@ async function translateCurrentChapter(startPct = 0) {
       if (seg && seg.type === 'image') continue;
       textIdx.push(i);
     }
-    if (!textIdx.length) { if (translatedChunks.size >= totalChunks) setTranslationStatus('✓'); return; }
+    if (!textIdx.length) { markChunkFinished(chunkIdx, false); return; }
 
     const slice = textIdx.map(i => {
       const p = paragraphs[i];
       return p.text !== undefined ? p.text : p;
     });
-    setTranslationStatus(`${Math.round((translatedChunks.size / totalChunks) * 100)}%`);
+    if (finishedChunks.size < totalChunks) {
+      setTranslationStatus(`${Math.round((finishedChunks.size / totalChunks) * 100)}%`);
+    }
     try {
       const translated = await translateParagraphs(slice, lang, signal);
       if (signal.aborted) return;
@@ -3312,7 +3341,7 @@ async function translateCurrentChapter(startPct = 0) {
         pEls[i].setAttribute('data-translated', 'true');
         pEls[i].classList.remove('pending');
       }
-      if (translatedChunks.size >= totalChunks) setTranslationStatus('✓');
+      markChunkFinished(chunkIdx, false);
     } catch (err) {
       if (signal.aborted) return;
       console.error('[translate] chunk error', chunkIdx, err);
@@ -3324,6 +3353,7 @@ async function translateCurrentChapter(startPct = 0) {
         pEls[i].innerHTML = buildTranslatedParagraphHtml(seg, fallback, i + 1);
         pEls[i].classList.remove('pending');
       }
+      markChunkFinished(chunkIdx, true);
     }
   }
 
@@ -3335,9 +3365,13 @@ async function translateCurrentChapter(startPct = 0) {
   if (signal.aborted) return;
 
   // Traduce i chunk precedenti in background (verso l'alto), senza bloccare
-  for (let i = startChunk - 1; i >= 0; i--) {
-    translateChunk(i); // fire-and-forget
-  }
+  // Uno alla volta: lanciarli tutti insieme provoca raffiche di richieste (HTTP 429)
+  (async () => {
+    for (let i = startChunk - 1; i >= 0; i--) {
+      if (signal.aborted) return;
+      await translateChunk(i);
+    }
+  })();
 
   // Lazy verso il basso: osserva l'ultimo paragrafo del chunk corrente
   let nextDownChunk = startChunk + 1;
@@ -3483,41 +3517,62 @@ function isOomError(err) {
 }
 
 async function loadEpub(arrayBuffer, filePath = '') {
-  // Stop TTS and disable controls before loading new book
+  // Stop TTS before loading new book
   ttsController.stop();
-  enableTTSControls(false);
+  showLoading(ui('loadingEpub'));
 
-  // Distruggi il libro precedente
+  // Il nuovo file viene aperto e validato (metadati, spine, indice) PRIMA di
+  // toccare il libro corrente: se non è un EPUB valido, il libro già aperto
+  // resta com'era invece di rimanere a schermo senza più funzionare.
+  // Nota: evitiamo intenzionalmente `book.ready` — può bloccarsi indefinitamente
+  // su certi EPUB (es. generati da Calibre) per un problema interno di JSZip.
+  // `book.loaded.metadata` si risolve non appena il manifest è parsato, che è
+  // tutto ciò di cui abbiamo bisogno prima di procedere.
+  let newBook = null;
+  let meta, nav;
+  try {
+    newBook = ePub(arrayBuffer);
+    meta = await Promise.race([
+      newBook.loaded.metadata,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('metadata timeout after 20s')), 20000)),
+    ]);
+    await Promise.race([
+      newBook.loaded.spine,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('spine timeout after 10s')), 10000)),
+    ]);
+    nav = await Promise.race([
+      newBook.loaded.navigation,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('navigation timeout after 10s')), 10000)),
+    ]);
+  } catch (err) {
+    if (newBook) { try { newBook.destroy(); } catch (_) { } }
+    hideLoading();
+    await showAlert(isOomError(err) ? ui('oomErrorMsg', { name: filePath }) : ui('errorOpening') + errMsg(err));
+    return;
+  }
+
+  // File valido: ora si può chiudere il libro precedente
+  displayGeneration++; // ferma i caricamenti di capitolo ancora in corso del vecchio libro
+  enableTTSControls(false);
   if (book) {
     try { book.destroy(); } catch (_) { }
-    book = null;
-    currentSpineItems = [];
-    chapterLengths = [];
-    chapterCumulativePct = [];
-    currentChapterParagraphs = [];
-    currentChapterBody = null;
-    currentFilePath = null;
   }
-  // Clear PDF state when loading EPUB
+  if (pdfDoc && pdfDoc.proxy) {
+    try { pdfDoc.proxy.destroy(); } catch (_) { }
+  }
+  currentSpineItems = [];
+  chapterLengths = [];
+  chapterCumulativePct = [];
+  currentChapterParagraphs = [];
+  currentChapterBody = null;
   currentFileType = 'epub';
   pdfDoc = null;
   pdfNav = null;
 
-  showLoading(ui('loadingEpub'));
   hideNoBookPlaceholder();
   currentFilePath = filePath || null;
   try {
-
-    // Nota: evitiamo intenzionalmente `book.ready` — può bloccarsi indefinitamente
-    // su certi EPUB (es. generati da Calibre) per un problema interno di JSZip.
-    // `book.loaded.metadata` si risolve non appena il manifest è parsato, che è
-    // tutto ciò di cui abbiamo bisogno prima di procedere.
-    book = ePub(arrayBuffer);
-
-    const meta = await Promise.race([
-      book.loaded.metadata,
-      new Promise((_, rej) => setTimeout(() => rej(new Error('metadata timeout after 20s')), 20000)),
-    ]);
+    book = newBook;
     bookTitle.textContent = meta.title || ui('unknownTitle');
     bookAuthor.textContent = meta.creator || '';
     bookInfo.classList.remove('hidden');
@@ -3538,18 +3593,10 @@ async function loadEpub(arrayBuffer, filePath = '') {
       autoAddToLibrary(arrayBuffer, filePath, meta);
     }
 
-    await Promise.race([
-      book.loaded.spine,
-      new Promise((_, rej) => setTimeout(() => rej(new Error('spine timeout after 10s')), 10000)),
-    ]);
     currentSpineItems = [];
     book.spine.each(item => currentSpineItems.push(item));
     currentSpineIndex = 0;
 
-    const nav = await Promise.race([
-      book.loaded.navigation,
-      new Promise((_, rej) => setTimeout(() => rej(new Error('navigation timeout after 10s')), 10000)),
-    ]);
     renderToc(nav.toc);
 
     updateProgress();
@@ -3741,29 +3788,14 @@ function updatePdfTocActive() {
 
 // ────────────────────────────────────────────────────────────────────────────
 async function loadPdfFile(arrayBuffer, filePath = '') {
-  // Stop TTS and disable controls before loading new book
+  // Stop TTS before loading new book
   ttsController.stop();
-  enableTTSControls(false);
-
-  // Destroy previous book if any
-  if (book) {
-    try { book.destroy(); } catch (_) { }
-    book = null;
-    currentSpineItems = [];
-    chapterLengths = [];
-    chapterCumulativePct = [];
-    currentChapterParagraphs = [];
-  }
-  // Clear previous PDF state
-  pdfDoc = null;
-  pdfNav = null;
-  // Clear segmentation cache for new document
-  clearSegmentationCache();
-  currentPdfHash = '';
-  currentFilePath = filePath || null;
-
   showLoading(ui('readingFile'));
-  hideNoBookPlaceholder();
+
+  // Il libro corrente viene chiuso solo dopo che il nuovo PDF è stato aperto e
+  // validato (più sotto): un file non valido lascia intatto quello già aperto.
+  // pdf.js trasferisce l'ArrayBuffer al proprio worker: la dimensione va letta prima.
+  const pdfByteLength = arrayBuffer.byteLength;
 
   try {
     const s = loadSettings();
@@ -3775,9 +3807,6 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
       await showAlert(ui('pdf_error_too_large', { size: (arrayBuffer.byteLength / 1024 / 1024).toFixed(1), max: maxMB }));
       return;
     }
-
-    // Copy the buffer before loadPdf consumes it (pdf.js transfers the ArrayBuffer to its worker)
-    pdfBufferCopy = arrayBuffer.slice(0);
 
     // Load PDF
     let doc;
@@ -3794,15 +3823,41 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     }
 
     // Validate text content
-    const validation = await validateTextContent(doc.proxy);
-    if (validation === 'blocked') {
+    let nav;
+    try {
+      const validation = await validateTextContent(doc.proxy);
+      if (validation === 'blocked') {
+        try { doc.proxy.destroy(); } catch (_) { }
+        hideLoading();
+        await showAlert(ui('pdf_blocked_dialog'));
+        return;
+      }
+
+      // Create navigator
+      nav = await PdfNavigator.create(doc.proxy, doc.outline);
+    } catch (err) {
+      try { doc.proxy.destroy(); } catch (_) { }
       hideLoading();
-      await showAlert(ui('pdf_blocked_dialog'));
+      await showAlert(ui('pdf_error_open') + ' ' + errMsg(err));
       return;
     }
 
-    // Create navigator
-    const nav = await PdfNavigator.create(doc.proxy, doc.outline);
+    // File valido: ora si può chiudere il libro precedente
+    displayGeneration++; // ferma i caricamenti di capitolo ancora in corso del vecchio libro
+    enableTTSControls(false);
+    if (book) {
+      try { book.destroy(); } catch (_) { }
+      book = null;
+    }
+    if (pdfDoc && pdfDoc.proxy) {
+      try { pdfDoc.proxy.destroy(); } catch (_) { }
+    }
+    currentSpineItems = [];
+    chapterLengths = [];
+    chapterCumulativePct = [];
+    currentChapterParagraphs = [];
+    clearSegmentationCache();
+    hideNoBookPlaceholder();
 
     // Success — set state
     pdfDoc = doc;
@@ -3812,7 +3867,7 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
 
     // Compute pdfHash from filename + file size (stable, cheap)
     const pdfFilename = (filePath || '').split(/[\\/]/).pop() || '';
-    currentPdfHash = `${pdfFilename}:${pdfBufferCopy.byteLength}`;
+    currentPdfHash = `${pdfFilename}:${pdfByteLength}`;
 
     // Display title in sidebar
     bookTitle.textContent = doc.title || ui('unknownTitle');
@@ -3823,7 +3878,7 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
 
     // Auto-add to library (Tauri with absolute path)
     if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
-      autoAddToLibrary(arrayBuffer, filePath, { title: doc.title, creator: doc.author });
+      autoAddToLibrary(arrayBuffer, filePath, { title: doc.title, creator: doc.author }, pdfByteLength);
     }
 
     addBookmarkBtn.disabled = false;
@@ -3851,6 +3906,9 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
 async function displayChapter(index, scrollPct = 0) {
   // Stop TTS on chapter navigation
   ttsController.stop();
+  // Ogni navigazione invalida quelle ancora in corso (frecce premute in rapida
+  // successione): un caricamento più lento non deve sovrascrivere quello nuovo.
+  const myGeneration = ++displayGeneration;
 
   // ── PDF branch ──────────────────────────────────────────────────────────
   if (currentFileType === 'pdf') {
@@ -3874,6 +3932,7 @@ async function displayChapter(index, scrollPct = 0) {
 
       // Extract text from all pages in the range
       const paragraphs = await extractChapterText(pdfDoc.proxy, pageRange, lang);
+      if (myGeneration !== displayGeneration) return;
 
       // Store for translation use
       currentChapterParagraphs = paragraphs;
@@ -3888,6 +3947,7 @@ async function displayChapter(index, scrollPct = 0) {
         if (!translationHidden) {
           await translateCurrentChapter(scrollPct);
         }
+        if (myGeneration === displayGeneration && scrollPct > 0) restoreScrollPct(scrollPct);
       } else {
         // Render in the original panel
         renderOriginal(paragraphs);
@@ -3911,6 +3971,7 @@ async function displayChapter(index, scrollPct = 0) {
         if (scrollPct > 0) restoreScrollPct(scrollPct);
       }
     } catch (err) {
+      if (myGeneration !== displayGeneration) return;
       console.error('[nav] PDF chapter load error:', err);
       renderOriginal([]);
       renderTranslationPlaceholder(ui('errorChapter') + errMsg(err));
@@ -3934,7 +3995,7 @@ async function displayChapter(index, scrollPct = 0) {
 
   try {
     const body = await loadChapterDocument(item);
-    if (currentSpineIndex !== myIndex) return;
+    if (currentSpineIndex !== myIndex || myGeneration !== displayGeneration) return;
     if (!body) throw new Error('documento capitolo null');
 
     currentChapterBody = body;
@@ -3953,6 +4014,7 @@ async function displayChapter(index, scrollPct = 0) {
       if (!translationHidden) {
         await translateCurrentChapter(scrollPct);
       }
+      if (myGeneration === displayGeneration && scrollPct > 0) restoreScrollPct(scrollPct);
     } else {
       renderOriginal(currentChapterParagraphs);
       await translateCurrentChapter(scrollPct);
@@ -4011,15 +4073,20 @@ async function computeChapterLengths() {
   chapterCumulativePct = [];
   if (!currentSpineItems.length || !book) return;
 
-  const lengths = new Array(currentSpineItems.length).fill(0);
+  // Il calcolo dura a lungo: se nel frattempo si apre un altro libro va
+  // abbandonato, altrimenti scriverebbe le lunghezze di questo su quello nuovo.
+  const myBook = book;
+  const items = currentSpineItems;
+  const lengths = new Array(items.length).fill(0);
 
-  for (let i = 0; i < currentSpineItems.length; i++) {
+  for (let i = 0; i < items.length; i++) {
     try {
-      const body = await loadChapterDocument(currentSpineItems[i]);
+      const body = await loadChapterDocument(items[i]);
       lengths[i] = (body?.textContent?.trim() || '').length;
     } catch {
       lengths[i] = 0;
     }
+    if (book !== myBook) return;
   }
 
   // Se tutti i capitoli sono vuoti, usa distribuzione uniforme
@@ -4164,7 +4231,7 @@ langSelect.addEventListener('change', () => {
     ttsController.stop();
   }
   populateTTSVoices();
-  if (currentChapterParagraphs.length) translateCurrentChapter();
+  retranslateCurrentChapter();
 });
 
 // ── Navigazione da tastiera ────────────────────────────────────────────────
@@ -4260,8 +4327,7 @@ function getChapterLabel(index) {
 addBookmarkBtn.addEventListener('click', async () => {
   if (!currentFilePath) return;
   const bms = await loadBookmarks();
-  const scrollMax = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
-  const scrollPct = scrollMax > 1 ? Math.round((originalViewer.scrollTop / scrollMax) * 100) : 0;
+  const scrollPct = Math.round(currentReadingScrollPct());
 
   let bm;
   if (currentFileType === 'pdf') {
@@ -4322,7 +4388,7 @@ async function renderBookmarks(query = '') {
         <span class="bm-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
         <span class="bm-chapter">${escapeHtml(chapterLabel)}${bm.scrollPct != null ? ` · ${bm.scrollPct}%` : ''}</span>
       </span>
-      <button class="bm-delete" title="Delete bookmark" data-id="${escapeHtml(bm.id)}"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
+      <button class="bm-delete" title="${escapeHtml(ui('deleteBookmark'))}" data-id="${escapeHtml(bm.id)}"><img src="/icons/xmark.svg" class="icon" alt="" /></button>
     `;
     li.querySelector('.bm-info').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
     li.querySelector('.bm-icon').addEventListener('click', () => { closeBookmarksModal(); openBookmark(bm); });
@@ -4509,13 +4575,38 @@ async function openBookmark(bm) {
 // Ripristina la posizione di scroll salvata nel segnalibro
 function restoreScrollPct(pct) {
   if (pct == null) return;
+  const generation = displayGeneration;
+  const target = Math.min(1, Math.max(0, pct / 100));
+  // Vale per il pannello di lettura attivo: testo, iframe EPUB o canvas PDF.
+  // L'iframe della vista originale carica il contenuto in modo asincrono: se
+  // lo scroll non "prende" (contenuto non ancora pronto) si riprova per ~2s.
+  const apply = (attempt) => {
+    if (generation !== displayGeneration) return; // nel frattempo si è navigato altrove
+    const { left, right } = getSyncPair();
+    if (left) left.setPct(target);
+    if (right) right.setPct(target);
+    const applied = left && (target === 0 || left.getPct() > 0);
+    if (!applied && attempt < 20) setTimeout(() => apply(attempt + 1), 100);
+  };
   // Doppio rAF: assicura che il layout sia calcolato dopo il rendering dei paragrafi
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    const max = Math.max(1, originalViewer.scrollHeight - originalViewer.clientHeight);
-    originalViewer.scrollTop = Math.round((pct / 100) * max);
-    const transMax = Math.max(1, translationViewer.scrollHeight - translationViewer.clientHeight);
-    translationViewer.scrollTop = Math.round((pct / 100) * transMax);
-  }));
+  requestAnimationFrame(() => requestAnimationFrame(() => apply(0)));
+}
+
+// Percentuale di scroll (0-100) del pannello di lettura attivo: il pannello
+// testo, oppure l'iframe EPUB / i canvas PDF nella vista originale.
+function currentReadingScrollPct() {
+  const { left } = getSyncPair();
+  const pct = left ? left.getPct() * 100 : 0;
+  return Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
+}
+
+// Ritraduce il capitolo corrente (cambio lingua o motore) senza perdere la
+// posizione di lettura: translateCurrentChapter riporta i pannelli in cima.
+function retranslateCurrentChapter() {
+  if (!currentChapterParagraphs || !currentChapterParagraphs.length) return;
+  const pct = currentReadingScrollPct();
+  translateCurrentChapter(pct);
+  if (pct > 0) restoreScrollPct(pct);
 }
 
 // Legge il file dal disco e lo carica nel reader, poi naviga al capitolo salvato
@@ -4532,7 +4623,8 @@ async function loadBookmarkFile(bm) {
       if (previousViewMode === 'original') {
         setViewMode('original', { skipRender: true });
       }
-      if (bm.chapterIndex > 0 && bm.chapterIndex < currentSpineItems.length) {
+      // Anche l'indice 0: loadEpub apre il primo capitolo "reale", che può non essere lo 0
+      if (Number.isInteger(bm.chapterIndex) && bm.chapterIndex >= 0 && bm.chapterIndex < currentSpineItems.length) {
         await displayChapter(bm.chapterIndex, bm.scrollPct ?? 0);
       } else if (bm.scrollPct > 0) {
         restoreScrollPct(bm.scrollPct);
@@ -4928,14 +5020,16 @@ async function extractMetadata(filePath) {
 let scanInProgress = false;
 
 // Auto-add a book to the library when opened, extracting cover in background
-async function autoAddToLibrary(arrayBuffer, filePath, meta) {
+// `knownSize`: dimensione del file quando `arrayBuffer` non è più leggibile
+// (pdf.js lo trasferisce al worker, lasciandolo con byteLength 0).
+async function autoAddToLibrary(arrayBuffer, filePath, meta, knownSize) {
   try {
     const lib = await loadLibrary();
     if (lib.some(e => e.filePath === filePath)) return; // already in library
     const fileName = filePath.split(/[\\/]/).pop();
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
     const addedAt = Date.now();
-    const fileSize = arrayBuffer.byteLength || 0;
+    const fileSize = knownSize || arrayBuffer.byteLength || 0;
 
     // ── PDF branch ──────────────────────────────────────────────────────
     if (currentFileType === 'pdf') {

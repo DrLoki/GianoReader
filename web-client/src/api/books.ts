@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, ensureOk } from './client';
 import type { BookSummary, TocEntry } from '../types';
 import { isOfflineMode, isLocalId, getLocalBooks, getLocalBookToc, setLocalBookRating } from './local-db';
 import { normalizeRating } from '../utils/rating';
@@ -32,7 +32,7 @@ export async function getBooks(): Promise<BookSummary[]> {
   );
 
   try {
-    const response = await apiFetch('/api/books');
+    const response = ensureOk(await apiFetch('/api/books'), 'Book list');
     const serverBooks = await response.json() as BookSummary[];
     // Exclude server books that the user already downloaded locally
     const uniqueServerBooks = serverBooks.filter((b) => !offlineMirrorIds.has(b.id));
@@ -64,7 +64,7 @@ export async function getToc(id: string): Promise<TocEntry[]> {
   if (isOfflineMode() || isLocalId(id)) {
     return getLocalBookToc(id);
   }
-  const response = await apiFetch(`/api/books/${id}/toc`);
+  const response = ensureOk(await apiFetch(`/api/books/${id}/toc`), 'Table of contents');
   return response.json() as Promise<TocEntry[]>;
 }
 

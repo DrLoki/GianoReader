@@ -394,17 +394,83 @@ pub fn google_lang_code(lang: &str) -> &str {
     }
 }
 
-/// Sends a single batch to the Google Translate endpoint and returns the translated text.
+/// Splits `text` into pieces of at most `limit` bytes each.
+///
+/// The free endpoint takes the text in the URL of a GET request and rejects
+/// URLs longer than about 16 KB, so one very long paragraph must be sent in
+/// several requests. Cuts after the last whitespace or punctuation mark that
+/// fits, so words and sentences stay whole when possible; text without any
+/// such character (e.g. a long CJK run) is cut between characters. Joining the
+/// pieces gives back `text`. Same rule as `splitByByteLimit` in the desktop
+/// `text-limits.js` and the PWA `text-limits.ts`.
+fn split_by_byte_limit(text: &str, limit: usize) -> Vec<&str> {
+    if text.len() <= limit {
+        return vec![text];
+    }
+    let is_break = |c: char| {
+        c.is_whitespace() || matches!(c, '.' | '!' | '?' | ';' | ':' | ',' | '。' | '！' | '？' | '；' | '：' | '，' | '、' | '…')
+    };
+
+    let mut pieces = Vec::new();
+    let mut start = 0; // byte offset where the current piece starts
+    let mut break_at = None; // byte offset just after the last break character
+    for (offset, c) in text.char_indices() {
+        let end = offset + c.len_utf8();
+        // A loop: what is left after cutting at a break point may still not
+        // have room for this character, and is then cut again (as a whole).
+        while end - start > limit && offset > start {
+            let cut = match break_at {
+                Some(b) if b > start => b,
+                _ => offset,
+            };
+            pieces.push(&text[start..cut]);
+            start = cut;
+            break_at = None;
+        }
+        if is_break(c) {
+            break_at = Some(end);
+        }
+    }
+    if start < text.len() {
+        pieces.push(&text[start..]);
+    }
+    pieces
+}
+
+/// Sends a single batch to the Google Translate endpoint and returns the
+/// translated text. A text over [`CHAR_LIMIT`] bytes is sent in several
+/// requests (see [`split_by_byte_limit`]).
 async fn translate_chunk(
     client: &Client,
     text: &str,
     source_lang: &str,
     target_lang: &str,
 ) -> Result<String, TranslateError> {
+    let pieces = split_by_byte_limit(text, CHAR_LIMIT);
+    if pieces.len() == 1 {
+        return translate_chunk_once(client, text, source_lang, target_lang).await;
+    }
+    let mut translated = Vec::with_capacity(pieces.len());
+    for piece in pieces {
+        let part = translate_chunk_once(client, piece, source_lang, target_lang).await?;
+        translated.push(part.trim().to_string());
+    }
+    Ok(translated.join(" "))
+}
+
+/// Sends one GET request to the Google Translate endpoint.
+async fn translate_chunk_once(
+    client: &Client,
+    text: &str,
+    source_lang: &str,
+    target_lang: &str,
+) -> Result<String, TranslateError> {
+    // The language codes come from the request: encoded so they cannot add
+    // parameters to the URL.
     let url = format!(
         "https://translate.googleapis.com/translate_a/single?client=gtx&sl={}&tl={}&dt=t&q={}",
-        source_lang,
-        google_lang_code(target_lang),
+        urlencoding_encode(source_lang),
+        urlencoding_encode(google_lang_code(target_lang)),
         urlencoding_encode(text),
     );
 
@@ -477,6 +543,44 @@ mod tests {
         assert_eq!(google_lang_code("pt-BR"), "pt");
         assert_eq!(google_lang_code("it"), "it");
         assert_eq!(google_lang_code("fil"), "fil");
+    }
+
+    #[test]
+    fn test_split_by_byte_limit() {
+        assert_eq!(split_by_byte_limit("short text", 100), vec!["short text"]);
+        // Words stay whole
+        assert_eq!(
+            split_by_byte_limit("alpha beta gamma delta", 12),
+            vec!["alpha beta ", "gamma delta"]
+        );
+        // Sentence punctuation in text without spaces ("一" is 3 bytes)
+        assert_eq!(
+            split_by_byte_limit("一二三。四五六。七八九。", 24),
+            vec!["一二三。四五六。", "七八九。"]
+        );
+        // The rest after a break-point cut has no room for the next character
+        // (" " + 2 + 4 bytes, then a 3-byte character, limit 8)
+        let pieces = split_by_byte_limit(" ¡𐀀ࠀ", 8);
+        assert_eq!(pieces, vec![" ", "¡𐀀", "ࠀ"]);
+        assert!(pieces.iter().all(|p| p.len() <= 8));
+        // No place to break: cut between characters, never inside one
+        assert_eq!(
+            split_by_byte_limit(&"日".repeat(10), 9),
+            vec!["日日日", "日日日", "日日日", "日"]
+        );
+    }
+
+    #[test]
+    fn test_split_by_byte_limit_long_cyrillic_paragraph() {
+        let paragraph = "Это довольно длинное предложение русского текста. ".repeat(120);
+        let pieces = split_by_byte_limit(&paragraph, CHAR_LIMIT);
+        assert!(pieces.len() > 1);
+        assert_eq!(pieces.concat(), paragraph);
+        for piece in pieces {
+            assert!(piece.len() <= CHAR_LIMIT);
+            // Under the ~16 KB URL limit of the endpoint once percent-encoded
+            assert!(urlencoding_encode(piece).len() <= CHAR_LIMIT * 3);
+        }
     }
 
     #[test]

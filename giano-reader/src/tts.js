@@ -31,7 +31,9 @@ export const LANG_TO_BCP47 = {
   id: 'id-ID',
   sv: 'sv-SE',
   uk: 'uk-UA',
-  sl: 'sl-SI'
+  sl: 'sl-SI',
+  fa: 'fa-IR',
+  vi: 'vi-VN'
 };
 
 // ---------------------------------------------------------------------------
@@ -898,7 +900,11 @@ export class TTSController {
       }
       await this._ensureTranslated(this._currentIndex);
       // Check if we were stopped/paused during translation wait
-      if (this._state !== 'playing') return;
+      if (this._state !== 'playing') {
+        // Paused: nothing is being spoken, so resume must start this paragraph
+        if (this._state === 'paused') this._speakOnResume = true;
+        return;
+      }
     }
 
     // Fire-and-forget: proactively trigger translation for upcoming paragraphs
@@ -1010,8 +1016,15 @@ export class TTSController {
         this._bufferStore.add(item.index, rawMp3Bytes);
       }
 
-      // Check if we were stopped while synthesizing
-      if (this._state !== 'playing') return;
+      // Check if we were stopped or paused while synthesizing
+      if (this._state !== 'playing') {
+        if (this._state === 'paused') {
+          // Nothing is playing yet: keep the audio and let resume start it
+          this._prefetchCache.set(cacheKey, Promise.resolve({ audioBuffer, rawMp3Bytes }));
+          this._speakOnResume = true;
+        }
+        return;
+      }
 
       // Kick off prefetch for upcoming paragraphs while this one plays
       this._prefetchAhead();
@@ -1077,6 +1090,13 @@ export class TTSController {
       if (this._prefetchCache.has(idx)) continue; // already fetching/fetched
 
       const item = this._paragraphs[idx];
+      if (this._settings.panel === 'translation' && item.element) {
+        // A paragraph not translated yet still shows the original text: do not
+        // synthesize it now, it is synthesized on demand once translated.
+        if (item.element.getAttribute('data-translated') !== 'true') continue;
+        // The queue text was captured at start, possibly before the translation
+        this._refreshItemText(item);
+      }
       const promise = this._proEngine.synthesize(item.text, {
         model: this._settings.ttsModel || 'canopylabs/orpheus-3b-0.1-ft',
         voice: this._settings.ttsVoice,
@@ -1128,6 +1148,14 @@ export class TTSController {
    * Resume from paused state.
    */
   _resume() {
+    if (this._speakOnResume) {
+      // Paused while waiting for a translation or for the audio: the engine
+      // has nothing to resume, so the current paragraph is started again.
+      this._speakOnResume = false;
+      this._setState('playing');
+      this._speakCurrent();
+      return;
+    }
     if (this._settings.mode === 'free') {
       this._freeEngine.resume();
     } else {
@@ -1140,6 +1168,7 @@ export class TTSController {
    * Cancel all pending speech/audio.
    */
   _cancelAll() {
+    this._speakOnResume = false;
     if (this._abortController) {
       this._abortController.abort();
       this._abortController = null;

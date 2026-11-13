@@ -271,6 +271,24 @@ pub fn find_epub_by_id(library_path: &Path, book_id: &str) -> Option<PathBuf> {
     Some(found)
 }
 
+/// File path and display title of the book identified by `book_id`.
+///
+/// Used for bookmarks created from the PWA: the desktop app needs the file
+/// path to open the book and a title to list the bookmark.
+pub fn book_file_info(library_path: &Path, book_id: &str) -> Option<(PathBuf, String)> {
+    let path = find_epub_by_id(library_path, book_id)?;
+    let title = epub_metadata(&path)
+        .and_then(|(title, _)| title)
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| {
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Untitled")
+                .to_string()
+        });
+    Some((path, title))
+}
+
 fn find_epub_by_id_uncached(library_path: &Path, book_id: &str) -> Option<PathBuf> {
     // First: check the desktop app's library JSON
     let library_json_path = library_path.parent()

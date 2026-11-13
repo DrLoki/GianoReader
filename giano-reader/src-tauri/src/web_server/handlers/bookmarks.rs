@@ -7,7 +7,9 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::web_server::epub_parser;
 use crate::web_server::models::ApiError;
+use crate::web_server::persistence::BookmarkBook;
 use super::books::AppState;
 
 #[derive(Deserialize)]
@@ -124,10 +126,26 @@ pub async fn create_bookmark(
         }
     }
 
-    // Create the bookmark
-    match state.store.create_bookmark(&id, chapter_index, &paragraph_id, body.label.clone()) {
-        Ok(bookmark) => (StatusCode::CREATED, Json(bookmark)).into_response(),
-        Err(_) => (
+    // Create the bookmark. File lookup and file write are blocking work.
+    let label = body.label.clone();
+    let created = super::books::blocking(move || {
+        let book = epub_parser::book_file_info(&state.library_path, &id).map(|(path, title)| {
+            BookmarkBook {
+                file_name: path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                file_path: path.to_string_lossy().into_owned(),
+                title,
+            }
+        });
+        state.store.create_bookmark(&id, chapter_index, &paragraph_id, label, book)
+    })
+    .await;
+
+    match created {
+        Ok(Ok(bookmark)) => (StatusCode::CREATED, Json(bookmark)).into_response(),
+        Ok(Err(_)) | Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
                 error: "Failed to create bookmark".to_string(),

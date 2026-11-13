@@ -40,7 +40,9 @@ export function normaliseItems(pdfItems, pageHeight) {
     const fontSize = Math.sqrt(transform[0] ** 2 + transform[1] ** 2);
     const x0 = transform[4];
     const y1 = pageHeight - transform[5]; // bottom edge in top-down space
-    const y0 = y1 - fontSize;             // top edge
+    // Top edge. Clamped at the page top: floating-point rounding can give a
+    // tiny negative value (e.g. -2.8e-14) for text that starts exactly there.
+    const y0 = Math.max(0, y1 - fontSize);
     const x1 = x0 + item.width;
 
     result.push({

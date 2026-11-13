@@ -121,12 +121,16 @@ export class PdfNavigator {
     if (this._mode !== 'chapter') return;
 
     const entries = [];
+    // Start page of each top-level outline entry, used by getTocEntries() to
+    // find the chapter an entry belongs to.
+    this._outlinePages = new Map();
 
     for (const entry of this._outline) {
       try {
         const pageNum = await this._resolveEntryPage(entry);
         if (pageNum !== null) {
           entries.push({ title: entry.title || '', startPage: pageNum });
+          this._outlinePages.set(entry, pageNum);
         }
       } catch (e) {
         // Skip entries whose destination can't be resolved
@@ -281,17 +285,29 @@ export class PdfNavigator {
     const entries = [];
     const topLevelOutline = this._outline || [];
 
+    // _chapters is built from the resolved top-level entries, sorted by page and
+    // without duplicates, so the i-th outline entry is not always the i-th
+    // chapter: an entry belongs to the chapter that contains its start page.
+    // An entry whose destination could not be resolved follows the previous one.
+    let chapterIndex = 0;
     for (let i = 0; i < topLevelOutline.length; i++) {
-      // Only top-level entries that resolved to chapters are navigation units.
-      // We need to find the chapter index for this outline entry.
-      // Since _chapters is built from resolved top-level entries (sorted/deduped),
-      // we use the index within _chapters. The outline order may differ from _chapters
-      // order if entries were sorted by page, but typically they align.
-      const chapterIndex = Math.min(i, this._chapters.length - 1);
+      const page = this._outlinePages ? this._outlinePages.get(topLevelOutline[i]) : undefined;
+      if (page !== undefined) chapterIndex = this._chapterIndexForPage(page);
       this._collectTocEntries(topLevelOutline[i], chapterIndex, 0, entries);
     }
 
     return entries;
+  }
+
+  /**
+   * Index of the chapter whose page range contains `page` (1-based).
+   * @private
+   */
+  _chapterIndexForPage(page) {
+    for (let i = this._chapters.length - 1; i >= 0; i--) {
+      if (page >= this._chapters[i].startPage) return i;
+    }
+    return 0;
   }
 
   /**
@@ -709,12 +725,15 @@ export function computeCanvasScale(pageWidth, pageHeight, containerWidth) {
  * @param {HTMLElement} container - DOM element to append canvases to
  * @returns {Promise<void>}
  */
-export async function renderPdfCanvas(doc, pageNumbers, container) {
+export async function renderPdfCanvas(doc, pageNumbers, container, isCurrent = () => true) {
   // Clear previous canvases for memory management
   container.innerHTML = '';
 
+  // `isCurrent` returns false once a newer rendering of the same container has
+  // started: this one must then stop without appending more canvases.
   for (const n of pageNumbers) {
     const page = await doc.getPage(n);
+    if (!isCurrent()) return;
     const defaultViewport = page.getViewport({ scale: 1 });
     const scale = container.clientWidth / defaultViewport.width;
     const viewport = page.getViewport({ scale });
@@ -727,6 +746,7 @@ export async function renderPdfCanvas(doc, pageNumbers, container) {
 
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport }).promise;
+    if (!isCurrent()) return;
 
     container.appendChild(canvas);
   }

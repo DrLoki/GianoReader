@@ -1,5 +1,6 @@
 import { apiFetch, getStoredPassword } from './client';
 import { isOfflineMode, getLocalPreferences } from './local-db';
+import { FREE_BYTE_LIMIT, utf8Length, splitByByteLimit } from '../utils/text-limits';
 
 const STATIC_LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -26,8 +27,6 @@ const STATIC_LANGUAGES = [
   { code: 'sl', name: 'Slovenščina' },
   { code: 'vi', name: 'Tiếng Việt' },
 ];
-
-const CHAR_LIMIT = 4500;
 
 /**
  * Internal language codes that Google spells differently. For Google, `pt`
@@ -71,12 +70,18 @@ async function translateChunkOffline(text: string, sourceLang: string, targetLan
   if (!navigator.onLine && baseUrl.includes('translate.googleapis.com')) {
     throw new Error('OFFLINE_NO_INTERNET');
   }
-  const sl = sourceLang || 'auto';
-  const url = `${baseUrl}?client=gtx&sl=${sl}&tl=${toGoogleLangCode(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Translation proxy error: ${res.status}`);
-  const data = await res.json();
-  return data[0].map((seg: any) => seg[0]).join('');
+  const sl = encodeURIComponent(sourceLang || 'auto');
+  // A text over the limit (one very long paragraph) is split: the endpoint
+  // rejects URLs that are too long (see utils/text-limits.ts).
+  const translatedPieces: string[] = [];
+  for (const piece of splitByByteLimit(text)) {
+    const url = `${baseUrl}?client=gtx&sl=${sl}&tl=${toGoogleLangCode(targetLang)}&dt=t&q=${encodeURIComponent(piece)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Translation proxy error: ${res.status}`);
+    const data = await res.json();
+    translatedPieces.push(data[0].map((seg: any) => seg[0]).join(''));
+  }
+  return translatedPieces.map((p) => p.trim()).join(' ');
 }
 
 async function postTranslateOffline(
@@ -93,7 +98,8 @@ async function postTranslateOffline(
   for (let i = 0; i < paragraphs.length; i++) {
     const para = paragraphs[i];
     const separator = batchText ? '\n\n' : '';
-    if (batchText && (batchText + separator + para).length > CHAR_LIMIT) {
+    // Counted in UTF-8 bytes, not characters: the text travels in the URL
+    if (batchText && utf8Length(batchText + separator + para) > FREE_BYTE_LIMIT) {
       batches.push({ start: batchStart, end: i, text: batchText });
       batchStart = i;
       batchText = para;

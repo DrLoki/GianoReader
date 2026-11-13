@@ -6,7 +6,8 @@
  * Per uso commerciale o ad alto volume usare l'API ufficiale Google Cloud Translation.
  */
 
-/** Limite di caratteri per singola richiesta (~5000 è il massimo di Google). */
+import { FREE_BYTE_LIMIT, utf8Length, splitByByteLimit } from './text-limits.js';
+
 function loadSettings() {
   try {
     return JSON.parse(localStorage.getItem('giano-reader-settings') || '{}');
@@ -149,11 +150,18 @@ async function translateChunk(text, targetLang) {
       throw new Error(`Translation error: ${err?.message || err}`);
     }
   } else {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${toGoogleLangCode(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Translation error: ${res.status}`);
-    const data = await res.json();
-    result = data[0].map(seg => seg[0]).join('');
+    // Un testo oltre il limite (un singolo paragrafo molto lungo) viene diviso:
+    // l'endpoint rifiuta gli URL troppo lunghi (vedi text-limits.js). In Tauri
+    // la stessa suddivisione avviene nel comando Rust.
+    const translatedPieces = [];
+    for (const piece of splitByByteLimit(text)) {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${toGoogleLangCode(targetLang)}&dt=t&q=${encodeURIComponent(piece)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Translation error: ${res.status}`);
+      const data = await res.json();
+      translatedPieces.push(data[0].map(seg => seg[0]).join(''));
+    }
+    result = translatedPieces.map(p => p.trim()).join(' ');
   }
 
   const duration = (performance.now() - startTime) / 1000;
@@ -291,15 +299,21 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
     return results;
   }
 
-  // FREE / PRO mode: batch by joined text length (~4500 chars, separated by \n\n)
+  // FREE / PRO mode: batch by joined text length (separated by \n\n).
+  // PRO conta i caratteri; FREE conta i byte UTF-8, perché il testo viaggia
+  // nell'URL e con alfabeti non latini 4500 caratteri superano il limite
+  // dell'endpoint (vedi text-limits.js).
   const batches = [];
   let batchStart = 0;
   let batchText = '';
+  const fits = isPro
+    ? (text) => text.length <= CHAR_LIMIT
+    : (text) => utf8Length(text) <= FREE_BYTE_LIMIT;
 
   for (let i = 0; i < paragraphs.length; i++) {
     const para = paragraphs[i];
     const separator = batchText ? '\n\n' : '';
-    if (batchText && (batchText + separator + para).length > CHAR_LIMIT) {
+    if (batchText && !fits(batchText + separator + para)) {
       batches.push({ start: batchStart, end: i, text: batchText });
       batchStart = i;
       batchText = para;

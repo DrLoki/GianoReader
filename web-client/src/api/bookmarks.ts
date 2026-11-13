@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, ensureOk } from './client';
 import type { Bookmark } from '../types';
 import { isOfflineMode, isLocalId, getLocalBookmarks, createLocalBookmark, deleteLocalBookmark } from './local-db';
 
@@ -18,7 +18,7 @@ export async function getBookmarks(bookId: string): Promise<Bookmark[]> {
   }
 
   try {
-    const response = await apiFetch(`/api/books/${bookId}/bookmarks`);
+    const response = ensureOk(await apiFetch(`/api/books/${bookId}/bookmarks`), 'Bookmark list');
     return response.json() as Promise<Bookmark[]>;
   } catch {
     // Network failure — server bookmarks are unreachable; return empty
@@ -45,6 +45,7 @@ export async function createBookmark(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  ensureOk(response, 'Bookmark creation');
   return response.json() as Promise<Bookmark>;
 }
 
@@ -57,8 +58,9 @@ export async function deleteBookmark(bookId: string, bookmarkId: string): Promis
   if (isOfflineMode() || isLocalId(bookId)) {
     return deleteLocalBookmark(bookmarkId);
   }
-  await apiFetch(`/api/books/${bookId}/bookmarks/${bookmarkId}`, {
+  const response = await apiFetch(`/api/books/${bookId}/bookmarks/${bookmarkId}`, {
     method: 'DELETE',
   });
+  ensureOk(response, 'Bookmark deletion');
 }
 

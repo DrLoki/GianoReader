@@ -1,6 +1,8 @@
 import ePub from 'epubjs';
 import type { BookSummary, TocEntry, ChapterResponse, ReadingState, Bookmark, Preferences } from '../types';
 import { apiFetch } from './client';
+import { sha256 } from '../utils/sha256';
+import { TEXT_BLOCK_SELECTOR, ownTextSource } from '../utils/text-blocks';
 
 const DB_NAME = 'giano_local_db';
 const DB_VERSION = 1;
@@ -459,8 +461,8 @@ export async function deleteLocalBookmark(bookmarkId: string): Promise<void> {
 export async function generateParagraphId(bookId: string, chapterIndex: number, paragraphIndex: number): Promise<string> {
   const input = `${bookId}${chapterIndex}${paragraphIndex}`;
   const encoded = new TextEncoder().encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-  const hashArray = new Uint8Array(hashBuffer);
+  // Not crypto.subtle directly: it does not exist on plain http:// LAN addresses
+  const hashArray = await sha256(encoded);
   return Array.from(hashArray.slice(0, 8))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
@@ -532,25 +534,19 @@ function escapeHtml(str: string): string {
 }
 
 async function extractParagraphs(body: HTMLElement, bookId: string, chapterIndex: number): Promise<any[]> {
-  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'];
-  const rawBlocks = body.querySelectorAll?.(selectors.join(', '));
-  // Un <blockquote> che contiene a sua volta p/h*/li/blockquote (blocchi già
-  // selezionati singolarmente) non va incluso come blocco proprio, altrimenti
-  // il suo testo verrebbe duplicato. Va incluso solo se è "foglia" di testo
-  // (contiene solo span/testo inline, come nei blockquote di dialogo/SMS).
-  const blocks = rawBlocks
-    ? Array.from(rawBlocks).filter((el) => {
-        if (el.tagName.toLowerCase() !== 'blockquote') return true;
-        return !el.querySelector(selectors.join(', '));
-      })
-    : rawBlocks;
+  const rawBlocks = body.querySelectorAll?.(TEXT_BLOCK_SELECTOR);
+  // Un blocco che contiene altri blocchi (<li><p>…</p></li>, liste annidate,
+  // <blockquote> di paragrafi) contribuisce solo con il testo suo proprio: i
+  // blocchi interni sono già selezionati singolarmente e verrebbero duplicati.
+  const blocks = rawBlocks ? Array.from(rawBlocks) : rawBlocks;
   if (blocks && blocks.length > 0) {
     const r: any[] = [];
     let paragraphIndex = 0;
     let pendingNativeId: string | undefined;
     for (let index = 0; index < blocks.length; index++) {
       const el = blocks[index];
-      const text = (el.textContent || '').trim();
+      const source = ownTextSource(el);
+      const text = source ? (source.textContent || '').trim() : '';
       if (!text) {
         // Preserve the id from empty anchor paragraphs for the next non-empty one
         const elId = (el as HTMLElement).id;
@@ -563,7 +559,7 @@ async function extractParagraphs(body: HTMLElement, bookId: string, chapterIndex
       if (nativeId) pendingNativeId = undefined;
       r.push({
         text,
-        html: stripDisallowedTags(safeInnerHtml(el as HTMLElement)),
+        html: stripDisallowedTags(safeInnerHtml(source as HTMLElement)),
         id,
         index,
         ...(nativeId ? { nativeId } : {}),
@@ -673,6 +669,11 @@ export async function parseAndSaveEpub(file: File): Promise<string> {
       }
     }
 
+    // A book where no chapter could be read must not be saved as an empty book
+    if (!chapters.some((c) => c.paragraphs.length > 0)) {
+      throw new Error('No readable chapter found in this EPUB');
+    }
+
     // Save parsed book to local DB
     await saveLocalBook(bookId, title, author, coverUrl, toc, chapters);
 
@@ -750,19 +751,27 @@ export async function downloadBookForOffline(
   // Fetch all chapters, stopping at the first non-OK response or safety cap
   const chapters: { chapterIndex: number; paragraphs: import('../types').Paragraph[] }[] = [];
   const estimatedTotal = Math.max(toc.length, 1);
+  // A failure in the middle must not be saved as a complete (truncated) book:
+  // network errors and server errors abort the download. The end of the book
+  // is the chapter count sent by the server, or a 404 when it sends none.
+  let total: number | null = null;
   let i = 0;
-  while (i < MAX_CHAPTERS_DOWNLOAD) {
-    try {
-      const res = await apiFetch(`/api/books/${serverBookId}/chapter/${i}`);
-      if (!res.ok) break;
-      const data: import('../types').ChapterResponse = await res.json();
-      if (!data.paragraphs) break; // malformed response guard
-      chapters.push({ chapterIndex: i, paragraphs: data.paragraphs });
-      i++;
-      onProgress?.(i, Math.max(estimatedTotal, i));
-    } catch {
-      break;
+  while (i < MAX_CHAPTERS_DOWNLOAD && (total === null || i < total)) {
+    const res = await apiFetch(`/api/books/${serverBookId}/chapter/${i}`);
+    if (res.status === 404 && total === null) break;
+    if (!res.ok) {
+      throw new Error(`Download of chapter ${i} failed: HTTP ${res.status}`);
     }
+    const data: import('../types').ChapterResponse = await res.json();
+    if (!data.paragraphs) {
+      throw new Error(`Download of chapter ${i} failed: malformed response`);
+    }
+    if (typeof data.totalChapters === 'number' && data.totalChapters > 0) {
+      total = data.totalChapters;
+    }
+    chapters.push({ chapterIndex: i, paragraphs: data.paragraphs });
+    i++;
+    onProgress?.(i, Math.max(total ?? estimatedTotal, i));
   }
 
   if (chapters.length === 0) {

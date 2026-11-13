@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, ensureOk } from './client';
 import type { ReadingState } from '../types';
 import { isOfflineMode, isLocalId, getLocalReadingState, putLocalReadingState } from './local-db';
 
@@ -30,10 +30,11 @@ export async function putReadingState(bookId: string, state: ReadingState): Prom
   if (isOfflineMode() || isLocalId(bookId)) {
     return putLocalReadingState(bookId, state);
   }
-  await apiFetch(`/api/books/${bookId}/state`, {
+  const response = await apiFetch(`/api/books/${bookId}/state`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(state),
   });
+  ensureOk(response, 'Reading state update');
 }
 
