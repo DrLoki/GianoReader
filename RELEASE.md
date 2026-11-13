@@ -9,6 +9,10 @@ It also adds **book ratings** (1 to 5 stars, editable from the desktop and from 
 
 ---
 
+## 📝 Changelog (v0.9.5 → v0.10.0)
+
+
+
 ## 📝 Changelog (v0.9.4 → v0.9.5)
 
 ### ⭐ Book Ratings

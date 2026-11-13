@@ -20,6 +20,16 @@ pub struct CreateBookmarkRequest {
     pub label: Option<String>,
 }
 
+/// Scroll percentage (0–100) of the paragraph at `position` in a chapter of
+/// `count` paragraphs: 0 for the first one, 100 for the last.
+pub fn paragraph_scroll_pct(position: usize, count: usize) -> u32 {
+    if count < 2 {
+        return 0;
+    }
+    let last = count - 1;
+    ((position.min(last) * 100 + last / 2) / last) as u32
+}
+
 /// GET /api/books/:id/bookmarks
 /// Returns 200 with a JSON array of bookmarks sorted by chapterIndex asc, paragraphId numerically asc.
 pub async fn list_bookmarks(
@@ -139,7 +149,22 @@ pub async fn create_bookmark(
                 title,
             }
         });
-        state.store.create_bookmark(&id, chapter_index, &paragraph_id, label, book)
+        // Position of the paragraph inside its chapter, as the percentage the
+        // desktop app scrolls to when it opens the bookmark.
+        let scroll_pct = epub_parser::get_chapter(&state.library_path, &id, chapter_index)
+            .ok()
+            .and_then(|chapter| {
+                let count = chapter.paragraphs.len();
+                chapter
+                    .paragraphs
+                    .iter()
+                    .position(|p| p.id == paragraph_id)
+                    .map(|pos| paragraph_scroll_pct(pos, count))
+            })
+            .unwrap_or(0);
+        state
+            .store
+            .create_bookmark(&id, chapter_index, &paragraph_id, label, book, scroll_pct)
     })
     .await;
 
@@ -178,5 +203,22 @@ pub async fn delete_bookmark(
             }),
         )
             .into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::paragraph_scroll_pct;
+
+    #[test]
+    fn paragraph_scroll_pct_spans_the_chapter() {
+        assert_eq!(paragraph_scroll_pct(0, 11), 0);
+        assert_eq!(paragraph_scroll_pct(5, 11), 50);
+        assert_eq!(paragraph_scroll_pct(10, 11), 100);
+        assert_eq!(paragraph_scroll_pct(1, 4), 33);
+        // Degenerate chapters and out-of-range positions
+        assert_eq!(paragraph_scroll_pct(0, 0), 0);
+        assert_eq!(paragraph_scroll_pct(0, 1), 0);
+        assert_eq!(paragraph_scroll_pct(99, 11), 100);
     }
 }

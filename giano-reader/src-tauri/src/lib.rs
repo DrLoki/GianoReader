@@ -68,12 +68,10 @@ fn get_server_status(
     guard.as_ref().map(|h| {
         let display_ip = h.lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
         let lan_url = format!("http://{}:{}", display_ip, h.port);
-        let qr_url = h.hostname_url.as_ref().unwrap_or(&lan_url).clone();
         ServerInfo {
             port: h.port,
+            qr_url: lan_url.clone(),
             lan_url,
-            hostname_url: h.hostname_url.clone(),
-            qr_url,
         }
     })
 }

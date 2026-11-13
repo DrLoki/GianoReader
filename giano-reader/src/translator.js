@@ -7,6 +7,7 @@
  */
 
 import { FREE_BYTE_LIMIT, utf8Length, splitByByteLimit } from './text-limits.js';
+import { segmentMarker, buildNumberedBatch, parseNumberedBatch, stripSegmentMarkers } from './pro-segments.js';
 
 function loadSettings() {
   try {
@@ -65,8 +66,9 @@ async function translateChunkPro(text, targetLang, apiKey, model, signal) {
         {
           role: 'system',
           content: `You are an expert literary translator. Translate the text into the language code: "${toLlmLangCode(targetLang)}".
-Maintain the exact original paragraph structure and do not merge paragraphs. Paragraphs are separated by double newlines (\\n\\n).
-CRITICAL: Return ONLY the translated text, preserving the exact paragraph count and double newlines. Do not include any introductory or concluding text, explanations, or conversational filler.`
+Each paragraph starts with a numbered marker such as ${segmentMarker(1)}, ${segmentMarker(2)}, ${segmentMarker(3)}. Paragraphs are separated by double newlines (\\n\\n).
+CRITICAL: Start every translated paragraph with its own marker, copied exactly, with the same number. Never merge, split, add, drop or reorder paragraphs: the answer must contain exactly the same markers as the input. Copy unchanged any other token between the same brackets (for example ⟦IMG0⟧).
+Return ONLY the translated text. Do not include any introductory or concluding text, explanations, or conversational filler.`
         },
         {
           role: 'user',
@@ -323,11 +325,43 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
   }
   if (batchText) batches.push({ start: batchStart, end: paragraphs.length, text: batchText });
 
+  // PRO: ogni paragrafo viaggia con un marcatore numerato (vedi pro-segments.js),
+  // così la risposta si riallinea per numero anche se il modello unisce o
+  // spezza le righe, senza dover ritradurre i paragrafi uno per uno.
+  const translateOnePro = async (text) => {
+    const raw = await translateChunkPro(buildNumberedBatch([text]), targetLang, apiKey, model, signal);
+    const parsed = parseNumberedBatch(raw, 1);
+    return parsed ? parsed[0] : stripSegmentMarkers(raw);
+  };
+
   for (const batch of batches) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const translated = isPro
-      ? await translateChunkPro(batch.text, targetLang, apiKey, model, signal)
-      : await translateChunk(batch.text, targetLang);
+
+    if (isPro) {
+      const count = batch.end - batch.start;
+      const slice = paragraphs.slice(batch.start, batch.end);
+      const raw = await translateChunkPro(buildNumberedBatch(slice), targetLang, apiKey, model, signal);
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+      let parts = parseNumberedBatch(raw, count);
+      if (!parts) {
+        // Marcatori non rispettati: prova con le righe vuote, come in passato
+        const byBlankLine = stripSegmentMarkers(raw).split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+        if (byBlankLine.length === count) parts = byBlankLine;
+      }
+      if (parts) {
+        for (let j = 0; j < count; j++) results[batch.start + j] = parts[j];
+      } else {
+        // Ultima risorsa: un paragrafo per richiesta
+        for (let j = 0; j < count; j++) {
+          if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+          results[batch.start + j] = (await translateOnePro(slice[j])).trim();
+        }
+      }
+      continue;
+    }
+
+    const translated = await translateChunk(batch.text, targetLang);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
     // Risplittiamo per doppio newline per riallineare ai paragrafi originali
@@ -346,9 +380,7 @@ export async function translateParagraphs(paragraphs, targetLang, signal) {
       for (let j = 0; j < count; j++) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const idx = batch.start + j;
-        const single = isPro
-          ? await translateChunkPro(paragraphs[idx], targetLang, apiKey, model, signal)
-          : await translateChunk(paragraphs[idx], targetLang);
+        const single = await translateChunk(paragraphs[idx], targetLang);
         results[idx] = single.trim();
       }
     }

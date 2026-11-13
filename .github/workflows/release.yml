@@ -10,7 +10,12 @@ env:
   ACTIONS_ALLOW_UNSECURE_NODE_VERSION: true
 
 jobs:
+  # A release is built only from a commit whose test suites pass
+  test:
+    uses: ./.github/workflows/tests.yml
+
   build:
+    needs: test
     strategy:
       fail-fast: false
       matrix:

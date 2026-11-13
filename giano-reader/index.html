@@ -143,6 +143,18 @@
               <line x1="8" y1="12" x2="16" y2="12" />
             </svg>
           </button>
+          <button id="book-translation-btn" class="view-toggle-btn" disabled title="Book translation"
+            aria-label="Book translation">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 5h9" />
+              <path d="M8.5 3v2" />
+              <path d="M11 5c-.8 3.6-3.4 6.6-7 8" />
+              <path d="M6.5 8.5c1.2 2 3 3.5 5 4.5" />
+              <path d="M13 21l4.5-10L22 21" />
+              <path d="M14.6 17.5h5.8" />
+            </svg>
+          </button>
           <span id="translation-status"></span>
           <span id="sync-disabled-notice" class="hidden sync-notice"></span>
         </div>
@@ -260,6 +272,34 @@
         <button id="bm-export-btn" title="Export bookmarks to JSON"><img src="/icons/download.svg" class="icon"
             alt="" /></button>
         <input type="file" id="bm-import-input" accept=".json" style="display:none" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: traduzione del libro aperto (cache, completamento, download) -->
+  <div id="book-translation-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="bt-modal-title">
+    <div class="modal-box modal-box--translation">
+      <div class="modal-header">
+        <h2 id="bt-modal-title">Book translation</h2>
+        <button id="bt-close-btn" class="modal-close" title="Close"><img src="/icons/xmark.svg" class="icon"
+            alt="" /></button>
+      </div>
+      <p id="bt-book" class="bt-book"></p>
+      <div class="bt-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+        id="bt-progress">
+        <div class="bt-progress-track"><div id="bt-progress-fill" class="bt-progress-fill"></div></div>
+        <span id="bt-percent" class="bt-percent"></span>
+      </div>
+      <p id="bt-summary" class="bt-summary"></p>
+      <p id="bt-status" class="bt-status" aria-live="polite"></p>
+      <ul id="bt-chapters" class="bt-chapters"></ul>
+      <p id="bt-variants" class="settings-hint"></p>
+      <div class="modal-footer bt-actions">
+        <button id="bt-retranslate-btn"></button>
+        <button id="bt-clear-btn"></button>
+        <button id="bt-download-btn"></button>
+        <button id="bt-complete-btn" class="btn-primary"></button>
       </div>
     </div>
   </div>
@@ -442,6 +482,7 @@
           <input type="password" id="web-server-password-input" placeholder=""
             autocomplete="off" />
         </div>
+        <p id="web-server-basic-hint" class="settings-hint hidden"></p>
         <!-- Web Server Mode (Tauri only) -->
         <div id="web-server-settings" class="settings-row hidden">
           <label>Web Server Mode</label>
@@ -457,10 +498,6 @@
             <p id="web-server-error" class="settings-error hidden"></p>
             <div id="web-server-info" class="hidden">
               <div class="web-server-url-row">
-                <label class="switch" for="web-server-url-toggle" title="Switch between PC Name and IP">
-                  <input type="checkbox" id="web-server-url-toggle" />
-                  <span class="switch-slider"></span>
-                </label>
                 <a id="web-server-url" class="web-server-url" href="#" target="_blank" rel="noopener noreferrer" title="Click to open in browser"></a>
               </div>
               <img id="web-server-qr" class="web-server-qr" alt="QR Code" />
@@ -618,6 +655,7 @@
             <label for="detail-notes">Notes</label>
             <textarea id="detail-notes" rows="3" placeholder="Personal notes..."></textarea>
           </div>
+          <p id="detail-translation" class="settings-hint"></p>
           <div id="detail-file-info"></div>
         </div>
       </div>

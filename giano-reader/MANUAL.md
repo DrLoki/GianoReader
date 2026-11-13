@@ -191,6 +191,25 @@ The translated panel preserves the visual structure of the chapter, not just pla
 
 Use the dropdown menu with flags in the sidebar. Changing the language automatically restarts the translation of the current chapter in the active mode.
 
+### Saved Translations and Book Translation
+
+Translations are saved per book on your computer, separately for each target language and engine (FREE, BASIC, PRO). Going back to a chapter, reopening the book or restarting the app shows the saved translation at once, without new requests (and without new costs for BASIC and PRO). If you edit the book file, unchanged paragraphs keep their translation.
+
+Click the **Book translation** button (the "A文" icon in the translation panel header) to open a window that shows, for the current language and engine:
+
+- the share of the book already translated, with paragraph and chapter counts and the characters still to translate;
+- a list of chapters with their progress (click a chapter to open it);
+- the other languages or engines with saved translations for this book.
+
+From the same window you can:
+
+- **Complete translation**: translates in the background every paragraph not yet translated. You can keep reading meanwhile; **Stop** ends it and keeps what was translated. With BASIC and PRO, the number of characters is shown and confirmed before starting, since these engines use your paid key.
+- **Download translated book**: saves an EPUB with the translated text. For an EPUB, the copy keeps the original layout, styles, images and table of contents; formatting inside a paragraph (italic, bold, links) is not kept in the translated text. For a PDF, a new simple EPUB is created with one section per chapter or page. Paragraphs not translated yet stay in the original language.
+- **Retranslate chapter**: translates the current chapter again, replacing its saved translation.
+- **Delete saved translations**: removes the saved translations of this book for the current language and engine.
+
+The saved translations of a book are deleted when you delete the book from the library. The book details panel shows which translations are saved and how complete they are.
+
 ### Hiding the Translation Panel
 
 Click the **arrows** icon (arrows-left-right-to-line) to hide or show the translation panel. This is useful for reading the original text full-screen.
@@ -223,8 +242,13 @@ This is the primary method for importing an existing collection:
 2. Click the **Select folder** button (upload icon).
 3. Choose the root folder that contains your EPUB files.
 4. Giano Reader scans the folder and its subfolders up to the configured scan depth (default: 3 levels).
-5. For every `.epub` file found, Giano Reader automatically extracts: title, author, publisher, year, language, description, cover, and estimated page count.
-6. Upon completion, a summary is displayed: *"Scan complete: X added, Y already in library."*
+5. For every new `.epub` or `.pdf` file, Giano Reader extracts: title, author, publisher, year, language, description, cover, and estimated page count.
+6. Upon completion, a summary is displayed: *"Scan complete: X added, Y updated, Z unchanged."*
+
+Scanning the same folder again is fast: books already in the library are recognised by their path and are not opened again.
+
+- **Edited books are analysed again.** If a book file changed since it was indexed (different size or modification date), its metadata, cover and page count are read again. What you entered yourself is kept: reading status, notes, rating, and any field you edited in the book details (for example a corrected title).
+- **A scan never removes books.** Books on a drive that is not connected stay in the library. To remove books whose file no longer exists, use the library check command explicitly.
 
 > **Scan Depth:** You can change the number of nested subfolder levels explored in **Settings** (using the *Search depth* field, value from 1 to 10). Increase this value if you have a highly nested folder hierarchy.
 
@@ -332,7 +356,8 @@ When a password is set:
 - The web client shows a login prompt on first access.
 - Entering the correct password grants full access to the library, bookmarks, reading state, and chapters.
 - Entering an incorrect password (or leaving the field empty and clicking "Sign in") enters **Guest Mode**: the user can still load a local EPUB file and read/translate it, but cannot browse the server library or bookmarks.
-- **Translation in Guest Mode**: if a Google Cloud API Key has been configured on the server, BASIC translation mode is available even in guest mode (the `/api/translate` endpoint is public and does not require authentication). The user can select BASIC in the translation mode dropdown in settings.
+- **Translation in Guest Mode**: guests translate with the FREE engine. BASIC uses your paid Google Cloud quota, so it is available only to users who entered the password.
+- **BASIC needs a password**: when no password is set, any device on your network could reach the server, so the server answers BASIC translation requests with the FREE engine. Set a password to use BASIC from the phone. The Settings tab shows a reminder when a Google Cloud API Key is configured without a password.
 - Book covers are always accessible without password (they are loaded via `<img>` tags which cannot send authentication headers).
 
 To remove password protection, clear the Password field in Settings.
@@ -459,7 +484,7 @@ Open Settings by clicking the **gear** icon in the sidebar.
 | **Fetch models** | Clicking the button fetches the list of available models from OpenRouter |
 | **OpenRouter Model (PRO)** | Dropdown selector to choose the LLM model to use for PRO translations |
 | **Cloudflare Worker Subdomain** | Cloudflare subdomain prefix for your CORS proxy worker (e.g. `happy-reader` to use `https://giano-translate-proxy.happy-reader.workers.dev`). If empty, direct Google Translate endpoint is used. |
-| **Password** | Optional password to protect the Web Server. When set, accessing the library and bookmarks from the web client requires entering this password. Translation and preferences remain accessible without authentication. |
+| **Password** | Optional password to protect the Web Server. When set, accessing the library, bookmarks and BASIC translation from the web client requires entering this password. Without a password the server translates with the FREE engine only. |
 | **Web Server Mode** | Toggle to start/stop the embedded HTTP server for mobile access (default port: 8888) |
 
 All settings are saved automatically. In the desktop application (Tauri), the Library and Bookmarks databases are stored in dedicated JSON files directly in the filesystem (`giano-library.json` and `giano-bookmarks.json` in the app's standard data directory), permanently bypassing browser storage quota limitations (`localStorage`) and avoiding "storage quota exceeded" errors when importing large ebook collections.

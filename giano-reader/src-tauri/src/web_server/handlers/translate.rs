@@ -75,6 +75,12 @@ pub struct Language {
     pub name: String,
 }
 
+/// BASIC (paid Google Cloud) translation is served only when the server has a
+/// password: without one, any device on the network could spend the quota.
+pub fn basic_allowed(prefs: &crate::web_server::models::Preferences) -> bool {
+    prefs.password.is_some()
+}
+
 /// POST /api/translate
 ///
 /// Translates an array of text strings from `sourceLang` to `targetLang`.
@@ -207,10 +213,12 @@ pub async fn post_translate(
     // Call the translation engine based on mode
     let mode = body.mode.as_deref().unwrap_or("free");
 
-    let result = if mode == "basic" {
-        // Load Google Cloud API key from preferences
-        let prefs = match state.store.get_preferences() {
-            Ok(p) => p,
+    // BASIC spends the owner's paid Google Cloud quota. Without a server
+    // password every device on the network can call this endpoint, so BASIC is
+    // then not offered and the request is served by the FREE engine instead.
+    let prefs = if mode == "basic" {
+        match state.store.get_preferences() {
+            Ok(p) => Some(p),
             Err(_) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -220,8 +228,14 @@ pub async fn post_translate(
                 )
                     .into_response();
             }
-        };
+        }
+    } else {
+        None
+    };
+    let basic_prefs = prefs.filter(basic_allowed);
 
+    let result = if let Some(prefs) = basic_prefs {
+        // Load Google Cloud API key from preferences
         let api_key = match prefs.gcloud_api_key {
             Some(ref key) if !key.is_empty() => key.clone(),
             _ => {
@@ -318,6 +332,16 @@ mod tests {
             .route("/api/translate", post(post_translate))
             .route("/api/translate/languages", get(get_languages))
             .with_state(state)
+    }
+
+    #[test]
+    fn test_basic_needs_a_server_password() {
+        use crate::web_server::models::Preferences;
+        let mut prefs = Preferences::default();
+        prefs.gcloud_api_key = Some("key".into());
+        assert!(!basic_allowed(&prefs));
+        prefs.password = Some("digest".into());
+        assert!(basic_allowed(&prefs));
     }
 
     #[tokio::test]

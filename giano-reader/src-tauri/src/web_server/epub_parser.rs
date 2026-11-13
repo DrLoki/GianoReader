@@ -599,11 +599,131 @@ fn find_spine_index_for_path<R: std::io::Read + std::io::Seek>(
     None
 }
 
-/// Returns the cover image bytes and MIME type for the book matching `book_id`.
-/// The MIME type is `"image/png"` if the epub reports it as such, otherwise
-/// defaults to `"image/jpeg"`.
+// ── Cover thumbnails ─────────────────────────────────────────────────────────
+
+/// Cover image: bytes and MIME type.
+type Cover = (Vec<u8>, &'static str);
+
+/// book_id → thumbnail from the desktop library, with the mtime of the library
+/// JSON it was read from. Rebuilt when the library file changes.
+type ThumbCache = (Option<SystemTime>, HashMap<String, Cover>);
+fn thumb_cache() -> &'static Mutex<Option<ThumbCache>> {
+    static C: OnceLock<Mutex<Option<ThumbCache>>> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(None))
+}
+
+/// Library entry fields needed for the thumbnails.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ThumbEntry {
+    file_path: String,
+    #[serde(default)]
+    cover_data_url: Option<String>,
+}
+
+/// Decodes a `data:image/…;base64,…` URL. Returns `None` for anything else.
+fn decode_image_data_url(url: &str) -> Option<Cover> {
+    let rest = url.strip_prefix("data:")?;
+    let (meta, data) = rest.split_once(',')?;
+    let mime_type = meta.strip_suffix(";base64")?;
+    let mime: &'static str = match mime_type.to_ascii_lowercase().as_str() {
+        "image/jpeg" | "image/jpg" => "image/jpeg",
+        "image/png" => "image/png",
+        "image/webp" => "image/webp",
+        "image/gif" => "image/gif",
+        _ => return None,
+    };
+    let bytes = decode_base64(data)?;
+    if bytes.is_empty() {
+        return None;
+    }
+    Some((bytes, mime))
+}
+
+/// Standard base64 decoder (padding optional, whitespace ignored).
+fn decode_base64(input: &str) -> Option<Vec<u8>> {
+    fn value(c: u8) -> Option<u32> {
+        match c {
+            b'A'..=b'Z' => Some((c - b'A') as u32),
+            b'a'..=b'z' => Some((c - b'a' + 26) as u32),
+            b'0'..=b'9' => Some((c - b'0' + 52) as u32),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let mut out = Vec::with_capacity(input.len() * 3 / 4);
+    let mut buffer: u32 = 0;
+    let mut bits = 0;
+    for &c in input.as_bytes() {
+        if c == b'=' {
+            break;
+        }
+        if c.is_ascii_whitespace() {
+            continue;
+        }
+        buffer = (buffer << 6) | value(c)?;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
+}
+
+/// The cover thumbnail the desktop app keeps in its library (about 200 px
+/// wide), for the book matching `book_id`.
+///
+/// The PWA shows covers as small tiles: serving this thumbnail instead of the
+/// original image saves opening the EPUB and sending a picture that can weigh
+/// several MB for each tile of the library grid.
+fn library_thumbnail(library_path: &Path, book_id: &str) -> Option<Cover> {
+    let lib_mtime = library_json_mtime(library_path);
+    if let Ok(cache) = thumb_cache().lock() {
+        if let Some((cached_mtime, map)) = cache.as_ref() {
+            if *cached_mtime == lib_mtime {
+                return map.get(book_id).cloned();
+            }
+        }
+    }
+
+    // Library changed (or first request): rebuild the whole map once
+    let json_path = library_path
+        .parent()
+        .unwrap_or(library_path)
+        .join("giano-reader-library.json");
+    let mut map = HashMap::new();
+    if let Ok(content) = fs::read_to_string(&json_path) {
+        if let Ok(entries) = serde_json::from_str::<Vec<ThumbEntry>>(&content) {
+            for entry in entries {
+                let Some(cover) = entry.cover_data_url.as_deref().and_then(decode_image_data_url) else {
+                    continue;
+                };
+                let path = PathBuf::from(&entry.file_path);
+                let canonical = path.canonicalize().unwrap_or(path);
+                map.insert(generate_book_id(&canonical), cover);
+            }
+        }
+    }
+    let found = map.get(book_id).cloned();
+    if let Ok(mut cache) = thumb_cache().lock() {
+        *cache = Some((lib_mtime, map));
+    }
+    found
+}
+
+/// Returns the cover image bytes and MIME type for the book matching `book_id`:
+/// the thumbnail from the desktop library when there is one, otherwise the
+/// cover stored in the EPUB.
+/// For the EPUB cover the MIME type is `"image/png"` if the epub reports it as
+/// such, otherwise defaults to `"image/jpeg"`.
 /// Returns `None` if the book is not found or has no cover.
 pub fn get_cover(library_path: &Path, book_id: &str) -> Option<(Vec<u8>, &'static str)> {
+    if let Some(thumbnail) = library_thumbnail(library_path, book_id) {
+        return Some(thumbnail);
+    }
     let epub_path = find_epub_by_id(library_path, book_id)?;
 
     let mut doc = EpubDoc::new(&epub_path).ok()?;
@@ -772,15 +892,27 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
             }
         };
 
-        let inner_html = &content[tag_end..close_tag];
+        let full_inner_html = &content[tag_end..close_tag];
 
-        // A blockquote wrapping other block-level tags is a container, not a
-        // paragraph itself: skip past its opening tag only, so the nested
-        // block(s) get extracted individually on the next iterations.
-        if tag_name == "blockquote" && find_next_block_tag(inner_html, 0).is_some() {
-            search_from = tag_end;
-            continue;
-        }
+        // A block that wraps other block-level tags (`<li><p>…</p></li>`, a
+        // nested list, a `<blockquote>` of paragraphs) contributes only the
+        // text of its own: the nested blocks are extracted individually on
+        // the next iterations, so the scan resumes right after the opening tag
+        // instead of after the closing one. Same rule as `ownTextSource` in
+        // the desktop `text-blocks.js` and the PWA `text-blocks.ts`.
+        let is_container = find_next_block_tag(full_inner_html, 0).is_some();
+        let own_html;
+        let inner_html: &str = if is_container {
+            own_html = remove_nested_blocks(full_inner_html);
+            &own_html
+        } else {
+            full_inner_html
+        };
+        let next_search = if is_container {
+            tag_end
+        } else {
+            skip_past_closing_tag(content, close_tag)
+        };
 
         // Skip empty paragraphs — but preserve their native id for the next paragraph
         let text = decode_html_entities(&strip_all_tags(inner_html));
@@ -790,7 +922,7 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
             if let Some(id_val) = extract_id_attribute(opening_tag) {
                 pending_native_id = Some(id_val);
             }
-            search_from = skip_past_closing_tag(content, close_tag);
+            search_from = next_search;
             continue;
         }
 
@@ -815,10 +947,72 @@ fn extract_paragraphs(content: &str, book_id: &str, chapter_index: u32) -> Vec<P
             native_id,
         });
 
-        search_from = skip_past_closing_tag(content, close_tag);
+        search_from = next_search;
+    }
+
+    // No block-level tag at all (text directly in <div>, <td>, <pre>…): fall
+    // back to one paragraph per line of text, like the desktop app and the
+    // PWA import do, instead of returning an empty chapter.
+    if paragraphs.is_empty() {
+        let body_text = decode_html_entities(&strip_all_tags(body_content(content)));
+        for line in body_text.lines().map(str::trim).filter(|l| l.chars().count() > 2) {
+            let index = paragraphs.len() as u32;
+            paragraphs.push(Paragraph {
+                id: generate_paragraph_id(book_id, chapter_index, index),
+                index,
+                html: escape_html_text(line),
+                text: line.to_string(),
+                native_id: None,
+            });
+        }
     }
 
     paragraphs
+}
+
+/// Returns `html` without the block-level elements nested in it (and their
+/// content), keeping only the text and inline markup that belong to the outer
+/// block itself.
+fn remove_nested_blocks(html: &str) -> String {
+    let mut result = String::with_capacity(html.len());
+    let mut pos = 0;
+    while let Some((tag_start, tag_name)) = find_next_block_tag(html, pos) {
+        result.push_str(&html[pos..tag_start]);
+        let tag_end = match html[tag_start..].find('>') {
+            Some(offset) => tag_start + offset + 1,
+            None => return result, // malformed tail: drop it
+        };
+        pos = match find_closing_tag(html, tag_end, tag_name) {
+            Some(close_pos) => skip_past_closing_tag(html, close_pos),
+            // Unclosed nested block: everything after it belongs to that block
+            None => return result,
+        };
+    }
+    result.push_str(&html[pos..]);
+    result
+}
+
+/// The part of an XHTML document inside `<body>`, or the whole document when
+/// there is no body tag. `<script>` and `<style>` content is not text, but it
+/// only appears in the head, which is left out here.
+fn body_content(content: &str) -> &str {
+    let Some(body_start) = find_tag_start(content, 0, "body") else {
+        return content;
+    };
+    let Some(open_end) = content[body_start..].find('>').map(|o| body_start + o + 1) else {
+        return content;
+    };
+    let lower = content.to_ascii_lowercase();
+    let end = lower[open_end..]
+        .rfind("</body")
+        .map(|o| open_end + o)
+        .unwrap_or(content.len());
+    &content[open_end..end]
+}
+
+/// Escapes text for use as the `html` of a paragraph.
+fn escape_html_text(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 /// Generates a stable paragraph id by hashing `book_id + chapter_index + paragraph_index`
@@ -1443,6 +1637,89 @@ mod tests {
         let paras = extract_paragraphs(content, "test_book", 0);
         assert_eq!(paras.len(), 1);
         assert_eq!(paras[0].text, "-i miss you");
+    }
+
+    #[test]
+    fn decode_base64_matches_known_values() {
+        assert_eq!(decode_base64("").unwrap(), b"");
+        assert_eq!(decode_base64("Zg==").unwrap(), b"f");
+        assert_eq!(decode_base64("Zm8=").unwrap(), b"fo");
+        assert_eq!(decode_base64("Zm9v").unwrap(), b"foo");
+        assert_eq!(decode_base64("Zm9vYmFy").unwrap(), b"foobar");
+        assert_eq!(decode_base64("Zm9v\nYmFy").unwrap(), b"foobar");
+        assert_eq!(decode_base64("/+8=").unwrap(), vec![0xff, 0xef]);
+        assert!(decode_base64("Zm9v!").is_none());
+    }
+
+    #[test]
+    fn decode_image_data_url_accepts_only_images() {
+        let (bytes, mime) = decode_image_data_url("data:image/jpeg;base64,/9j/").unwrap();
+        assert_eq!(mime, "image/jpeg");
+        assert_eq!(bytes, vec![0xff, 0xd8, 0xff]);
+        assert_eq!(decode_image_data_url("data:image/png;base64,iVBO").unwrap().1, "image/png");
+        assert!(decode_image_data_url("data:text/html;base64,PGI+").is_none());
+        assert!(decode_image_data_url("data:image/jpeg,raw").is_none());
+        assert!(decode_image_data_url("https://example.com/x.jpg").is_none());
+        assert!(decode_image_data_url("data:image/jpeg;base64,").is_none());
+    }
+
+    #[test]
+    fn get_cover_prefers_the_library_thumbnail() {
+        let dir = std::env::temp_dir().join(format!("giano-test-thumb-{}", uuid::Uuid::new_v4()));
+        let library = dir.join("library");
+        fs::create_dir_all(&library).unwrap();
+        // The book file must exist for its id; it is never opened here
+        let book = dir.join("book.epub");
+        fs::write(&book, b"not really an epub").unwrap();
+        let id = generate_book_id(&book.canonicalize().unwrap());
+        let entries = serde_json::json!([{
+            "filePath": book.to_string_lossy(),
+            "coverDataUrl": "data:image/jpeg;base64,/9j/4A==",
+        }]);
+        fs::write(dir.join("giano-reader-library.json"), entries.to_string()).unwrap();
+
+        let (bytes, mime) = get_cover(&library, &id).unwrap();
+        assert_eq!(mime, "image/jpeg");
+        assert_eq!(bytes, vec![0xff, 0xd8, 0xff, 0xe0]);
+        // Unknown book: no thumbnail, and no EPUB to fall back to
+        assert!(get_cover(&library, "0000000000000000").is_none());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn texts(paras: &[Paragraph]) -> Vec<&str> {
+        paras.iter().map(|p| p.text.as_str()).collect()
+    }
+
+    #[test]
+    fn extract_paragraphs_list_item_with_paragraph_is_not_merged() {
+        let content = "<ul><li><p>one</p><p>two</p></li><li><p>three</p></li></ul>";
+        let paras = extract_paragraphs(content, "test_book", 0);
+        assert_eq!(texts(&paras), vec!["one", "two", "three"]);
+    }
+
+    #[test]
+    fn extract_paragraphs_nested_list_keeps_parent_text_and_children() {
+        let content = "<ul><li>parent <em>item</em><ul><li>child a</li><li>child b</li></ul></li></ul>";
+        let paras = extract_paragraphs(content, "test_book", 0);
+        assert_eq!(texts(&paras), vec!["parent item", "child a", "child b"]);
+        assert_eq!(paras[0].html, "parent <em>item</em>");
+    }
+
+    #[test]
+    fn extract_paragraphs_blockquote_own_text_beside_paragraphs() {
+        let content = "<blockquote>intro<p>first</p><p>second</p></blockquote>";
+        let paras = extract_paragraphs(content, "test_book", 0);
+        assert_eq!(texts(&paras), vec!["intro", "first", "second"]);
+    }
+
+    #[test]
+    fn extract_paragraphs_falls_back_to_lines_without_block_tags() {
+        let content = "<html><head><title>Ignored title</title></head><body>\n<div>First line of text</div>\n<div>Second &amp; last line</div>\n</body></html>";
+        let paras = extract_paragraphs(content, "test_book", 0);
+        assert_eq!(texts(&paras), vec!["First line of text", "Second & last line"]);
+        assert_eq!(paras[1].html, "Second &amp; last line");
+        assert_eq!(paras[1].index, 1);
     }
 
     #[test]

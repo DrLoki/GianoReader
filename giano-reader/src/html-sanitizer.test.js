@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   sanitizeHtml,
   sanitizeTree,
+  sanitizeStyle,
   isExternalHttpUrl,
   isSafeResourceUrl,
   escapeHtmlText,
@@ -57,6 +58,37 @@ describe('sanitizeHtml', () => {
   it('drops inline styles that load resources', () => {
     expect(sanitizeHtml('<span style="text-align:center">a</span>')).toBe('<span style="text-align:center">a</span>');
     expect(sanitizeHtml('<span style="background:url(https://evil/x)">a</span>')).toBe('<span>a</span>');
+  });
+
+  it('keeps only formatting declarations of an inline style', () => {
+    expect(sanitizeStyle('color: red; font-weight: bold')).toBe('color: red; font-weight: bold');
+    expect(sanitizeStyle('color: rgb(10, 20, 30); margin: calc(1em + 2px)'))
+      .toBe('color: rgb(10, 20, 30); margin: calc(1em + 2px)');
+    // Mixed: the safe declarations survive, the others are removed
+    expect(sanitizeStyle('color: red; background: url(https://evil/x); text-align: center'))
+      .toBe('color: red; text-align: center');
+    expect(sanitizeStyle('position: fixed; top: 0; left: 0; z-index: 9999; width: 100%'))
+      .toBe('width: 100%');
+  });
+
+  it('is not fooled by CSS escapes, comments or unknown functions', () => {
+    for (const bad of [
+      'background-color: \\75rl(https://evil/x)',
+      'color: r\\65 d',
+      'width: expression(alert(1))',
+      'color: red /* x */',
+      'font-family: image-set("x.png" 1x)',
+      'color: var(--x)',
+      'behavior: url(x.htc)',
+      '-moz-binding: url(x.xml#y)',
+      'content: "x"',
+      'cursor: url(x.cur), auto',
+      '@import "x.css"',
+      'not a declaration',
+    ]) {
+      expect(sanitizeStyle(bad), bad).toBe('');
+    }
+    expect(sanitizeHtml('<span style="background-color:\\75rl(https://evil/x)">a</span>')).toBe('<span>a</span>');
   });
 
   it('removes comments', () => {

@@ -486,6 +486,46 @@ body {
 #add-bookmark-btn:not(:disabled):hover { background: #2a2a2a; color: #fff; }
 
 /* ── Modale segnalibri ── */
+/* ── Traduzione del libro (cache, completamento, download) ── */
+.modal-box--translation {
+  max-width: 640px; width: 95%;
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 85vh;
+}
+.bt-book { color: var(--text-muted); font-size: 0.85rem; }
+.bt-progress { display: flex; align-items: center; gap: 10px; }
+.bt-progress-track {
+  flex: 1; height: 8px; border-radius: 4px;
+  background: var(--progress-bg); overflow: hidden;
+}
+.bt-progress-fill {
+  height: 100%; width: 0; background: var(--progress-fg);
+  transition: width 0.3s ease;
+}
+.bt-percent { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.bt-summary { font-size: 0.85rem; }
+.bt-status { font-size: 0.85rem; color: var(--text-muted); min-height: 1.2em; }
+.bt-chapters {
+  list-style: none; overflow-y: auto; flex: 1; min-height: 60px;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.bt-chapter {
+  display: grid; grid-template-columns: minmax(0, 1fr) 90px 5.5em;
+  align-items: center; gap: 10px;
+  padding: 6px 10px; font-size: 0.82rem; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.bt-chapter:last-child { border-bottom: none; }
+.bt-chapter:hover { background: var(--surface); }
+.bt-chapter.current { border-left: 3px solid var(--accent); padding-left: 7px; }
+.bt-chapter-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-chapter-bar { height: 5px; border-radius: 3px; background: var(--progress-bg); overflow: hidden; }
+.bt-chapter-bar > span { display: block; height: 100%; background: var(--progress-fg); }
+.bt-chapter.done .bt-chapter-bar > span { background: #27ae60; }
+.bt-chapter-count { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.bt-actions { flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.bt-actions button:disabled { opacity: 0.5; cursor: default; }
+
 .modal-box--bookmarks {
   max-width: 640px; width: 95%;
   display: flex; flex-direction: column;
@@ -575,6 +615,19 @@ body {
   padding: 0;
 }
 .modal-footer button:not(.btn-primary):not(.btn-danger):hover { background: #3a3a3a; color: #fff; }
+/* Book translation footer: text buttons, not icon squares */
+/* (selettori con :not() per battere la regola delle icone sopra, che ha più specificità) */
+.modal-footer.bt-actions button,
+.modal-footer.bt-actions button:not(.btn-primary):not(.btn-danger) {
+  width: auto; height: auto; min-height: 34px;
+  padding: 6px 14px; border-radius: 4px;
+  font-size: 0.85rem; white-space: nowrap;
+}
+.modal-footer.bt-actions button:not(.btn-primary):not(.btn-danger) {
+  background: var(--btn-bg, #2a2a2a); color: var(--text, #ccc);
+  border: 1px solid var(--border);
+}
+.modal-footer.bt-actions button:not(.btn-primary):not(.btn-danger):hover:not(:disabled) { background: #3a3a3a; color: #fff; }
 
 /* ── Modal ── */
 .modal-overlay {

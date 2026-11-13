@@ -225,13 +225,31 @@ export class PdfNavigator {
    * @returns {{ start: number, end: number }} 1-based page numbers
    */
   get pageRange() {
+    return this.pageRangeOf(this._currentIndex);
+  }
+
+  /**
+   * Page range of any navigation unit, without moving to it.
+   * @param {number} index 0-based unit index
+   * @returns {{ start: number, end: number }} 1-based page numbers
+   */
+  pageRangeOf(index) {
     if (this._mode === 'chapter') {
-      const ch = this._chapters[this._currentIndex];
+      const ch = this._chapters[index];
       return { start: ch.startPage, end: ch.endPage };
     }
     // In page mode, the range is a single page
-    const page = this._currentIndex + 1;
+    const page = index + 1;
     return { start: page, end: page };
+  }
+
+  /**
+   * Title of a chapter in chapter mode; empty in page mode (the caller builds
+   * a localised "page N" label).
+   * @param {number} index 0-based unit index
+   */
+  chapterTitleOf(index) {
+    return this._mode === 'chapter' && this._chapters[index] ? this._chapters[index].title : '';
   }
 
   /**
@@ -718,6 +736,112 @@ export function computeCanvasScale(pageWidth, pageHeight, containerWidth) {
   };
 }
 
+// ─── Page canvases: sharp on HiDPI screens, painted only near the viewport ───
+
+/** Upper bound of the canvas pixel density: above 2 the memory cost is not worth it. */
+const MAX_OUTPUT_SCALE = 2;
+
+/** Device pixels per CSS pixel used for page canvases (1 on a standard screen). */
+function outputScale() {
+  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  return Math.min(Math.max(dpr, 1), MAX_OUTPUT_SCALE);
+}
+
+/** Gives `canvas` the on-screen size of the page without allocating its pixels. */
+function reservePageCanvas(canvas, viewport) {
+  canvas.style.width = `${viewport.width}px`;
+  canvas.style.height = `${viewport.height}px`;
+}
+
+/**
+ * Paints `page` on `canvas`. The backing store is `outputScale()` times the
+ * on-screen size, so the page is not blurry on HiDPI screens.
+ * @returns {{ promise: Promise<void>, cancel?: Function }} the pdf.js render task
+ */
+function paintPage(page, viewport, canvas) {
+  const scale = outputScale();
+  canvas.width = Math.floor(viewport.width * scale);
+  canvas.height = Math.floor(viewport.height * scale);
+  const params = { canvasContext: canvas.getContext('2d'), viewport };
+  if (scale !== 1) params.transform = [scale, 0, 0, scale, 0, 0];
+  return page.render(params);
+}
+
+/**
+ * Paints page canvases only while they are near the visible part of `root`
+ * (the scrolling container) and frees their pixels when they scroll far away.
+ * A chapter of several hundred pages would otherwise keep one full-size bitmap
+ * per page in memory.
+ *
+ * Returns `null` where `IntersectionObserver` does not exist (tests): the
+ * caller then paints every page right away.
+ */
+function createLazyPainter(root) {
+  if (typeof IntersectionObserver === 'undefined') return null;
+  const jobs = new Map(); // canvas → { page, viewport, task, painted }
+
+  const start = (canvas, job) => {
+    if (job.painted || job.task) return;
+    let task;
+    try {
+      task = paintPage(job.page, job.viewport, canvas);
+    } catch (err) {
+      console.warn('[pdf] page render failed:', err);
+      return;
+    }
+    job.task = task;
+    task.promise.then(
+      () => { if (job.task === task) { job.task = null; job.painted = true; } },
+      () => { if (job.task === task) job.task = null; }, // cancelled or failed
+    );
+  };
+
+  const release = (canvas, job) => {
+    if (job.task) {
+      try { job.task.cancel?.(); } catch (_) { /* already finished */ }
+      job.task = null;
+    }
+    if (job.painted || canvas.width) {
+      // A zero-size backing store frees the bitmap; the CSS size keeps the layout
+      canvas.width = 0;
+      canvas.height = 0;
+      job.painted = false;
+    }
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const job = jobs.get(entry.target);
+      if (!job) continue;
+      if (entry.isIntersecting) start(entry.target, job);
+      else release(entry.target, job);
+    }
+  }, { root, rootMargin: '200% 0px' }); // two screens above and below
+
+  return {
+    add(canvas, page, viewport) {
+      jobs.set(canvas, { page, viewport, task: null, painted: false });
+      observer.observe(canvas);
+    },
+    disconnect() {
+      observer.disconnect();
+      for (const [canvas, job] of jobs) release(canvas, job);
+      jobs.clear();
+    },
+  };
+}
+
+/** Stops the lazy painter of a previous rendering into `container`, if any. */
+function resetLazyPainter(container) {
+  if (container.__pdfLazyPainter) {
+    container.__pdfLazyPainter.disconnect();
+    container.__pdfLazyPainter = null;
+  }
+  const painter = createLazyPainter(container);
+  container.__pdfLazyPainter = painter;
+  return painter;
+}
+
 /**
  * Renders PDF pages to canvas elements inside a container.
  * @param {PDFDocumentProxy} doc - The PDF document proxy
@@ -727,6 +851,7 @@ export function computeCanvasScale(pageWidth, pageHeight, containerWidth) {
  */
 export async function renderPdfCanvas(doc, pageNumbers, container, isCurrent = () => true) {
   // Clear previous canvases for memory management
+  const painter = resetLazyPainter(container);
   container.innerHTML = '';
 
   // `isCurrent` returns false once a newer rendering of the same container has
@@ -739,13 +864,18 @@ export async function renderPdfCanvas(doc, pageNumbers, container, isCurrent = (
     const viewport = page.getViewport({ scale });
 
     const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
     canvas.style.display = 'block';
     canvas.style.marginBottom = '8px';
+    reservePageCanvas(canvas, viewport);
 
-    const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    if (painter) {
+      // Painted when it comes near the viewport
+      container.appendChild(canvas);
+      painter.add(canvas, page, viewport);
+      continue;
+    }
+
+    await paintPage(page, viewport, canvas).promise;
     if (!isCurrent()) return;
 
     container.appendChild(canvas);
@@ -767,6 +897,7 @@ export async function renderPdfCanvas(doc, pageNumbers, container, isCurrent = (
  * @returns {Promise<Array<{pageNum: number, blocks: Array<{text: string, el: HTMLElement, fontSize: number, noTranslate?: boolean}>}>>}
  */
 export async function renderPdfWithOverlayPlaceholders(doc, pageNumbers, container, pdfHash = '', lang = 'en') {
+  const painter = resetLazyPainter(container);
   container.innerHTML = '';
   const pages = [];
 
@@ -788,17 +919,20 @@ export async function renderPdfWithOverlayPlaceholders(doc, pageNumbers, contain
     pageWrapper.style.marginBottom = '8px';
     pageWrapper.style.overflow = 'hidden';
 
-    // Render canvas
+    // Render canvas (lazily when possible: only the text below is needed for
+    // every page up front, the bitmap is painted near the viewport)
     const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
     canvas.style.display = 'block';
     canvas.style.position = 'absolute';
     canvas.style.top = '0';
     canvas.style.left = '0';
-    const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    reservePageCanvas(canvas, viewport);
     pageWrapper.appendChild(canvas);
+    if (painter) {
+      painter.add(canvas, page, viewport);
+    } else {
+      await paintPage(page, viewport, canvas).promise;
+    }
 
     // Canvas dimensions for clamping
     const canvasWidth = viewport.width;
@@ -1136,6 +1270,10 @@ export async function loadPdf(buffer, filename = '') {
   const author = (meta?.info?.Author && typeof meta.info.Author === 'string')
     ? meta.info.Author.trim()
     : '';
+  // Document language (e.g. "it-IT"), when the PDF declares one
+  const language = (meta?.info?.Language && typeof meta.info.Language === 'string')
+    ? meta.info.Language.trim()
+    : '';
 
   return {
     proxy,
@@ -1143,5 +1281,6 @@ export async function loadPdf(buffer, filename = '') {
     pageCount: proxy.numPages,
     title,
     author,
+    language,
   };
 }

@@ -91,9 +91,73 @@ export function isSafeResourceUrl(value) {
   return !head.includes(':');
 }
 
-/** Inline styles that load resources or use legacy script hooks are dropped. */
-function isSafeStyle(value) {
-  return !/url\s*\(|expression\s*\(|javascript:|@import|behavior\s*:|-moz-binding/i.test(value);
+/**
+ * CSS properties kept in inline styles: text and box formatting only. Anything
+ * that can load a resource (`background`, `content`, `cursor`, …) or take the
+ * element out of the text flow to cover the app's own UI (`position`,
+ * `z-index`, …) is left out.
+ */
+const ALLOWED_STYLE_PROPS = new Set([
+  'color', 'background-color', 'opacity',
+  'font', 'font-family', 'font-size', 'font-style', 'font-variant', 'font-weight',
+  'font-stretch', 'line-height', 'letter-spacing', 'word-spacing',
+  'text-align', 'text-indent', 'text-decoration', 'text-decoration-line',
+  'text-decoration-style', 'text-decoration-color', 'text-transform',
+  'text-shadow', 'vertical-align', 'white-space', 'word-break', 'overflow-wrap',
+  'word-wrap', 'hyphens', 'direction', 'unicode-bidi', 'writing-mode',
+  'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+  'border-color', 'border-style', 'border-width', 'border-radius',
+  'border-collapse', 'border-spacing',
+  'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+  'display', 'float', 'clear', 'visibility',
+  'list-style', 'list-style-type', 'list-style-position',
+  'page-break-before', 'page-break-after', 'page-break-inside',
+  'break-before', 'break-after', 'break-inside',
+  // SVG presentation
+  'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-opacity',
+  'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'stop-color',
+  'stop-opacity', 'text-anchor',
+]);
+
+/** Functions allowed in a style value; any other `name(` drops the declaration. */
+const ALLOWED_STYLE_FUNCTIONS = new Set(['rgb', 'rgba', 'hsl', 'hsla', 'calc']);
+
+function isSafeStyleValue(value) {
+  // Backslash: CSS escapes can spell a forbidden word (`\75rl(`). The other
+  // characters never appear in the plain formatting values allowed here.
+  if (/[\\<>@{}]/.test(value) || /\/\*/.test(value)) return false;
+  for (const match of value.matchAll(/([a-z-]*)\s*\(/gi)) {
+    if (!ALLOWED_STYLE_FUNCTIONS.has(match[1].toLowerCase())) return false;
+  }
+  return true;
+}
+
+/**
+ * Filters an inline style: keeps only the declarations whose property is in
+ * `ALLOWED_STYLE_PROPS` and whose value is plain formatting. A whitelist
+ * instead of a list of forbidden patterns, which CSS escapes can get around.
+ * @param {string} value content of a `style` attribute
+ * @returns {string} the filtered style, empty when nothing is left
+ */
+export function sanitizeStyle(value) {
+  if (typeof value !== 'string') return '';
+  const kept = [];
+  let dropped = false;
+  for (const declaration of value.split(';')) {
+    if (!declaration.trim()) continue;
+    const colon = declaration.indexOf(':');
+    const prop = colon < 0 ? '' : declaration.slice(0, colon).trim().toLowerCase();
+    const val = colon < 0 ? '' : declaration.slice(colon + 1).trim();
+    if (!val || !ALLOWED_STYLE_PROPS.has(prop) || !isSafeStyleValue(val)) {
+      dropped = true;
+      continue;
+    }
+    kept.push(`${prop}: ${val}`);
+  }
+  // Nothing removed: the style is returned as written in the book
+  return dropped ? kept.join('; ') : value.trim();
 }
 
 function sanitizeAttributes(el) {
@@ -107,7 +171,9 @@ function sanitizeAttributes(el) {
       // <a href> is never kept: links are re-routed through data-epub-href
       keep = tag !== 'a' && name !== 'srcset' && isSafeResourceUrl(attr.value);
     } else if (name === 'style') {
-      keep = isSafeStyle(attr.value);
+      const style = sanitizeStyle(attr.value);
+      keep = style !== '';
+      if (keep && style !== attr.value) el.setAttribute(attr.name, style);
     } else {
       keep = ALLOWED_ATTRS.has(name);
     }

@@ -91,6 +91,9 @@
       "allow": [
         {
           "path": "$APPLOCALDATA/*.desktop.tmp"
+        },
+        {
+          "path": "$APPLOCALDATA/translations/*"
         }
       ]
     },

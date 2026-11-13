@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { qrCodeDataUrl } from './qr-code.js';
 
-describe('Web Server Settings URL & QR Switching', () => {
+// Mirror of renderServerUrlAndQr / updateWebServerUI in main.js (the UI code
+// there cannot be imported in tests). The server address is always the LAN IP:
+// the "<pc-name>.local" address is no longer offered because Android does not
+// resolve it.
+describe('Web Server Settings URL & QR', () => {
   let webServerToggle;
   let webServerPort;
-  let webServerError;
   let webServerInfo;
-  let webServerUrlToggle;
   let webServerUrl;
   let webServerQr;
   let webServerWarning;
@@ -14,19 +17,15 @@ describe('Web Server Settings URL & QR Switching', () => {
 
   function renderServerUrlAndQr() {
     if (!currentServerInfo) return;
-    const showIp = webServerUrlToggle ? webServerUrlToggle.checked : false;
-    const hostnameUrl = currentServerInfo.hostname_url;
     const lanUrl = currentServerInfo.lan_url || `http://127.0.0.1:${currentServerInfo.port}`;
-
-    const url = (showIp || !hostnameUrl) ? lanUrl : hostnameUrl;
+    const url = lanUrl;
 
     if (webServerUrl) {
       webServerUrl.textContent = url;
       webServerUrl.href = url;
     }
     if (webServerQr) {
-      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=150x150`;
-      webServerQr.src = qrSrc;
+      webServerQr.src = qrCodeDataUrl(url);
       webServerQr.alt = `QR: ${url}`;
     }
 
@@ -46,16 +45,6 @@ describe('Web Server Settings URL & QR Switching', () => {
     currentServerInfo = active ? info : null;
 
     if (active && info) {
-      if (webServerUrlToggle) {
-        webServerUrlToggle.checked = false; // default to PC name URL when enabled
-        if (!info.hostname_url) {
-          webServerUrlToggle.disabled = true;
-          webServerUrlToggle.title = 'Hostname not available';
-        } else {
-          webServerUrlToggle.disabled = false;
-          webServerUrlToggle.title = 'Switch between PC Name and IP';
-        }
-      }
       renderServerUrlAndQr();
       if (webServerInfo) webServerInfo.classList.remove('hidden');
     } else {
@@ -68,75 +57,57 @@ describe('Web Server Settings URL & QR Switching', () => {
     webServerToggle = document.createElement('input');
     webServerToggle.type = 'checkbox';
     webServerPort = document.createElement('input');
-    webServerError = document.createElement('p');
     webServerInfo = document.createElement('div');
-    webServerUrlToggle = document.createElement('input');
-    webServerUrlToggle.type = 'checkbox';
+    webServerInfo.classList.add('hidden');
     webServerUrl = document.createElement('a');
     webServerQr = document.createElement('img');
     webServerWarning = document.createElement('p');
     webServerWarning.classList.add('hidden');
+  });
 
-    webServerUrlToggle.addEventListener('change', () => {
-      renderServerUrlAndQr();
+  it('shows the LAN IP address as link and QR code when the server is enabled', () => {
+    updateWebServerUI(true, {
+      port: 8888,
+      lan_url: 'http://192.168.1.190:8888',
+      qr_url: 'http://192.168.1.190:8888',
     });
-  });
-
-  it('displays PC name URL, sets href, and matching QR code by default when server is enabled', () => {
-    const info = {
-      port: 8888,
-      lan_url: 'http://192.168.1.190:8888',
-      hostname_url: 'http://granfico.local:8888/',
-      qr_url: 'http://granfico.local:8888/'
-    };
-
-    updateWebServerUI(true, info);
-
-    expect(webServerUrlToggle.checked).toBe(false);
-    expect(webServerUrl.textContent).toBe('http://granfico.local:8888/');
-    expect(webServerUrl.href).toBe('http://granfico.local:8888/');
-    expect(webServerQr.src).toContain(encodeURIComponent('http://granfico.local:8888/'));
-    expect(webServerQr.alt).toBe('QR: http://granfico.local:8888/');
-  });
-
-  it('switches to IP URL and updates QR code when switch is toggled ON', () => {
-    const info = {
-      port: 8888,
-      lan_url: 'http://192.168.1.190:8888',
-      hostname_url: 'http://granfico.local:8888/',
-      qr_url: 'http://granfico.local:8888/'
-    };
-
-    updateWebServerUI(true, info);
-
-    // Toggle switch to IP
-    webServerUrlToggle.checked = true;
-    webServerUrlToggle.dispatchEvent(new Event('change'));
 
     expect(webServerUrl.textContent).toBe('http://192.168.1.190:8888');
-    expect(webServerQr.src).toContain(encodeURIComponent('http://192.168.1.190:8888'));
+    expect(webServerUrl.getAttribute('href')).toBe('http://192.168.1.190:8888');
+    // Generated locally: an image data URL, not a request to an external service
+    expect(webServerQr.src).toBe(qrCodeDataUrl('http://192.168.1.190:8888'));
+    expect(webServerQr.src.startsWith('data:image/')).toBe(true);
     expect(webServerQr.alt).toBe('QR: http://192.168.1.190:8888');
-
-    // Toggle switch back to PC name
-    webServerUrlToggle.checked = false;
-    webServerUrlToggle.dispatchEvent(new Event('change'));
-
-    expect(webServerUrl.textContent).toBe('http://granfico.local:8888/');
-    expect(webServerQr.src).toContain(encodeURIComponent('http://granfico.local:8888/'));
+    expect(webServerInfo.classList.contains('hidden')).toBe(false);
+    expect(webServerWarning.classList.contains('hidden')).toBe(true);
   });
 
-  it('falls back to IP URL and disables switch when hostname_url is not available', () => {
-    const info = {
+  it('never shows a .local address', () => {
+    updateWebServerUI(true, {
       port: 8888,
       lan_url: 'http://192.168.1.190:8888',
-      hostname_url: null,
-      qr_url: 'http://192.168.1.190:8888'
-    };
+      qr_url: 'http://192.168.1.190:8888',
+    });
 
-    updateWebServerUI(true, info);
+    expect(webServerUrl.textContent).not.toContain('.local');
+    expect(webServerQr.alt).not.toContain('.local');
+  });
 
-    expect(webServerUrlToggle.disabled).toBe(true);
-    expect(webServerUrl.textContent).toBe('http://192.168.1.190:8888');
-    expect(webServerQr.src).toContain(encodeURIComponent('http://192.168.1.190:8888'));
+  it('warns when no LAN address was found', () => {
+    updateWebServerUI(true, {
+      port: 8888,
+      lan_url: 'http://127.0.0.1:8888',
+      qr_url: 'http://127.0.0.1:8888',
+    });
+
+    expect(webServerWarning.classList.contains('hidden')).toBe(false);
+  });
+
+  it('hides the address when the server is stopped', () => {
+    updateWebServerUI(true, { port: 8888, lan_url: 'http://192.168.1.190:8888', qr_url: 'http://192.168.1.190:8888' });
+    updateWebServerUI(false, null);
+
+    expect(webServerInfo.classList.contains('hidden')).toBe(true);
+    expect(webServerToggle.checked).toBe(false);
   });
 });

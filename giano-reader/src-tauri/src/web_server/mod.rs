@@ -43,12 +43,10 @@ pub async fn start(
                 // Already running on the requested port (e.g. after a webview reload)
                 let display_ip = h.lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
                 let lan_url = format!("http://{}:{}", display_ip, h.port);
-                let qr_url = h.hostname_url.clone().unwrap_or_else(|| lan_url.clone());
                 return Ok(ServerInfo {
                     port: h.port,
+                    qr_url: lan_url.clone(),
                     lan_url,
-                    hostname_url: h.hostname_url.clone(),
-                    qr_url,
                 });
             } else {
                 return Err(format!("Web Server is already running on port {}", h.port));
@@ -83,24 +81,9 @@ pub async fn start(
     let display_ip = lan_ip.unwrap_or(Ipv4Addr::LOCALHOST);
     let lan_url = format!("http://{}:{}", display_ip, port);
 
-    // Detect Hostname for local mDNS URL (e.g. http://granfico.local:8888/)
-    let hostname = sysinfo::System::host_name()
-        .or_else(|| std::env::var("COMPUTERNAME").ok())
-        .or_else(|| std::env::var("HOSTNAME").ok())
-        .map(|h| h.trim().to_lowercase())
-        .filter(|h| !h.is_empty());
-
-    let hostname_url = hostname.map(|h| {
-        let clean_host = h.chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.').collect::<String>();
-        let host = if clean_host.ends_with(".local") {
-            clean_host
-        } else {
-            format!("{}.local", clean_host)
-        };
-        format!("http://{}:{}/", host, port)
-    });
-
-    let qr_url = hostname_url.as_ref().unwrap_or(&lan_url).clone();
+    // The QR code and the shown address use the LAN IP. A `<hostname>.local`
+    // (mDNS) address is not offered: Android does not resolve it.
+    let qr_url = lan_url.clone();
 
     // Create cancellation token for graceful shutdown
     let token = CancellationToken::new();
@@ -128,7 +111,6 @@ pub async fn start(
         server_task,
         port,
         lan_ip,
-        hostname_url: hostname_url.clone(),
     };
     {
         let mut guard = server_state.handle.lock().unwrap();
@@ -145,7 +127,6 @@ pub async fn start(
     Ok(ServerInfo {
         port,
         lan_url,
-        hostname_url,
         qr_url,
     })
 }

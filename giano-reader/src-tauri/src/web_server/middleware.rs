@@ -10,7 +10,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::web_server::models::{ApiError, ServerState};
+use crate::web_server::models::ApiError;
 use super::handlers::books::AppState;
 
 // ── Brute-force protection ───────────────────────────────────────────────────
@@ -67,6 +67,48 @@ pub fn secrets_equal(a: &str, b: &str) -> bool {
     da.iter().zip(db.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
+/// Marks a stored password as a salted hash: `sha256$<salt>$<hex digest>`.
+const PASSWORD_HASH_PREFIX: &str = "sha256$";
+
+fn salted_digest(salt: &str, password: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(salt.as_bytes());
+    hasher.update(password.as_bytes());
+    hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Form in which the server password is kept in the preferences store: a
+/// salted SHA-256 digest, so the password itself is not written to disk.
+///
+/// The password is checked on every API request, which rules out a slow
+/// key-derivation function; the digest keeps the password out of the database
+/// file but does not make a short password hard to guess for someone who can
+/// read that file.
+pub fn hash_password(password: &str) -> String {
+    let salt = uuid::Uuid::new_v4().simple().to_string();
+    format!("{}{}${}", PASSWORD_HASH_PREFIX, salt, salted_digest(&salt, password))
+}
+
+/// True when `stored` is already in the hashed form.
+pub fn is_hashed_password(stored: &str) -> bool {
+    stored
+        .strip_prefix(PASSWORD_HASH_PREFIX)
+        .and_then(|rest| rest.split_once('$'))
+        .is_some()
+}
+
+/// Checks a supplied password against the stored one. Accepts the hashed form
+/// and, for stores written by older versions, a plain-text password.
+pub fn password_matches(supplied: &str, stored: &str) -> bool {
+    match stored
+        .strip_prefix(PASSWORD_HASH_PREFIX)
+        .and_then(|rest| rest.split_once('$'))
+    {
+        Some((salt, digest)) => secrets_equal(&salted_digest(salt, supplied), digest),
+        None => secrets_equal(supplied, stored),
+    }
+}
+
 /// Outcome of an authorization check against the configured server password.
 #[derive(Debug, PartialEq, Eq)]
 pub enum AuthOutcome {
@@ -110,7 +152,7 @@ pub fn check_auth(state: &AppState, headers: &HeaderMap, ip: Option<IpAddr>) -> 
         .and_then(|v| v.strip_prefix("Bearer "));
 
     match supplied {
-        Some(token) if secrets_equal(token, &expected) => {
+        Some(token) if password_matches(token, &expected) => {
             state.auth_guard.record_success(ip);
             AuthOutcome::Allowed
         }
@@ -135,37 +177,6 @@ pub fn auth_error_response(outcome: &AuthOutcome) -> Response<Body> {
         .header("content-type", "application/json")
         .body(Body::from(body))
         .unwrap()
-}
-
-/// Middleware that returns 401 Unauthorized for all requests when Web Server Mode
-/// is inactive (i.e. `ServerState.handle` is `None`).
-///
-/// Satisfies Requirements 1.4 and 1.5 — while the server is inactive, all REST API
-/// endpoints and static asset paths return HTTP 401.
-#[allow(dead_code)]
-pub async fn require_active_server(
-    State(state): State<Arc<ServerState>>,
-    req: Request<Body>,
-    next: Next,
-) -> Response<Body> {
-    let is_active = {
-        let handle = state.handle.lock().unwrap();
-        handle.is_some()
-    };
-
-    if !is_active {
-        let error = ApiError {
-            error: "Web Server Mode is not active".to_string(),
-        };
-        let body = serde_json::to_string(&error).unwrap();
-        return Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .header("content-type", "application/json")
-            .body(Body::from(body))
-            .unwrap();
-    }
-
-    next.run(req).await
 }
 
 /// Middleware that enforces password protection on protected API routes.
@@ -218,6 +229,27 @@ mod tests {
         assert!(!secrets_equal("abc", "abd"));
         assert!(!secrets_equal("abc", "abcd"));
         assert!(!secrets_equal("", "a"));
+    }
+
+    #[test]
+    fn hashed_password_matches_only_the_right_password() {
+        let stored = hash_password("s3cret pässword");
+        assert!(is_hashed_password(&stored));
+        assert!(!stored.contains("s3cret"));
+        assert!(password_matches("s3cret pässword", &stored));
+        assert!(!password_matches("s3cret password", &stored));
+        assert!(!password_matches("", &stored));
+        // The digest itself is not accepted as a password
+        assert!(!password_matches(&stored, &stored));
+        // Each hash has its own salt
+        assert_ne!(stored, hash_password("s3cret pässword"));
+    }
+
+    #[test]
+    fn plain_text_password_from_an_older_store_still_matches() {
+        assert!(!is_hashed_password("old-plain"));
+        assert!(password_matches("old-plain", "old-plain"));
+        assert!(!password_matches("other", "old-plain"));
     }
 
     #[test]

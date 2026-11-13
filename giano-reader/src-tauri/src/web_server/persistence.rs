@@ -229,6 +229,7 @@ impl PersistenceStore {
         paragraph_id: &str,
         label: Option<String>,
         book: Option<BookmarkBook>,
+        scroll_pct: u32,
     ) -> Result<Bookmark, sled::Error> {
         let id = Uuid::new_v4().to_string();
         let created_at = Utc::now().to_rfc3339();
@@ -257,7 +258,7 @@ impl PersistenceStore {
                 serde_json::Number::from(chapter_index),
             )),
             chapter_label: None,
-            scroll_pct: Some(serde_json::Value::Number(serde_json::Number::from(0))),
+            scroll_pct: Some(serde_json::Value::Number(serde_json::Number::from(scroll_pct))),
             label: label.clone(),
             web_id: Some(id.clone()),
             paragraph_id: Some(paragraph_id.to_string()),

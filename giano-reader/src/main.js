@@ -7,7 +7,16 @@ import { bookmarkKey, mergeBookmarkLists } from './bookmarks-sync.js';
 import { normalizeRating, setEntryRating, matchesRatingFilter, ratingStars, mergeLibraryRatings } from './library-sync.js';
 import { StorageReadError, readJsonFile, writeJsonFileAtomic } from './storage-file.js';
 import { TEXT_BLOCK_TAGS, ownTextSource } from './text-blocks.js';
+import { retryWithBackoff, abortableDelay } from './retry.js';
+import { qrCodeDataUrl } from './qr-code.js';
+import { fileFingerprint, planScan, mergeReanalysis, markEditedFields } from './library-scan.js';
+import { BookTranslationCache, textKey, variantKey, parseVariant } from './translation-cache.js';
+import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from './book-export.js';
+import { observeChunksLazily } from './lazy-chunks.js';
+import JSZip from 'jszip';
 
+// Pause prima del 2° e del 3° tentativo di tradurre un blocco fallito
+const TRANSLATION_RETRY_DELAYS_MS = [1500, 4000];
 // Versione dell'app, iniettata da Vite a build time leggendo package.json
 // (vedi vite.config.js): non va più aggiornata a mano nel codice.
 // eslint-disable-next-line no-undef
@@ -123,7 +132,6 @@ const webServerToggle = document.getElementById('web-server-toggle');
 const webServerPort = document.getElementById('web-server-port');
 const webServerError = document.getElementById('web-server-error');
 const webServerInfo = document.getElementById('web-server-info');
-const webServerUrlToggle = document.getElementById('web-server-url-toggle');
 const webServerUrl = document.getElementById('web-server-url');
 const webServerQr = document.getElementById('web-server-qr');
 const webServerWarning = document.getElementById('web-server-warning');
@@ -401,6 +409,9 @@ const IndexedDBStorage = {
   }
 };
 
+// Errori di lettura/scrittura dei file dati già segnalati all'utente
+const _reportedStorageErrors = new Set();
+
 // Helper per storage persistente (Filesystem in Tauri, IndexedDB/localStorage in Browser)
 const PersistentStorage = {
   async get(key, defaultValue = []) {
@@ -453,7 +464,16 @@ const PersistentStorage = {
           transaction.objectStore(IndexedDBStorage.storeName).delete(key);
         } catch { }
         return;
-      } catch (e) { console.error(`[Storage] error saving ${key} to FS:`, e); }
+      } catch (e) {
+        console.error(`[Storage] error saving ${key} to FS:`, e);
+        // Il ripiego su IndexedDB qui sotto non sostituisce il file: se il file
+        // esiste, alla prossima lettura vince lui. L'utente va quindi avvisato
+        // (una volta per file) che le modifiche potrebbero andare perse.
+        if (!_reportedStorageErrors.has(`write:${key}`)) {
+          _reportedStorageErrors.add(`write:${key}`);
+          showAlert(t(loadSettings().uiLang || 'en', 'storageWriteError', { file: `${key}.json` }));
+        }
+      }
     }
     try {
       await IndexedDBStorage.set(key, value);
@@ -473,7 +493,6 @@ const PersistentStorage = {
 
 // Avvisa (una sola volta per file) che un file dati esiste ma non è leggibile.
 // Restituisce true se l'errore era di questo tipo ed è stato gestito.
-const _reportedStorageErrors = new Set();
 function reportStorageReadError(e) {
   if (!(e instanceof StorageReadError)) return false;
   console.error('[Storage]', e);
@@ -482,6 +501,142 @@ function reportStorageReadError(e) {
     showAlert(t(loadSettings().uiLang || 'en', 'storageReadError', { file: e.path }));
   }
   return true;
+}
+
+// ── Cache delle traduzioni (un file per libro) ─────────────────────────────
+// Vedi translation-cache.js. Il file sta in <dati app>/translations/<id>.json
+// (in modalità browser in IndexedDB). Le scritture sono raggruppate: si salva
+// TRANSLATION_CACHE_SAVE_DELAY_MS dopo l'ultima traduzione, al cambio di libro
+// e alla chiusura dell'app.
+const TRANSLATION_CACHE_DIR = 'translations';
+const TRANSLATION_CACHE_SAVE_DELAY_MS = 2000;
+let currentTranslationCache = null; // cache del libro aperto
+let currentBookFileSize = 0;        // dimensione del file del libro aperto
+let chapterLengthsPromise = null;   // lettura dei capitoli in corso all'apertura di un EPUB
+const _dirtyTranslationCaches = new Set();
+let _translationCacheTimer = null;
+
+function isTauriApp() {
+  return !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+}
+
+/** Identificativo del file di cache di un libro: hash del suo percorso. */
+function translationCacheId(filePath, title) {
+  return textKey(filePath || title || 'untitled');
+}
+
+async function translationCacheDir() {
+  const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
+  return join(await appLocalDataDir(), TRANSLATION_CACHE_DIR);
+}
+
+async function loadBookTranslationCache(filePath, title) {
+  const id = translationCacheId(filePath, title);
+  let data = null;
+  try {
+    if (isTauriApp()) {
+      const fs = await import('@tauri-apps/plugin-fs');
+      const { join } = await import('@tauri-apps/api/path');
+      const file = await readJsonFile(fs, await join(await translationCacheDir(), `${id}.json`));
+      if (file.found) data = file.value;
+    } else {
+      data = await IndexedDBStorage.get(`translation-cache:${id}`, null);
+    }
+  } catch (e) {
+    // Una cache illeggibile si ricostruisce: costa solo ritradurre
+    console.warn('[translation-cache] not loaded, starting empty:', e);
+  }
+  const cache = new BookTranslationCache(data, { filePath: filePath || '', title: title || '' });
+  cache.id = id;
+  return cache;
+}
+
+async function saveBookTranslationCache(cache) {
+  if (!cache || !cache.dirty) return;
+  cache.dirty = false; // prima dell'await: le modifiche durante il salvataggio la risegnano
+  try {
+    if (isTauriApp()) {
+      const fs = await import('@tauri-apps/plugin-fs');
+      const { join } = await import('@tauri-apps/api/path');
+      const dir = await translationCacheDir();
+      if (!(await fs.exists(dir))) await fs.mkdir(dir, { recursive: true });
+      await writeJsonFileAtomic(fs, await join(dir, `${cache.id}.json`), cache.toJSON());
+    } else {
+      await IndexedDBStorage.set(`translation-cache:${cache.id}`, cache.toJSON());
+    }
+  } catch (e) {
+    cache.dirty = true;
+    console.warn('[translation-cache] save failed:', e);
+  }
+}
+
+function scheduleTranslationCacheSave(cache = currentTranslationCache) {
+  if (!cache) return;
+  _dirtyTranslationCaches.add(cache);
+  clearTimeout(_translationCacheTimer);
+  _translationCacheTimer = setTimeout(flushTranslationCaches, TRANSLATION_CACHE_SAVE_DELAY_MS);
+}
+
+async function flushTranslationCaches() {
+  clearTimeout(_translationCacheTimer);
+  const caches = [..._dirtyTranslationCaches];
+  _dirtyTranslationCaches.clear();
+  for (const cache of caches) await saveBookTranslationCache(cache);
+}
+
+/** Cancella il file di cache di un libro (eliminazione del libro dalla libreria). */
+async function deleteBookTranslationCache(filePath, title) {
+  const id = translationCacheId(filePath, title);
+  if (currentTranslationCache && currentTranslationCache.id === id) currentTranslationCache.dirty = false;
+  try {
+    if (isTauriApp()) {
+      const fs = await import('@tauri-apps/plugin-fs');
+      const { join } = await import('@tauri-apps/api/path');
+      const path = await join(await translationCacheDir(), `${id}.json`);
+      if (await fs.exists(path)) await fs.remove(path);
+    } else {
+      await IndexedDBStorage.set(`translation-cache:${id}`, null);
+    }
+  } catch (e) {
+    console.warn('[translation-cache] delete failed:', e);
+  }
+}
+
+/** Variante di traduzione corrente: lingua di destinazione e motore scelto. */
+function translationVariant(lang) {
+  return variantKey(lang, loadSettings().translationMode || 'free');
+}
+
+/**
+ * Traduce `texts` usando la cache del libro aperto: i testi già tradotti con la
+ * stessa lingua e lo stesso motore non vengono rimandati al traduttore; gli
+ * altri vengono tradotti (con ritentativi) e aggiunti alla cache.
+ * Con `force` la cache viene ignorata e sovrascritta (ritraduzione richiesta).
+ */
+async function translateWithCache(texts, lang, signal, { force = false, cache = currentTranslationCache } = {}) {
+  const variant = translationVariant(lang);
+  const out = new Array(texts.length);
+  const missing = [];
+  texts.forEach((text, i) => {
+    const hit = !force && cache ? cache.get(variant, text) : undefined;
+    if (hit !== undefined) out[i] = hit;
+    else missing.push(i);
+  });
+  if (!missing.length) return out;
+
+  const fresh = await retryWithBackoff(
+    () => translateParagraphs(missing.map(i => texts[i]), lang, signal),
+    { signal, delaysMs: TRANSLATION_RETRY_DELAYS_MS }
+  );
+  missing.forEach((i, k) => {
+    out[i] = fresh[k];
+    if (cache && !(signal && signal.aborted)) cache.set(variant, texts[i], fresh[k]);
+  });
+  if (cache && cache.dirty) {
+    scheduleTranslationCacheSave(cache);
+    refreshBookTranslationModal();
+  }
+  return out;
 }
 
 function loadSettings() {
@@ -593,6 +748,15 @@ function applyUiLang(lang) {
   if (toggleSyncBtn) {
     toggleSyncBtn.title = t(lang, 'toggleSync');
     toggleSyncBtn.setAttribute('aria-label', t(lang, 'toggleSync'));
+  }
+  {
+    // Cercato qui e non tramite la costante in fondo al file: questa funzione
+    // gira all'avvio, prima che quella costante sia inizializzata
+    const btBtn = document.getElementById('book-translation-btn');
+    if (btBtn) {
+      btBtn.title = t(lang, 'bookTranslation');
+      btBtn.setAttribute('aria-label', t(lang, 'bookTranslation'));
+    }
   }
   if (translationStatus) {
     translationStatus.title = t(lang, 'resyncHint');
@@ -1563,6 +1727,7 @@ if (gcloudApiKeyInput) {
     updateTranslationModeSelect();
     // Sync to web server if running
     if (window._syncApiKeysToServer) window._syncApiKeysToServer();
+    updateWebServerBasicHint();
   };
   gcloudApiKeyInput.addEventListener('change', handleGcloudKeyUpdate);
   gcloudApiKeyInput.addEventListener('input', handleGcloudKeyUpdate);
@@ -1645,7 +1810,7 @@ if (translationModeSelect) {
   });
 }
 
-settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+settingsBtn.addEventListener('click', () => { updateWebServerBasicHint(); settingsModal.classList.remove('hidden'); });
 settingsCloseBtn.addEventListener('click', () => { settingsModal.classList.add('hidden'); updateTranslationModeSelect(); });
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); updateTranslationModeSelect(); } });
 
@@ -1679,9 +1844,24 @@ if (cloudflareSubdomainInput) {
 
 // ── Web Server Password ────────────────────────────────────────────────────
 const webServerPasswordInput = document.getElementById('web-server-password-input');
+const webServerBasicHint = document.getElementById('web-server-basic-hint');
+
+// Il server usa BASIC (chiave Google Cloud a pagamento) solo se è impostata una
+// password; altrimenti serve FREE ai telefoni. L'avviso compare quando la
+// chiave c'è ma la password no.
+function updateWebServerBasicHint() {
+  if (!webServerBasicHint) return;
+  const s = loadSettings();
+  const hasKey = !!(s.gcloudApiKey && s.gcloudApiKey.trim());
+  const hasPassword = !!(webServerPasswordInput ? webServerPasswordInput.value : s.webServerPassword);
+  webServerBasicHint.textContent = ui('webServerBasicNeedsPassword');
+  webServerBasicHint.classList.toggle('hidden', !(hasKey && !hasPassword));
+}
+
 if (webServerPasswordInput) {
   const s = loadSettings();
   if (s.webServerPassword) webServerPasswordInput.value = s.webServerPassword;
+  webServerPasswordInput.addEventListener('input', updateWebServerBasicHint);
   webServerPasswordInput.addEventListener('change', () => {
     const settings = loadSettings();
     settings.webServerPassword = webServerPasswordInput.value;
@@ -1744,20 +1924,26 @@ if (webServerPasswordInput) {
 
   function renderServerUrlAndQr() {
     if (!currentServerInfo) return;
-    const showIp = webServerUrlToggle ? webServerUrlToggle.checked : false;
-    const hostnameUrl = currentServerInfo.hostname_url;
+    // Sempre l'indirizzo IP della LAN: l'indirizzo "<nome-pc>.local" non viene
+    // più proposto perché Android non lo risolve.
     const lanUrl = currentServerInfo.lan_url || `http://127.0.0.1:${currentServerInfo.port}`;
-
-    // If IP switch is active or hostnameUrl is not available, show IP; otherwise show PC name URL
-    const url = (showIp || !hostnameUrl) ? lanUrl : hostnameUrl;
+    const url = lanUrl;
 
     if (webServerUrl) {
       webServerUrl.textContent = url;
       webServerUrl.href = url;
     }
     if (webServerQr) {
-      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=150x150`;
-      webServerQr.src = qrSrc;
+      // QR generato in locale: funziona senza internet e l'indirizzo della LAN
+      // non viene inviato a un servizio esterno.
+      try {
+        webServerQr.src = qrCodeDataUrl(url);
+        webServerQr.classList.remove('hidden');
+      } catch (err) {
+        console.warn('[web-server] QR code generation failed:', err);
+        webServerQr.removeAttribute('src');
+        webServerQr.classList.add('hidden');
+      }
       webServerQr.alt = `QR: ${url}`;
     }
 
@@ -1777,16 +1963,6 @@ if (webServerPasswordInput) {
     currentServerInfo = active ? info : null;
 
     if (active && info) {
-      if (webServerUrlToggle) {
-        webServerUrlToggle.checked = false; // default to PC name URL when enabled
-        if (!info.hostname_url) {
-          webServerUrlToggle.disabled = true;
-          webServerUrlToggle.title = 'Hostname not available';
-        } else {
-          webServerUrlToggle.disabled = false;
-          webServerUrlToggle.title = 'Switch between PC Name and IP';
-        }
-      }
       renderServerUrlAndQr();
       if (webServerInfo) webServerInfo.classList.remove('hidden');
     } else {
@@ -1794,12 +1970,6 @@ if (webServerPasswordInput) {
       if (webServerWarning) webServerWarning.classList.add('hidden');
     }
     hideWebServerError();
-  }
-
-  if (webServerUrlToggle) {
-    webServerUrlToggle.addEventListener('change', () => {
-      renderServerUrlAndQr();
-    });
   }
 
   if (webServerUrl) {
@@ -2000,6 +2170,16 @@ function errMsg(err) {
   try { return JSON.stringify(err); } catch { return String(err); }
 }
 
+// Etichetta dell'unità PDF corrente: titolo del capitolo, oppure "Pag. N / Tot"
+// nella lingua dell'interfaccia quando il PDF si naviga per pagine.
+function pdfUnitLabel() {
+  if (!pdfNav) return '';
+  if (pdfNav.mode === 'page') {
+    return ui('pdf_page_indicator', { n: pdfNav.currentIndex + 1, total: pdfNav.totalUnits });
+  }
+  return pdfNav.currentLabel;
+}
+
 // ── Progress bar ───────────────────────────────────────────────────────────
 function updateProgress() {
   // PDF navigation
@@ -2008,7 +2188,7 @@ function updateProgress() {
     const pct = total <= 1 ? 0 : (pdfNav.currentIndex / (total - 1)) * 100;
     progressFill.style.width = `${pct}%`;
     progressThumb.style.left = `${pct}%`;
-    pageInfo.textContent = pdfNav.currentLabel;
+    pageInfo.textContent = pdfUnitLabel();
     prevBtn.disabled = pdfNav.currentIndex <= 0;
     nextBtn.disabled = pdfNav.currentIndex >= total - 1;
     return;
@@ -2115,7 +2295,7 @@ function buildProgressTicks(spineItems, tocItems) {
     const label = labelMap[href]
       || labelMap[item.href]
       || href.split('/').pop().replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')
-      || `Ch. ${i + 1}`;
+      || ui('chapterN', { n: i + 1 });
     tick.dataset.label = label;
 
     tick.addEventListener('click', e => { e.stopPropagation(); displayChapter(i); });
@@ -3089,7 +3269,7 @@ function shrinkFontToFit(el) {
 // ── PDF overlay translation ────────────────────────────────────────────────
 // Renders the PDF canvas in the translation panel with translated text overlaid
 // at the exact position of each paragraph, using the full column width.
-async function translatePdfOverlay(startPct = 0) {
+async function translatePdfOverlay(startPct = 0, { force = false } = {}) {
   translationAbortController = new AbortController();
   const signal = translationAbortController.signal;
 
@@ -3157,7 +3337,7 @@ async function translatePdfOverlay(startPct = 0) {
       setTranslationStatus(`${Math.round((translatedChunks.size / totalChunks) * 100)}%`);
 
       try {
-        const translated = await translateParagraphs(slice, lang, signal);
+        const translated = await translateWithCache(slice, lang, signal, { force });
         if (signal.aborted) return;
         for (let i = 0; i < translated.length; i++) {
           const block = allBlocks[start + i];
@@ -3189,26 +3369,15 @@ async function translatePdfOverlay(startPct = 0) {
       translateOverlayChunk(i);
     }
 
-    // Lazy translate chunks below
-    let nextDownChunk = startChunk + 1;
-    function observeNextOverlaySentinel() {
-      if (nextDownChunk >= totalChunks) return;
-      const sentinelIdx = Math.min(nextDownChunk * LAZY_CHUNK - 1, total - 1);
-      const sentinel = allBlocks[sentinelIdx]?.el;
-      if (!sentinel) return;
-
-      lazyObserver = new IntersectionObserver(async (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          lazyObserver.unobserve(entry.target);
-          await translateOverlayChunk(nextDownChunk++);
-          if (signal.aborted) return;
-          observeNextOverlaySentinel();
-        }
-      }, { root: translationViewer, threshold: 0.1 });
-      lazyObserver.observe(sentinel);
-    }
-    observeNextOverlaySentinel();
+    // Lazy: ogni chunk viene tradotto quando entra (o sta per entrare) nella vista
+    lazyObserver = observeChunksLazily({
+      root: translationViewer,
+      elements: allBlocks.map(b => b && b.el),
+      chunkSize: LAZY_CHUNK,
+      translateChunk: translateOverlayChunk,
+      isDone: (c) => c <= startChunk,
+      signal,
+    });
 
   } catch (err) {
     if (signal.aborted) return;
@@ -3217,13 +3386,21 @@ async function translatePdfOverlay(startPct = 0) {
   }
 }
 
-const lang = langSelect.value;
-const rawLabel = langSelect.options[langSelect.selectedIndex].text;
-translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
+// Etichetta del pannello traduzione: nome della lingua selezionata, senza
+// l'eventuale emoji bandiera iniziale.
+function updateTranslationLangLabel() {
+  const option = langSelect.options[langSelect.selectedIndex];
+  const rawLabel = option ? option.text : '';
+  translationLangLabel.textContent = rawLabel.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim();
+}
+updateTranslationLangLabel(); // etichetta iniziale, prima di aprire un libro
+
 // ── Traduzione lazy ────────────────────────────────────────────────────────
 // startPct: percentuale di scroll da cui partire (0-100). Traduce prima il chunk
 // visibile a quella posizione, poi espande lazy verso il basso e verso l'alto.
-async function translateCurrentChapter(startPct = 0) {
+// `force`: ignora le traduzioni salvate e le sostituisce (ritraduzione del capitolo)
+async function translateCurrentChapter(startPct = 0, { force = false } = {}) {
+  const forceRetranslation = force;
   ttsTranslateChunk = null; // Reset on re-entry / chapter change
   translatedChunksRef = null;
   if (translationAbortController) translationAbortController.abort();
@@ -3237,7 +3414,7 @@ async function translateCurrentChapter(startPct = 0) {
 
   // PDF overlay mode: render canvas + translated text overlay (only in original view mode)
   if (currentFileType === 'pdf' && pdfDoc && pdfNav && currentViewMode === 'original') {
-    await translatePdfOverlay(startPct);
+    await translatePdfOverlay(startPct, { force });
     return;
   }
 
@@ -3332,7 +3509,11 @@ async function translateCurrentChapter(startPct = 0) {
       setTranslationStatus(`${Math.round((finishedChunks.size / totalChunks) * 100)}%`);
     }
     try {
-      const translated = await translateParagraphs(slice, lang, signal);
+      // Un errore temporaneo (rete, limite di richieste) viene ritentato con
+      // una pausa crescente prima di arrendersi e mostrare il testo originale.
+      // Dalla cache del libro i paragrafi già tradotti; gli altri vengono
+      // tradotti (con ritentativi) e salvati nella cache.
+      const translated = await translateWithCache(slice, lang, signal, { force: forceRetranslation });
       if (signal.aborted) return;
       for (let k = 0; k < textIdx.length; k++) {
         const i = textIdx[k];
@@ -3360,6 +3541,34 @@ async function translateCurrentChapter(startPct = 0) {
   // Expose translateChunk for TTS on-demand translation
   ttsTranslateChunk = translateChunk;
 
+  // I chunk già interamente in cache vengono mostrati subito, senza attendere
+  // lo scroll: la lettura dalla cache è sincrona e non fa richieste.
+  if (!forceRetranslation && currentTranslationCache) {
+    const variant = translationVariant(lang);
+    for (let c = 0; c < totalChunks; c++) {
+      const s = c * LAZY_CHUNK;
+      const e = Math.min(s + LAZY_CHUNK, total);
+      const hits = [];
+      let complete = true;
+      for (let i = s; i < e; i++) {
+        const seg = paragraphs[i];
+        if (seg && seg.type === 'image') continue;
+        const text = seg.text !== undefined ? seg.text : seg;
+        const hit = currentTranslationCache.get(variant, text);
+        if (hit === undefined) { complete = false; break; }
+        hits.push([i, hit]);
+      }
+      if (!complete) continue;
+      for (const [i, hit] of hits) {
+        pEls[i].innerHTML = buildTranslatedParagraphHtml(paragraphs[i], hit, i + 1);
+        pEls[i].setAttribute('data-translated', 'true');
+        pEls[i].classList.remove('pending');
+      }
+      translatedChunks.add(c);
+      markChunkFinished(c, false);
+    }
+  }
+
   // Traduce il chunk visibile per primo, poi quelli precedenti (verso l'alto), poi lazy verso il basso
   await translateChunk(startChunk);
   if (signal.aborted) return;
@@ -3373,26 +3582,16 @@ async function translateCurrentChapter(startPct = 0) {
     }
   })();
 
-  // Lazy verso il basso: osserva l'ultimo paragrafo del chunk corrente
-  let nextDownChunk = startChunk + 1;
-
-  function observeNextSentinel() {
-    if (nextDownChunk >= totalChunks) return;
-    const lastParagraphOfCurrent = pEls[Math.min(nextDownChunk * LAZY_CHUNK - 1, total - 1)];
-    if (!lastParagraphOfCurrent) return;
-    lazyObserver = new IntersectionObserver(async (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        lazyObserver.unobserve(entry.target);
-        await translateChunk(nextDownChunk++);
-        if (signal.aborted) return;
-        observeNextSentinel();
-      }
-    }, { root: translationViewer, threshold: 0.1 });
-    lazyObserver.observe(lastParagraphOfCurrent);
-  }
-
-  observeNextSentinel();
+  // Lazy: ogni chunk non tradotto viene tradotto quando entra (o sta per entrare)
+  // nella vista, anche se lo scroll veloce salta interi chunk.
+  lazyObserver = observeChunksLazily({
+    root: translationViewer,
+    elements: pEls,
+    chunkSize: LAZY_CHUNK,
+    translateChunk,
+    isDone: (c) => translatedChunks.has(c),
+    signal,
+  });
 }
 
 // ── Size Guard ─────────────────────────────────────────────────────────────
@@ -3553,6 +3752,9 @@ async function loadEpub(arrayBuffer, filePath = '') {
 
   // File valido: ora si può chiudere il libro precedente
   displayGeneration++; // ferma i caricamenti di capitolo ancora in corso del vecchio libro
+  cancelBookTranslationJob();
+  flushTranslationCaches();
+  currentTranslationCache = null;
   enableTTSControls(false);
   if (book) {
     try { book.destroy(); } catch (_) { }
@@ -3573,6 +3775,10 @@ async function loadEpub(arrayBuffer, filePath = '') {
   currentFilePath = filePath || null;
   try {
     book = newBook;
+    // Traduzioni già salvate per questo libro: caricate prima del primo capitolo
+    currentBookFileSize = arrayBuffer.byteLength || 0;
+    const bookCache = await loadBookTranslationCache(filePath, meta.title);
+    if (book === newBook) currentTranslationCache = bookCache;
     bookTitle.textContent = meta.title || ui('unknownTitle');
     bookAuthor.textContent = meta.creator || '';
     bookInfo.classList.remove('hidden');
@@ -3586,11 +3792,12 @@ async function loadEpub(arrayBuffer, filePath = '') {
       saveSettings(s);
     }
 
-    try { const url = await book.coverUrl(); if (url) coverImg.src = url; } catch (_) { }
+    let coverUrl = null;
+    try { coverUrl = (await book.coverUrl()) || null; if (coverUrl) coverImg.src = coverUrl; } catch (_) { }
 
     // Auto-aggiunta alla libreria quando si apre un libro (solo in Tauri con path assoluto)
     if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
-      autoAddToLibrary(arrayBuffer, filePath, meta);
+      autoAddToLibrary(arrayBuffer, filePath, meta, undefined, coverUrl);
     }
 
     currentSpineItems = [];
@@ -3602,6 +3809,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
     updateProgress();
     buildProgressTicks(currentSpineItems, nav.toc);
     addBookmarkBtn.disabled = false;
+    if (bookTranslationBtn) bookTranslationBtn.disabled = false;
     enableTTSControls(true);
     populateTTSVoices();
 
@@ -3613,11 +3821,20 @@ async function loadEpub(arrayBuffer, filePath = '') {
         bestIndex = i; break;
       }
     }
+    // Lunghezze dei capitoli già calcolate a un'apertura precedente (se il file
+    // non è cambiato): evitano di rileggere i capitoli qui e più sotto.
+    const fileSize = arrayBuffer.byteLength || 0;
+    const cachedLengths = await getCachedChapterLengths(filePath, fileSize, currentSpineItems.length);
+
     // Seconda passa: primo spine item con più di 500 caratteri di testo.
     if (bestIndex < 0) {
-      for (let i = 0; i < currentSpineItems.length; i++) {
-        const body = await loadChapterDocument(currentSpineItems[i]);
-        if ((body?.textContent?.trim() || '').length > 500) { bestIndex = i; break; }
+      if (cachedLengths) {
+        bestIndex = cachedLengths.findIndex(l => l > 500);
+      } else {
+        for (let i = 0; i < currentSpineItems.length; i++) {
+          const body = await loadChapterDocument(currentSpineItems[i]);
+          if ((body?.textContent?.trim() || '').length > 500) { bestIndex = i; break; }
+        }
       }
     }
     setViewMode('text');
@@ -3625,7 +3842,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
     await displayChapter(bestIndex >= 0 ? bestIndex : 0);
 
     // Compute chapter lengths in background for proportional progress bar
-    computeChapterLengths();
+    chapterLengthsPromise = computeChapterLengths(cachedLengths, { filePath, fileSize })
+      .finally(() => { chapterLengthsPromise = null; });
   } catch (err) {
     if (book) {
       try { book.destroy(); } catch (_) { }
@@ -3695,7 +3913,7 @@ function renderPdfTicks() {
       label = pdfNav.currentLabel;
       pdfNav.goTo(saved);
     } else {
-      label = `Pag. ${unitIndex + 1}`;
+      label = ui('pdf_page_indicator', { n: unitIndex + 1, total: pdfNav.totalUnits });
     }
     tick.dataset.label = label;
     tick.dataset.unitIndex = unitIndex;
@@ -3844,6 +4062,9 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
 
     // File valido: ora si può chiudere il libro precedente
     displayGeneration++; // ferma i caricamenti di capitolo ancora in corso del vecchio libro
+    cancelBookTranslationJob();
+    flushTranslationCaches();
+    currentTranslationCache = null;
     enableTTSControls(false);
     if (book) {
       try { book.destroy(); } catch (_) { }
@@ -3865,9 +4086,24 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     currentFileType = 'pdf';
     currentFilePath = filePath || null;
 
+    // Lingua sorgente per la scelta della voce TTS: quella dichiarata dal PDF,
+    // se c'è. Altrimenti si azzera, per non usare quella dell'ultimo libro aperto.
+    {
+      const settings = loadSettings();
+      const pdfLang = (doc.language || '').split(/[-_]/)[0].toLowerCase();
+      if (/^[a-z]{2,3}$/.test(pdfLang)) settings.sourceLang = pdfLang;
+      else delete settings.sourceLang;
+      saveSettings(settings);
+    }
+
     // Compute pdfHash from filename + file size (stable, cheap)
     const pdfFilename = (filePath || '').split(/[\\/]/).pop() || '';
     currentPdfHash = `${pdfFilename}:${pdfByteLength}`;
+
+    // Traduzioni già salvate per questo libro: caricate prima della prima unità
+    currentBookFileSize = pdfByteLength;
+    const bookCache = await loadBookTranslationCache(filePath, doc.title);
+    if (pdfDoc === doc) currentTranslationCache = bookCache;
 
     // Display title in sidebar
     bookTitle.textContent = doc.title || ui('unknownTitle');
@@ -3882,6 +4118,7 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     }
 
     addBookmarkBtn.disabled = false;
+    if (bookTranslationBtn) bookTranslationBtn.disabled = false;
     enableTTSControls(true);
     populateTTSVoices();
     setViewMode('text'); // Normal view mode — old pipeline handles rendering
@@ -4063,12 +4300,46 @@ async function loadChapterDocument(spineItem) {
   return null;
 }
 
+// Lunghezze dei capitoli salvate nella voce di libreria del libro, valide solo
+// se il file ha ancora la stessa dimensione e lo stesso numero di capitoli.
+// Evitano di rileggere tutti i capitoli a ogni apertura.
+async function getCachedChapterLengths(filePath, fileSize, chapterCount) {
+  if (!filePath || !fileSize) return null;
+  try {
+    const entry = (await loadLibrary()).find(e => e.filePath === filePath);
+    const lengths = entry && entry.chapterLengths;
+    if (!Array.isArray(lengths) || lengths.length !== chapterCount) return null;
+    if (entry.chapterLengthsFileSize !== fileSize) return null;
+    if (!lengths.every(l => Number.isFinite(l) && l >= 0)) return null;
+    return lengths;
+  } catch {
+    return null;
+  }
+}
+
+async function saveChapterLengthsToLibrary({ filePath, fileSize }, lengths) {
+  if (!filePath || !fileSize) return;
+  try {
+    const lib = await loadLibrary();
+    const entry = lib.find(e => e.filePath === filePath);
+    if (!entry) return; // libro non in libreria (es. aperto in modalità browser)
+    entry.chapterLengths = lengths;
+    entry.chapterLengthsFileSize = fileSize;
+    await saveLibrary(lib);
+  } catch (e) {
+    console.warn('[library] chapter lengths not saved:', e);
+  }
+}
+
 /**
  * Calcola la lunghezza testuale di ogni capitolo e costruisce la mappa
  * delle posizioni cumulative (0–100%) per la progress bar proporzionale.
  * Eseguita in background dopo il caricamento iniziale del libro.
  */
-async function computeChapterLengths() {
+// `cachedLengths`: lunghezze già note (salvate nella libreria a un'apertura
+// precedente); se presenti non si rilegge alcun capitolo.
+// `cacheKey`: { filePath, fileSize } con cui salvare le lunghezze calcolate.
+async function computeChapterLengths(cachedLengths = null, cacheKey = null) {
   chapterLengths = [];
   chapterCumulativePct = [];
   if (!currentSpineItems.length || !book) return;
@@ -4077,16 +4348,40 @@ async function computeChapterLengths() {
   // abbandonato, altrimenti scriverebbe le lunghezze di questo su quello nuovo.
   const myBook = book;
   const items = currentSpineItems;
-  const lengths = new Array(items.length).fill(0);
+  let lengths;
 
-  for (let i = 0; i < items.length; i++) {
-    try {
-      const body = await loadChapterDocument(items[i]);
+  // Nella stessa lettura dei capitoli si registra anche la struttura del libro
+  // (paragrafi per capitolo) per la cache delle traduzioni, se manca: serve a
+  // sapere quanta parte del libro è tradotta.
+  const translationCache = currentTranslationCache;
+  const needStructure = !!translationCache && !translationCache.getStructure(currentBookFileSize);
+  const fileSize = currentBookFileSize;
+
+  if (cachedLengths && !needStructure) {
+    lengths = cachedLengths.slice();
+  } else {
+    lengths = new Array(items.length).fill(0);
+    const chapters = [];
+    for (let i = 0; i < items.length; i++) {
+      let body = null;
+      // Il capitolo a schermo è già caricato: ricaricarlo lo scaricherebbe
+      if (i === currentSpineIndex && currentChapterBody) {
+        body = currentChapterBody;
+      } else {
+        try { body = await loadChapterDocument(items[i]); } catch { body = null; }
+        if (book !== myBook) return;
+      }
       lengths[i] = (body?.textContent?.trim() || '').length;
-    } catch {
-      lengths[i] = 0;
+      if (needStructure) {
+        chapters.push({ label: epubChapterLabel(i), texts: body ? paragraphTexts(extractParagraphs(body, null)) : [] });
+      }
     }
-    if (book !== myBook) return;
+    if (cacheKey && !cachedLengths) saveChapterLengthsToLibrary(cacheKey, lengths);
+    if (needStructure && currentTranslationCache === translationCache) {
+      translationCache.setStructure(chapters, fileSize);
+      scheduleTranslationCacheSave(translationCache);
+      refreshBookTranslationModal();
+    }
   }
 
   // Se tutti i capitoli sono vuoti, usa distribuzione uniforme
@@ -4320,7 +4615,7 @@ async function saveBookmarks(bms) {
 // Restituisce la label del capitolo corrente dalla progress bar
 function getChapterLabel(index) {
   const tick = progressTicks.querySelector(`[data-idx="${index}"]`);
-  return tick?.dataset.label || `Chapter ${index + 1}`;
+  return tick?.dataset.label || ui('chapterN', { n: index + 1 });
 }
 
 // Aggiunge un segnalibro per il capitolo corrente
@@ -4337,7 +4632,7 @@ addBookmarkBtn.addEventListener('click', async () => {
       fileName: (currentFilePath || '').split(/[\\/]/).pop() || '',
       bookTitle: (pdfDoc && pdfDoc.title) || bookTitle.textContent || '',
       chapterIndex: pdfNav ? pdfNav.currentIndex : 0,
-      chapterLabel: pdfNav ? pdfNav.currentLabel : '',
+      chapterLabel: pdfNav ? pdfUnitLabel() : '',
       scrollPct,
       fileType: 'pdf',
       pageNumber: pdfNav ? pdfNav.pageRange.start : 1,
@@ -4381,7 +4676,7 @@ async function renderBookmarks(query = '') {
     const li = document.createElement('li');
     li.className = 'bookmark-item';
     const title = bm.bookTitle || bm.fileName || bm.bookId || '';
-    const chapterLabel = bm.chapterLabel || (bm.chapterIndex != null ? `Chapter ${bm.chapterIndex + 1}` : '');
+    const chapterLabel = bm.chapterLabel || (bm.chapterIndex != null ? ui('chapterN', { n: Number(bm.chapterIndex) + 1 }) : '');
     li.innerHTML = `
       <span class="bm-icon"><img src="/icons/book-bookmark.svg" class="icon" alt="" /></span>
       <span class="bm-info">
@@ -4534,7 +4829,7 @@ async function openBookmark(bm) {
   );
 
   const bmFileName = bm.fileName || bm.bookTitle || '';
-  const bmChapterLabel = bm.chapterLabel || (bm.chapterIndex != null ? `Chapter ${bm.chapterIndex + 1}` : '');
+  const bmChapterLabel = bm.chapterLabel || (bm.chapterIndex != null ? ui('chapterN', { n: Number(bm.chapterIndex) + 1 }) : '');
 
   if (!hasAbsolutePath) {
     if (isTauri) {
@@ -4543,13 +4838,13 @@ async function openBookmark(bm) {
       if (!newPath) return;
       await updateBookmarkPath(bm, newPath);
     } else {
-      await showAlert(`Please open the file "${bmFileName}" manually and navigate to: ${bmChapterLabel}`);
+      await showAlert(ui('openFileManually', { name: bmFileName, chapter: bmChapterLabel }));
       return;
     }
   }
 
   if (!isTauri) {
-    await showAlert(`Please open the file "${bmFileName}" manually and navigate to: ${bmChapterLabel}`);
+    await showAlert(ui('openFileManually', { name: bmFileName, chapter: bmChapterLabel }));
     return;
   }
 
@@ -4661,13 +4956,19 @@ async function loadBookmarkFile(bm) {
 
 // ── Persistenza geometria finestra (solo Tauri) ────────────────────────────
 const WINDOW_STATE_KEY = 'giano-reader-window-state';
+// Attesa dopo l'ultimo spostamento/ridimensionamento prima di salvare
+const WINDOW_STATE_SAVE_DELAY_MS = 500;
 
 async function saveWindowState() {
   try {
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     const win = getCurrentWindow();
     const isMaximized = await win.isMaximized();
-    const state = { maximized: isMaximized };
+    // Da massimizzata si conservano posizione e dimensioni precedenti, così
+    // all'uscita dalla massimizzazione la finestra torna dov'era.
+    let previous = {};
+    try { previous = JSON.parse(localStorage.getItem(WINDOW_STATE_KEY) || '{}') || {}; } catch { }
+    const state = isMaximized ? { ...previous, maximized: true } : { maximized: false };
     if (!isMaximized) {
       const { x, y } = await win.outerPosition();
       const { width, height } = await win.innerSize();
@@ -4695,15 +4996,16 @@ async function restoreWindowState() {
     // Verifica se le coordinate sono valide (non negative o eccessive) per evitare finestre "perse"
     const isValidPos = state.x !== undefined && state.y !== undefined && state.x >= -10000 && state.y >= -10000;
 
-    if (state.maximized) {
-      await win.maximize();
-    } else if (state.physical) {
+    // Prima la geometria "normale" (anche se la finestra va massimizzata: è
+    // quella a cui torna uscendo dalla massimizzazione), poi la massimizzazione
+    if (state.physical) {
       if (state.width && state.height) await win.setSize(new PhysicalSize(state.width, state.height));
       if (isValidPos) await win.setPosition(new PhysicalPosition(state.x, state.y));
     } else {
       if (state.width && state.height) await win.setSize(new LogicalSize(state.width, state.height));
       if (isValidPos) await win.setPosition(new LogicalPosition(state.x, state.y));
     }
+    if (state.maximized) await win.maximize();
   } catch (err) {
     console.warn('[window-state] restore error:', err);
   }
@@ -4716,8 +5018,24 @@ if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
   // Salva geometria prima della chiusura
   window.addEventListener('beforeunload', saveWindowState);
 
-  // Salva anche periodicamente (ogni 5s) per catturare ridimensionamenti/spostamenti
-  setInterval(saveWindowState, 5000);
+  // Salva anche quando la finestra viene spostata o ridimensionata, mezzo
+  // secondo dopo l'ultimo evento: il salvataggio alla chiusura è asincrono e
+  // non sempre fa in tempo. Nessun salvataggio mentre la finestra è ferma.
+  (async () => {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const win = getCurrentWindow();
+      let timer = null;
+      const scheduleSave = () => {
+        clearTimeout(timer);
+        timer = setTimeout(saveWindowState, WINDOW_STATE_SAVE_DELAY_MS);
+      };
+      await win.onMoved(scheduleSave);
+      await win.onResized(scheduleSave);
+    } catch (err) {
+      console.warn('[window-state] cannot listen to window changes:', err);
+    }
+  })();
 }
 
 // Distruggi il libro alla chiusura della finestra per liberare memoria
@@ -4863,7 +5181,10 @@ async function addEntries(newEntries) {
 
 async function removeEntry(id) {
   const lib = await loadLibrary();
+  const removed = lib.find(e => e.id === id);
   await saveLibrary(lib.filter(e => e.id !== id));
+  // Le traduzioni salvate del libro eliminato non servono più
+  if (removed) await deleteBookTranslationCache(removed.filePath, removed.title);
   const { query, status } = getLibFilters();
   await renderLibraryGrid(query, status);
 }
@@ -4908,7 +5229,11 @@ async function extractMetadata(filePath) {
       const fileSize = buffer.byteLength;
       try {
         const doc = await loadPdf(buffer, fileName);
-        return { id, filePath, fileName, title: doc.title || titleFallback, author: doc.author || '', publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: doc.pageCount || 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
+        const entry = { id, filePath, fileName, title: doc.title || titleFallback, author: doc.author || '', publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: doc.pageCount || 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
+        // Servivano solo i metadati: il documento va rilasciato, altrimenti una
+        // scansione con molti PDF li tiene tutti in memoria.
+        try { await doc.proxy.destroy(); } catch (_) { }
+        return entry;
       } catch {
         return { id, filePath, fileName, title: titleFallback, author: '', fileSize: fileSize ?? 0, pageCount: 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
       }
@@ -5022,7 +5347,9 @@ let scanInProgress = false;
 // Auto-add a book to the library when opened, extracting cover in background
 // `knownSize`: dimensione del file quando `arrayBuffer` non è più leggibile
 // (pdf.js lo trasferisce al worker, lasciandolo con byteLength 0).
-async function autoAddToLibrary(arrayBuffer, filePath, meta, knownSize) {
+// `knownCoverUrl`: URL (blob) della copertina del libro già aperto, oppure null
+// se il libro non ha copertina; undefined = da estrarre riaprendo il file.
+async function autoAddToLibrary(arrayBuffer, filePath, meta, knownSize, knownCoverUrl) {
   try {
     const lib = await loadLibrary();
     if (lib.some(e => e.filePath === filePath)) return; // already in library
@@ -5048,11 +5375,17 @@ async function autoAddToLibrary(arrayBuffer, filePath, meta, knownSize) {
     const description = meta.description || '';
     // Add immediately without cover so the entry appears right away
     await addEntries([{ id, filePath, fileName, title, author, publisher, language, pubdate, description, fileSize, pageCount: 0, coverDataUrl: null, status: 'to-read', notes: '', addedAt }]);
-    // Extract cover in background and update the entry
+    // Extract cover in background and update the entry. The cover URL of the
+    // book that is being opened is reused when the caller has it: opening the
+    // EPUB a second time only for the cover would decompress it twice.
+    let tmpBook = null;
     try {
-      const tmpBook = ePub(arrayBuffer);
-      await Promise.race([tmpBook.ready, new Promise((_, r) => setTimeout(() => r(new Error('t')), 8000))]);
-      const coverBlobUrl = await Promise.race([tmpBook.coverUrl(), new Promise((_, r) => setTimeout(() => r(new Error('t')), 5000))]);
+      let coverBlobUrl = knownCoverUrl;
+      if (coverBlobUrl === undefined) {
+        tmpBook = ePub(arrayBuffer);
+        await Promise.race([tmpBook.ready, new Promise((_, r) => setTimeout(() => r(new Error('t')), 8000))]);
+        coverBlobUrl = await Promise.race([tmpBook.coverUrl(), new Promise((_, r) => setTimeout(() => r(new Error('t')), 5000))]);
+      }
       if (coverBlobUrl) {
         const coverDataUrl = await new Promise(resolve => {
           const img = new Image();
@@ -5079,8 +5412,10 @@ async function autoAddToLibrary(arrayBuffer, filePath, meta, knownSize) {
           if (idx >= 0) { current[idx].coverDataUrl = coverDataUrl; await saveLibrary(current); }
         }
       }
-      tmpBook.destroy();
     } catch { /* cover extraction failed, entry already saved without cover */ }
+    finally {
+      if (tmpBook) { try { tmpBook.destroy(); } catch (_) { } }
+    }
   } catch (e) {
     console.warn('[library] autoAdd error:', e);
   }
@@ -5101,14 +5436,74 @@ async function scanFolder(rootPath) {
       libStatus.textContent = ui('libNoBooksFound');
       return;
     }
-    const newEntries = [];
-    for (const filePath of epubPaths) {
-      libStatus.textContent = ui('libScanning') + ' ' + (newEntries.length + 1) + '/' + epubPaths.length;
-      const entry = await extractMetadata(filePath);
-      newEntries.push(entry);
+
+    // 1. Dimensione e data di modifica di ogni file (veloce: il file non viene aperto)
+    const { stat } = await import('@tauri-apps/plugin-fs');
+    const files = [];
+    for (const path of epubPaths) {
+      try {
+        files.push({ path, fingerprint: fileFingerprint(await stat(path)) });
+      } catch (e) {
+        console.warn('[library] cannot stat', path, e);
+      }
     }
-    const { added, skipped } = await addEntries(newEntries);
-    libStatus.textContent = ui('libScanDone', { added, skipped });
+
+    // 2. Si analizzano solo i libri nuovi e quelli modificati dopo l'indicizzazione.
+    //    La scansione non rimuove mai voci (libri su dischi non collegati).
+    const plan = planScan(await loadLibrary(), files);
+    const toAnalyse = [
+      ...plan.added.map(f => ({ ...f, entry: null })),
+      ...plan.changed,
+    ];
+
+    // 3. Analisi, salvando a gruppi: un'interruzione non perde il lavoro fatto
+    const SAVE_EVERY = 10;
+    let pendingNew = [];
+    let pendingChanged = [];
+    const flush = async () => {
+      if (!pendingNew.length && !pendingChanged.length) return;
+      const lib = await loadLibrary();
+      for (const merged of pendingChanged) {
+        const idx = lib.findIndex(e => e.id === merged.id);
+        if (idx >= 0) lib[idx] = merged;
+      }
+      const known = new Set(lib.map(e => e.filePath));
+      for (const entry of pendingNew) {
+        if (!known.has(entry.filePath)) { lib.push(entry); known.add(entry.filePath); }
+      }
+      await saveLibrary(lib);
+      pendingNew = [];
+      pendingChanged = [];
+    };
+
+    for (let i = 0; i < toAnalyse.length; i++) {
+      const { path, fingerprint, entry } = toAnalyse[i];
+      libStatus.textContent = ui('libScanAnalysing', { n: i + 1, total: toAnalyse.length });
+      const fresh = await extractMetadata(path);
+      if (entry) {
+        pendingChanged.push(mergeReanalysis(entry, fresh, fingerprint));
+      } else {
+        pendingNew.push({ ...fresh, fileSize: fingerprint.size || fresh.fileSize || 0, fileMtime: fingerprint.mtime });
+      }
+      if (pendingNew.length + pendingChanged.length >= SAVE_EVERY) await flush();
+    }
+    await flush();
+
+    // 4. Libri invariati indicizzati prima che si registrasse la data di
+    //    modifica: la si registra ora, così le modifiche future si riconoscono.
+    const missingTime = plan.unchanged.filter(f => f.entry.fileMtime == null && f.fingerprint.mtime != null);
+    if (missingTime.length) {
+      const lib = await loadLibrary();
+      const times = new Map(missingTime.map(f => [f.entry.id, f.fingerprint.mtime]));
+      for (const e of lib) if (times.has(e.id)) e.fileMtime = times.get(e.id);
+      await saveLibrary(lib);
+    }
+
+    libStatus.textContent = ui('libScanSummary', {
+      added: plan.added.length,
+      updated: plan.changed.length,
+      unchanged: plan.unchanged.length,
+    });
     await renderLibraryGrid();
   } catch (err) {
     libStatus.textContent = ui('libImportError') + errMsg(err);
@@ -5288,6 +5683,7 @@ async function openBookDetail(entryId) {
   const entry = lib.find(e => e.id === entryId);
   if (!entry) return;
   const modal = document.getElementById('book-detail-modal');
+  renderDetailTranslation(entry); // in background: legge il file di cache del libro
   // Localize all labels
   document.getElementById('book-detail-title').textContent = entry.title || ui('bookDetail');
   document.querySelector('label[for="detail-title"]').textContent = ui('detailTitle');
@@ -5325,6 +5721,7 @@ async function openBookDetail(entryId) {
   // Wire save button
   const saveBtn = document.getElementById('book-detail-save-btn');
   saveBtn.onclick = async () => {
+    const before = { ...entry };
     entry.title = document.getElementById('detail-title').value.trim() || entry.title;
     entry.author = document.getElementById('detail-author').value.trim();
     entry.publisher = document.getElementById('detail-publisher').value.trim();
@@ -5334,6 +5731,9 @@ async function openBookDetail(entryId) {
     setEntryRating(entry, getDetailRating());
     entry.description = document.getElementById('detail-description').value.trim();
     entry.notes = document.getElementById('detail-notes').value.trim();
+    // I campi modificati qui non vengono sovrascritti quando il file del libro
+    // cambia e la scansione lo rianalizza (library-scan.js)
+    markEditedFields(entry, before);
     const idx = lib.findIndex(e => e.id === entryId);
     if (idx >= 0) { lib[idx] = entry; await saveLibrary(lib); }
     modal.classList.add('hidden');
@@ -5817,3 +6217,482 @@ document.addEventListener('wheel', e => {
   }
 }, { passive: false });
 
+// ── Traduzione del libro: stato, completamento e download ──────────────────
+// Finestra aperta dal pulsante nella testata del pannello traduzione. Mostra
+// quanta parte del libro è tradotta (nella lingua e con il motore correnti,
+// dalla cache delle traduzioni), permette di completare la traduzione in
+// background e di scaricare il libro tradotto come EPUB.
+const bookTranslationBtn = document.getElementById('book-translation-btn');
+const bookTranslationModal = document.getElementById('book-translation-modal');
+const btEls = {
+  title: document.getElementById('bt-modal-title'),
+  close: document.getElementById('bt-close-btn'),
+  book: document.getElementById('bt-book'),
+  progress: document.getElementById('bt-progress'),
+  fill: document.getElementById('bt-progress-fill'),
+  percent: document.getElementById('bt-percent'),
+  summary: document.getElementById('bt-summary'),
+  status: document.getElementById('bt-status'),
+  chapters: document.getElementById('bt-chapters'),
+  variants: document.getElementById('bt-variants'),
+  retranslate: document.getElementById('bt-retranslate-btn'),
+  clear: document.getElementById('bt-clear-btn'),
+  download: document.getElementById('bt-download-btn'),
+  complete: document.getElementById('bt-complete-btn'),
+};
+
+// Pausa tra una richiesta e l'altra del completamento con il motore FREE,
+// per non incorrere nel limite di richieste dell'endpoint gratuito
+const FREE_JOB_PAUSE_MS = 400;
+
+let bookTranslationJob = null;   // { controller, kind: 'measure'|'complete'|'download' }
+let bookTranslationMessage = ''; // ultimo messaggio di stato (resta dopo la fine del lavoro)
+
+/** Oggetto che identifica il libro aperto: cambia quando se ne apre un altro. */
+function currentBookToken() {
+  return currentFileType === 'pdf' ? pdfDoc : book;
+}
+
+function bookUnitCount() {
+  if (currentFileType === 'pdf') return pdfNav ? pdfNav.totalUnits : 0;
+  return currentSpineItems.length;
+}
+
+function currentUnitIndex() {
+  return currentFileType === 'pdf' ? (pdfNav ? pdfNav.currentIndex : 0) : currentSpineIndex;
+}
+
+/** Testi dei paragrafi da tradurre (le immagini a sé stanti non si traducono). */
+function paragraphTexts(paragraphs) {
+  return (paragraphs || [])
+    .filter(p => !(p && p.type === 'image'))
+    .map(p => (p && p.text !== undefined ? p.text : p))
+    .filter(t => typeof t === 'string' && t.trim());
+}
+
+function epubChapterLabel(index) {
+  return getChapterLabel(index);
+}
+
+function bookUnitLabel(index) {
+  if (currentFileType === 'pdf' && pdfNav) {
+    if (pdfNav.mode === 'page') return ui('pdf_page_indicator', { n: index + 1, total: pdfNav.totalUnits });
+    return pdfNav.chapterTitleOf(index) || ui('chapterN', { n: index + 1 });
+  }
+  return epubChapterLabel(index);
+}
+
+/** Testi dei paragrafi di un capitolo (o unità PDF) del libro aperto. */
+async function readUnitTexts(index) {
+  if (index === currentUnitIndex() && currentChapterParagraphs.length) {
+    return paragraphTexts(currentChapterParagraphs);
+  }
+  if (currentFileType === 'pdf') {
+    const paragraphs = await extractChapterText(pdfDoc.proxy, pdfNav.pageRangeOf(index), loadSettings().uiLang || 'en');
+    return paragraphTexts(paragraphs);
+  }
+  const body = await loadChapterDocument(currentSpineItems[index]);
+  return body ? paragraphTexts(extractParagraphs(body, null)) : [];
+}
+
+/**
+ * Legge tutti i capitoli del libro aperto.
+ * @returns {Promise<Array<{ label: string, texts: string[] }>>}
+ * @throws AbortError se il lavoro viene fermato o si apre un altro libro
+ */
+async function readBookChapters(signal, onProgress) {
+  const token = currentBookToken();
+  const total = bookUnitCount();
+  const chapters = [];
+  for (let i = 0; i < total; i++) {
+    if (signal.aborted || currentBookToken() !== token) throw new DOMException('Aborted', 'AbortError');
+    if (onProgress) onProgress(i + 1, total);
+    chapters.push({ label: bookUnitLabel(i), texts: await readUnitTexts(i) });
+  }
+  if (currentBookToken() !== token) throw new DOMException('Aborted', 'AbortError');
+  return chapters;
+}
+
+function cancelBookTranslationJob() {
+  if (bookTranslationJob) {
+    bookTranslationJob.controller.abort();
+    bookTranslationJob = null;
+  }
+  bookTranslationMessage = '';
+  refreshBookTranslationModal();
+}
+
+function setBookTranslationMessage(message) {
+  bookTranslationMessage = message;
+  refreshBookTranslationModal();
+}
+
+/** Nome leggibile di una lingua, dalle opzioni del selettore della lingua. */
+function languageName(code) {
+  const option = Array.from(langSelect.options).find(o => o.value === code);
+  return option ? option.text.replace(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]\s*/, '').trim() : code;
+}
+
+function variantLabel(variant) {
+  const { lang, engine } = parseVariant(variant);
+  return `${languageName(lang)} (${engine.toUpperCase()})`;
+}
+
+async function askConfirm(message, title = 'Giano Reader') {
+  if (isTauriApp()) {
+    try {
+      const { confirm } = await import('@tauri-apps/plugin-dialog');
+      return await confirm(message, { title, kind: 'warning' });
+    } catch { /* ripiego sul dialog del browser */ }
+  }
+  return window.confirm(message);
+}
+
+const formatNumber = (n) => Number(n || 0).toLocaleString(loadSettings().uiLang || undefined);
+
+function refreshBookTranslationModal() {
+  if (!bookTranslationModal || bookTranslationModal.classList.contains('hidden')) return;
+  const cache = currentTranslationCache;
+  const running = !!bookTranslationJob;
+  const lang = langSelect.value;
+  const engine = loadSettings().translationMode || 'free';
+  const variant = variantKey(lang, engine);
+
+  btEls.title.textContent = ui('bookTranslation');
+  btEls.retranslate.textContent = ui('btRetranslateChapter');
+  btEls.clear.textContent = ui('btClear');
+  btEls.download.textContent = ui('btDownload');
+  btEls.complete.textContent = running && bookTranslationJob.kind === 'complete' ? ui('btStop') : ui('btComplete');
+
+  if (!cache || !currentBookToken()) {
+    btEls.book.textContent = ui('btNoBook');
+    btEls.summary.textContent = '';
+    btEls.status.textContent = '';
+    btEls.chapters.innerHTML = '';
+    btEls.variants.textContent = '';
+    btEls.fill.style.width = '0%';
+    btEls.percent.textContent = '';
+    [btEls.retranslate, btEls.clear, btEls.download, btEls.complete].forEach(b => { b.disabled = true; });
+    return;
+  }
+
+  btEls.book.textContent = `${bookTitle.textContent || ''} · ${variantLabel(variant)}`;
+  const stats = cache.stats(variant, currentBookFileSize);
+  if (stats) {
+    btEls.fill.style.width = `${stats.percent}%`;
+    btEls.percent.textContent = `${stats.percent}%`;
+    btEls.progress.setAttribute('aria-valuenow', String(stats.percent));
+    btEls.summary.textContent = ui('btSummary', {
+      translated: formatNumber(stats.translatedParagraphs),
+      total: formatNumber(stats.paragraphs),
+      complete: formatNumber(stats.completeChapters),
+      chapters: formatNumber(stats.chapters.length),
+    }) + (stats.missingChars ? ' · ' + ui('btMissingChars', { chars: formatNumber(stats.missingChars) }) : '');
+
+    const current = currentUnitIndex();
+    btEls.chapters.innerHTML = stats.chapters.map((ch, i) => `
+      <li class="bt-chapter${ch.translated === ch.paragraphs ? ' done' : ''}${i === current ? ' current' : ''}" data-index="${i}" title="${escapeHtml(ch.label)}">
+        <span class="bt-chapter-label">${escapeHtml(ch.label || ui('chapterN', { n: i + 1 }))}</span>
+        <span class="bt-chapter-bar"><span style="width:${ch.percent}%"></span></span>
+        <span class="bt-chapter-count">${formatNumber(ch.translated)}/${formatNumber(ch.paragraphs)}</span>
+      </li>`).join('');
+  } else {
+    btEls.fill.style.width = '0%';
+    btEls.percent.textContent = '';
+    btEls.progress.setAttribute('aria-valuenow', '0');
+    btEls.summary.textContent = ui('btMeasuring');
+    btEls.chapters.innerHTML = '';
+  }
+  btEls.status.textContent = bookTranslationMessage;
+
+  const others = cache.variants(currentBookFileSize).filter(v => v.variant !== variant);
+  btEls.variants.textContent = others.length
+    ? ui('btOtherVariants', {
+      list: others.map(v => `${variantLabel(v.variant)} ${v.percent != null ? v.percent + '%' : formatNumber(v.cached)}`).join(', '),
+    })
+    : '';
+
+  const hasTranslations = stats
+    ? stats.translatedParagraphs > 0
+    : cache.variants().some(v => v.variant === variant);
+  btEls.retranslate.disabled = running || !currentChapterParagraphs.length;
+  btEls.clear.disabled = running || !hasTranslations;
+  btEls.download.disabled = running || !hasTranslations;
+  btEls.complete.disabled = running && bookTranslationJob.kind !== 'complete';
+}
+
+async function openBookTranslationModal() {
+  if (!bookTranslationModal) return;
+  bookTranslationModal.classList.remove('hidden');
+  refreshBookTranslationModal();
+  // Struttura del libro non ancora nota (es. PDF): la si misura ora
+  if (currentTranslationCache && !currentTranslationCache.getStructure(currentBookFileSize) && !bookTranslationJob) {
+    await measureBookStructure();
+  }
+}
+
+function closeBookTranslationModal() {
+  if (bookTranslationModal) bookTranslationModal.classList.add('hidden');
+}
+
+/** Legge tutto il libro per registrarne la struttura nella cache. */
+async function measureBookStructure() {
+  const cache = currentTranslationCache;
+  if (!cache || bookTranslationJob) return;
+  // All'apertura di un EPUB la lettura dei capitoli è già in corso: la si attende
+  if (chapterLengthsPromise) {
+    setBookTranslationMessage(ui('btMeasuring'));
+    try { await chapterLengthsPromise; } catch { /* ignorato */ }
+    if (cache.getStructure(currentBookFileSize)) { setBookTranslationMessage(''); return; }
+  }
+  if (bookTranslationJob || cache !== currentTranslationCache) return;
+  const controller = new AbortController();
+  bookTranslationJob = { controller, kind: 'measure' };
+  try {
+    const chapters = await readBookChapters(controller.signal, (n, total) => setBookTranslationMessage(ui('btReading', { n, total })));
+    cache.setStructure(chapters, currentBookFileSize);
+    scheduleTranslationCacheSave(cache);
+    bookTranslationMessage = '';
+  } catch (err) {
+    bookTranslationMessage = err && err.name === 'AbortError' ? '' : ui('btFailed', { error: errMsg(err) });
+  } finally {
+    if (bookTranslationJob && bookTranslationJob.controller === controller) bookTranslationJob = null;
+    refreshBookTranslationModal();
+  }
+}
+
+/**
+ * Traduce tutti i paragrafi del libro non ancora presenti nella cache, nella
+ * lingua e con il motore correnti. Gira in background: si può continuare a
+ * leggere, e il lavoro si ferma con "Ferma" o aprendo un altro libro.
+ */
+async function completeBookTranslation() {
+  const cache = currentTranslationCache;
+  if (!cache || bookTranslationJob) return;
+  const controller = new AbortController();
+  const signal = controller.signal;
+  bookTranslationJob = { controller, kind: 'complete' };
+  refreshBookTranslationModal();
+  if (chapterLengthsPromise) { try { await chapterLengthsPromise; } catch { /* ignorato */ } }
+
+  const token = currentBookToken();
+  const lang = langSelect.value;
+  const engine = loadSettings().translationMode || 'free';
+  const variant = variantKey(lang, engine);
+
+  try {
+    // 1. Testo di tutti i capitoli (aggiorna anche la struttura del libro)
+    const chapters = await readBookChapters(signal, (n, total) => setBookTranslationMessage(ui('btReading', { n, total })));
+    cache.setStructure(chapters, currentBookFileSize);
+    scheduleTranslationCacheSave(cache);
+
+    // 2. Paragrafi ancora da tradurre (ogni testo una volta sola)
+    const seen = new Set();
+    const pending = chapters.map(ch => ch.texts.filter(text => {
+      if (cache.has(variant, text) || seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    }));
+    const totalChars = pending.flat().reduce((sum, t) => sum + t.length, 0);
+    if (!totalChars) {
+      setBookTranslationMessage(ui('btAlreadyComplete'));
+      return;
+    }
+
+    // 3. Con un motore a pagamento si chiede conferma mostrando la quantità di testo
+    if (engine !== 'free') {
+      const ok = await askConfirm(ui('btConfirmPaid', { chars: formatNumber(totalChars), engine: engine.toUpperCase() }), ui('bookTranslation'));
+      if (!ok) { setBookTranslationMessage(''); return; }
+    }
+
+    // 4. Traduzione a gruppi di paragrafi dello stesso capitolo
+    let doneChars = 0;
+    for (let c = 0; c < pending.length; c++) {
+      for (let start = 0; start < pending[c].length; start += LAZY_CHUNK) {
+        if (signal.aborted || currentBookToken() !== token) throw new DOMException('Aborted', 'AbortError');
+        const group = pending[c].slice(start, start + LAZY_CHUNK);
+        setBookTranslationMessage(ui('btTranslating', {
+          n: c + 1, total: pending.length, percent: Math.floor((doneChars / totalChars) * 100),
+        }));
+        await translateWithCache(group, lang, signal, { cache });
+        doneChars += group.reduce((sum, t) => sum + t.length, 0);
+        if (engine === 'free') await abortableDelay(FREE_JOB_PAUSE_MS, signal);
+      }
+    }
+    setBookTranslationMessage(ui('btDone'));
+    // Il capitolo a schermo ora è tutto nella cache: lo si ridisegna tradotto
+    if (currentBookToken() === token) retranslateCurrentChapter();
+  } catch (err) {
+    setBookTranslationMessage(err && err.name === 'AbortError' ? ui('btStopped') : ui('btFailed', { error: errMsg(err) }));
+  } finally {
+    if (bookTranslationJob && bookTranslationJob.controller === controller) bookTranslationJob = null;
+    await flushTranslationCaches();
+    refreshBookTranslationModal();
+  }
+}
+
+/** Salva un file scelto dall'utente (dialog in Tauri, download nel browser). */
+async function saveBytesAs(bytes, fileName, filterName, extension) {
+  if (isTauriApp()) {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const { writeFile } = await import('@tauri-apps/plugin-fs');
+    const path = await save({ defaultPath: fileName, filters: [{ name: filterName, extensions: [extension] }] });
+    if (!path) return null;
+    await writeFile(path, bytes);
+    return path.split(/[\\/]/).pop();
+  }
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/epub+zip' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return fileName;
+}
+
+/**
+ * Scarica il libro tradotto (EPUB). I paragrafi senza traduzione nella cache
+ * restano nella lingua originale: se il libro non è tradotto per intero si
+ * chiede conferma.
+ */
+async function downloadTranslatedBook() {
+  const cache = currentTranslationCache;
+  if (!cache || bookTranslationJob) return;
+  const lang = langSelect.value;
+  const variant = translationVariant(lang);
+  const stats = cache.stats(variant, currentBookFileSize);
+  if (stats && stats.percent < 100) {
+    const ok = await askConfirm(ui('btDownloadPartial', { percent: stats.percent }), ui('bookTranslation'));
+    if (!ok) return;
+  }
+
+  const controller = new AbortController();
+  bookTranslationJob = { controller, kind: 'download' };
+  const lookup = (text) => cache.get(variant, text);
+  const fileName = translatedFileName(currentFilePath || bookTitle.textContent || 'book', lang);
+  try {
+    let bytes;
+    let replaced = 0;
+    if (currentFileType === 'pdf') {
+      // PDF: un EPUB nuovo con il testo tradotto di ogni capitolo o pagina
+      const doc = pdfDoc;
+      const chapters = await readBookChapters(controller.signal, (n, total) => setBookTranslationMessage(ui('btReading', { n, total })));
+      const translated = chapters.map(ch => ({
+        title: ch.label,
+        paragraphs: ch.texts.map(t => {
+          const tr = lookup(t);
+          if (tr !== undefined) replaced++;
+          return tr !== undefined ? tr : t;
+        }),
+      }));
+      setBookTranslationMessage(ui('btBuilding'));
+      bytes = await buildEpubFromChapters(JSZip, {
+        title: doc.title || bookTitle.textContent || fileName,
+        author: doc.author || '',
+        lang,
+        chapters: translated,
+      });
+    } else {
+      // EPUB: copia dell'originale con il testo dei paragrafi tradotto
+      if (!book || !book.archive || !book.archive.zip) throw new Error('EPUB archive not available');
+      setBookTranslationMessage(ui('btBuilding'));
+      const source = await book.archive.zip.generateAsync({ type: 'uint8array' });
+      const result = await buildTranslatedEpub(JSZip, source, {
+        chapterPaths: currentSpineItems.map(item => item.url || item.href),
+        extractText: (el) => extractTextWithInlineImages(el, null).text,
+        lookup,
+        lang,
+        onProgress: (n, total) => setBookTranslationMessage(ui('btBuildingChapter', { n, total })),
+      });
+      bytes = result.bytes;
+      replaced = result.replaced;
+    }
+    const saved = await saveBytesAs(bytes, fileName, 'EPUB', 'epub');
+    setBookTranslationMessage(saved ? ui('btDownloaded', { name: saved, replaced: formatNumber(replaced) }) : '');
+  } catch (err) {
+    setBookTranslationMessage(err && err.name === 'AbortError' ? '' : ui('btFailed', { error: errMsg(err) }));
+  } finally {
+    if (bookTranslationJob && bookTranslationJob.controller === controller) bookTranslationJob = null;
+    refreshBookTranslationModal();
+  }
+}
+
+/** Cancella le traduzioni salvate di questo libro per la lingua e il motore correnti. */
+async function clearBookTranslations() {
+  const cache = currentTranslationCache;
+  if (!cache || bookTranslationJob) return;
+  const variant = translationVariant(langSelect.value);
+  const { lang, engine } = parseVariant(variant);
+  const ok = await askConfirm(ui('btClearConfirm', { lang: languageName(lang), engine: engine.toUpperCase() }), ui('bookTranslation'));
+  if (!ok) return;
+  cache.clearVariant(variant);
+  scheduleTranslationCacheSave(cache);
+  await flushTranslationCaches();
+  setBookTranslationMessage(ui('btCleared'));
+}
+
+/** Ritraduce il capitolo a schermo ignorando le traduzioni salvate. */
+function retranslateChapterNow() {
+  if (!currentChapterParagraphs.length || bookTranslationJob) return;
+  const pct = currentReadingScrollPct();
+  translateCurrentChapter(pct, { force: true });
+  if (pct > 0) restoreScrollPct(pct);
+  setBookTranslationMessage(ui('btRetranslating'));
+}
+
+if (bookTranslationBtn) bookTranslationBtn.addEventListener('click', openBookTranslationModal);
+if (btEls.close) btEls.close.addEventListener('click', closeBookTranslationModal);
+if (bookTranslationModal) {
+  bookTranslationModal.addEventListener('click', e => { if (e.target === bookTranslationModal) closeBookTranslationModal(); });
+}
+if (btEls.complete) {
+  btEls.complete.addEventListener('click', () => {
+    if (bookTranslationJob && bookTranslationJob.kind === 'complete') cancelBookTranslationJob();
+    else completeBookTranslation();
+  });
+}
+if (btEls.download) btEls.download.addEventListener('click', downloadTranslatedBook);
+if (btEls.clear) btEls.clear.addEventListener('click', clearBookTranslations);
+if (btEls.retranslate) btEls.retranslate.addEventListener('click', retranslateChapterNow);
+if (btEls.chapters) {
+  btEls.chapters.addEventListener('click', e => {
+    const row = e.target.closest('.bt-chapter');
+    if (!row) return;
+    closeBookTranslationModal();
+    const index = Number(row.dataset.index);
+    if (currentFileType === 'pdf') {
+      if (pdfNav && pdfNav.goTo(index)) displayPdfUnit();
+    } else {
+      displayChapter(index);
+    }
+  });
+}
+// Lingua o motore cambiati: le statistiche si riferiscono a un'altra variante
+langSelect.addEventListener('change', refreshBookTranslationModal);
+if (translationModeSelect) translationModeSelect.addEventListener('change', refreshBookTranslationModal);
+// Salvataggio delle traduzioni ancora in sospeso alla chiusura dell'app
+window.addEventListener('beforeunload', () => { flushTranslationCaches(); });
+
+/**
+ * Riga "Traduzione" della scheda di un libro della libreria: varianti salvate
+ * e percentuale tradotta, lette dal file di cache del libro.
+ */
+async function renderDetailTranslation(entry) {
+  const el = document.getElementById('detail-translation');
+  if (!el) return;
+  el.textContent = '';
+  try {
+    const isCurrent = currentTranslationCache && currentFilePath && entry.filePath === currentFilePath;
+    const cache = isCurrent ? currentTranslationCache : await loadBookTranslationCache(entry.filePath, entry.title);
+    const variants = cache.variants(isCurrent ? currentBookFileSize : entry.fileSize);
+    el.textContent = variants.length
+      ? ui('detailTranslation', {
+        list: variants.map(v => `${variantLabel(v.variant)}${v.percent != null ? ' ' + v.percent + '%' : ''}`).join(', '),
+      })
+      : ui('detailTranslationNone');
+  } catch (e) {
+    console.warn('[translation-cache] detail not available:', e);
+  }
+}

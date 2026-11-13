@@ -2,6 +2,7 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::web_server::middleware::{hash_password, is_hashed_password};
 use crate::web_server::models::{ApiError, Preferences};
 use crate::web_server::persistence::PersistenceStore;
 use super::books::AppState;
@@ -54,7 +55,13 @@ pub fn set_secrets(
     let _guard = store.prefs_lock.lock().unwrap_or_else(|e| e.into_inner());
     let mut prefs = store.get_preferences().map_err(|e| e.to_string())?;
     if let Some(pw) = password {
-        prefs.password = if pw.is_empty() { None } else { Some(pw) };
+        // Stored as a salted digest, never as the password itself
+        prefs.password = if pw.is_empty() { None } else { Some(hash_password(&pw)) };
+    } else if let Some(stored) = prefs.password.as_deref() {
+        // Password written in plain text by an older version: convert it
+        if !is_hashed_password(stored) {
+            prefs.password = Some(hash_password(stored));
+        }
     }
     if let Some(key) = gcloud_api_key {
         let key = key.trim().to_string();
@@ -288,8 +295,33 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
-        // Password must still be set
-        assert_eq!(state.store.get_preferences().unwrap().password.as_deref(), Some("secret"));
+        // Password must still be set (stored as a digest, not in plain text)
+        let stored = state.store.get_preferences().unwrap().password.unwrap();
+        assert!(crate::web_server::middleware::password_matches("secret", &stored));
+    }
+
+    #[test]
+    fn test_set_secrets_stores_a_digest_and_converts_old_plain_text() {
+        let state = create_state();
+
+        set_secrets(&state.store, Some("secret".into()), None).unwrap();
+        let stored = state.store.get_preferences().unwrap().password.unwrap();
+        assert!(is_hashed_password(&stored));
+        assert!(!stored.contains("secret"));
+
+        // A store written by an older version holds the password in plain text
+        let mut prefs = state.store.get_preferences().unwrap();
+        prefs.password = Some("old-plain".into());
+        state.store.put_preferences(&prefs).unwrap();
+        // Any later secrets update (here: only the API key) converts it
+        set_secrets(&state.store, None, Some("key".into())).unwrap();
+        let stored = state.store.get_preferences().unwrap().password.unwrap();
+        assert!(is_hashed_password(&stored));
+        assert!(crate::web_server::middleware::password_matches("old-plain", &stored));
+
+        // An empty password clears it
+        set_secrets(&state.store, Some(String::new()), None).unwrap();
+        assert!(state.store.get_preferences().unwrap().password.is_none());
     }
 
     #[tokio::test]
