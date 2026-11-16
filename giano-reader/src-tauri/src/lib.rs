@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use sysinfo::System;
 use tauri::Manager;
 
+mod pdf_layout;
 mod web_server;
 
 use web_server::handlers::books::AppState;
@@ -32,6 +33,28 @@ async fn translate_free(
     web_server::translator::translate_chunk_raw(&text, &source_lang, &target_lang)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Analizza il layout di un insieme di pagine PDF (righe, blocchi, ruoli,
+/// ordine di lettura, paragrafi logici). Gira fuori dal thread della UI.
+#[tauri::command]
+async fn analyze_pdf_layout(
+    pages: Vec<pdf_layout::model::PageInput>,
+    options: Option<pdf_layout::model::AnalysisOptions>,
+) -> Result<pdf_layout::model::DocumentResult, String> {
+    let opts = options.unwrap_or_default();
+    tokio::task::spawn_blocking(move || pdf_layout::pipeline::analyze_document(&pages, &opts))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Distribuisce un paragrafo tradotto sui segmenti (colonne/pagine) dell'originale.
+#[tauri::command]
+fn distribute_pdf_translations(units: Vec<pdf_layout::reflow::DistUnit>) -> Vec<Vec<String>> {
+    units
+        .iter()
+        .map(|u| pdf_layout::reflow::distribute(&u.text, &u.weights))
+        .collect()
 }
 
 #[tauri::command]
@@ -146,6 +169,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_system_ram,
             translate_free,
+            analyze_pdf_layout,
+            distribute_pdf_translations,
             start_web_server,
             stop_web_server,
             get_server_status,

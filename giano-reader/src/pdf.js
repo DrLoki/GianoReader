@@ -642,6 +642,13 @@ export function splitLongParagraph(text, maxLen = 4500) {
  * @param {string} [lang='en'] - Language code for localized messages
  * @returns {Promise<string[]>} Array of paragraph strings
  */
+/** Scioglie le legature tipografiche (ﬁ, ﬀ, ﬂ…) che molti font non hanno nel carattere di sostituzione. */
+export function expandLigatures(str) {
+  return str.replace(/[ﬀ-ﬆ]/g, ch => ({
+    'ﬀ': 'ff', 'ﬁ': 'fi', 'ﬂ': 'fl', 'ﬃ': 'ffi', 'ﬄ': 'ffl', 'ﬅ': 'st', 'ﬆ': 'st',
+  }[ch]));
+}
+
 export async function extractPageText(page, pageNum, lang = 'en') {
   const content = await page.getTextContent();
   const items = content.items;
@@ -650,7 +657,7 @@ export async function extractPageText(page, pageNum, lang = 'en') {
   const filtered = items
     .filter(item => item.str && item.str.trim().length > 0)
     .map(item => ({
-      str: item.str,
+      str: expandLigatures(item.str),
       x: item.transform[4],
       y: item.transform[5],
       height: Math.sqrt(item.transform[0] ** 2 + item.transform[1] ** 2),
@@ -880,6 +887,41 @@ export async function renderPdfCanvas(doc, pageNumbers, container, isCurrent = (
 
     container.appendChild(canvas);
   }
+}
+
+/**
+ * Renders each page as a positioned wrapper (`.pdf-page-wrapper`) holding its
+ * lazily painted canvas, and returns the wrappers so a layer of translated text
+ * can be placed on top of them.
+ * @returns {Promise<Array<{ pageNum: number, wrapper: HTMLElement, scale: number }>>}
+ */
+export async function renderPdfPageShells(doc, pageNumbers, container, isCurrent = () => true) {
+  const painter = resetLazyPainter(container);
+  container.innerHTML = '';
+  const shells = [];
+  for (const n of pageNumbers) {
+    const page = await doc.getPage(n);
+    if (!isCurrent()) return shells;
+    const scale = container.clientWidth / page.getViewport({ scale: 1 }).width;
+    const viewport = page.getViewport({ scale });
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pdf-page-wrapper';
+    wrapper.style.position = 'relative';
+    wrapper.style.width = viewport.width + 'px';
+    wrapper.style.height = viewport.height + 'px';
+    wrapper.style.marginBottom = '8px';
+
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'display:block;position:absolute;top:0;left:0';
+    reservePageCanvas(canvas, viewport);
+    wrapper.appendChild(canvas);
+    container.appendChild(wrapper);
+    if (painter) painter.add(canvas, page, viewport);
+    else await paintPage(page, viewport, canvas).promise;
+    shells.push({ pageNum: n, wrapper, scale });
+  }
+  return shells;
 }
 
 // ─── PDF Translation Overlay Rendering ───────────────────────────────────────

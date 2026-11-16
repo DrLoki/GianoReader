@@ -21,7 +21,8 @@ const TRANSLATION_RETRY_DELAYS_MS = [1500, 4000];
 // (see vite.config.js): it no longer needs to be updated by hand in the code.
 // eslint-disable-next-line no-undef
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
-import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfWithOverlayPlaceholders } from './pdf.js';
+import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfPageShells, renderPdfWithOverlayPlaceholders } from './pdf.js';
+import { PdfLayoutAnalyzer, selectParagraphs, paragraphTextsForRange, createSegmentBox, fillSegment } from './pdf-layout.js';
 import { clearSegmentationCache } from './pdf-xycut-segmenter.js';
 import ttsController, { isProModeAvailable, makeDownloadFilename, LANG_TO_BCP47 } from './tts.js';
 
@@ -42,6 +43,7 @@ let currentFilePath = null;         // absolute path of the open file (Tauri onl
 let currentViewMode = 'text';       // 'text' | 'original'
 let currentFileType = null;         // 'epub' | 'pdf'
 let pdfDoc = null;                  // PdfDocument instance (null when EPUB)
+let pdfAnalyzer = null;             // PdfLayoutAnalyzer (layout engine cache for the open PDF)
 let pdfNav = null;                  // PdfNavigator instance (null when EPUB)
 let currentPdfHash = '';            // Stable hash for the current PDF (used for segmentation cache)
 
@@ -2717,6 +2719,21 @@ function getSyncPair() {
   return { left: makeScrollable('text'), right: makeScrollable('translation') };
 }
 
+// Diagnostics of the scroll sync: localStorage.setItem('giano-debug-scroll', '1') and reload.
+function SCROLL_DEBUG() {
+  try { return localStorage.getItem('giano-debug-scroll') === '1'; } catch { return false; }
+}
+function logScrollSync(fromLeft, left, right) {
+  const info = (p) => {
+    const el = p.el && p.el.scrollTop !== undefined ? p.el : null;
+    if (!el) return 'n/a';
+    return `top=${Math.round(el.scrollTop)} range=${Math.round(el.scrollHeight - el.clientHeight)} (scrollH=${el.scrollHeight} clientH=${el.clientHeight} clientW=${el.clientWidth}) pct=${p.getPct().toFixed(4)}`;
+  };
+  console.log(`[scroll-sync] from ${fromLeft ? 'LEFT' : 'RIGHT'} offset=${syncOffsetPct.toFixed(4)}
+  left : ${info(left)}
+  right: ${info(right)}`);
+}
+
 function bindSyncScroll() {
   // Stacca eventuali listener precedenti
   if (currentScrollUnbind) { currentScrollUnbind(); currentScrollUnbind = null; }
@@ -2733,6 +2750,7 @@ function bindSyncScroll() {
 
     syncingScroll = true;
     const sp = source.getPct();
+    if (SCROLL_DEBUG()) logScrollSync(isLeftSource, left, right);
     // offset is defined as right - left; if the source is the right panel
     // (right) the offset must be subtracted, if it is the left one it must be added.
     const targetPct = isLeftSource
@@ -3386,6 +3404,120 @@ async function translatePdfOverlay(startPct = 0, { force = false } = {}) {
   }
 }
 
+// Paragraphs of a PDF page range. On desktop they come from the layout engine
+// (columns, boxes, stitching across pages, de-hyphenation, ligatures); the
+// simple pdf.js heuristic is the fallback (browser, analysis error, no text).
+async function extractPdfUnitText(range, lang) {
+  if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
+    try {
+      if (!pdfAnalyzer || pdfAnalyzer.doc !== pdfDoc.proxy) pdfAnalyzer = new PdfLayoutAnalyzer(pdfDoc.proxy);
+      const result = await pdfAnalyzer.analyze(range.start, range.end);
+      const texts = paragraphTextsForRange(result, range.start, range.end);
+      if (texts.length) return texts;
+    } catch (err) {
+      console.warn('[pdf] layout analysis failed, using the simple text extraction:', err);
+    }
+  }
+  return extractChapterText(pdfDoc.proxy, range, lang);
+}
+
+// ── PDF layout translation ─────────────────────────────────────────────────
+// Original view of a PDF (desktop app): the layout engine (Rust, ported from
+// PDF X-Ray) rebuilds the logical paragraphs of the pages (columns, boxes,
+// stitching across pages, running heads...) and the translation of each
+// paragraph is written inside the box of the original text, over the page.
+// Returns false when it cannot be used (browser, analysis error): the caller
+// then falls back to `translatePdfOverlay`.
+async function translatePdfLayout(startPct = 0, { force = false } = {}) {
+  if (!(window.__TAURI__ || window.__TAURI_INTERNALS__)) return false;
+  translationAbortController = new AbortController();
+  const signal = translationAbortController.signal;
+
+  updateTranslationLangLabel();
+  const lang = langSelect.value;
+  const range = pdfNav.pageRange;
+  const pageNumbers = [];
+  for (let i = range.start; i <= range.end; i++) pageNumbers.push(i);
+
+  translationViewer.classList.add('pdf-pages');
+  translationViewer.innerHTML = '';
+  translationViewer.scrollTop = 0;
+
+  try {
+    if (!pdfAnalyzer || pdfAnalyzer.doc !== pdfDoc.proxy) pdfAnalyzer = new PdfLayoutAnalyzer(pdfDoc.proxy);
+    setTranslationStatus(ui('pdf_layout_analyzing'));
+    const result = await pdfAnalyzer.analyze(range.start, range.end, {
+      signal,
+      onProgress: (done, total) => setTranslationStatus(`${ui('pdf_layout_analyzing')} ${Math.round(done / total * 100)}%`),
+    });
+    if (signal.aborted || !result) return true;
+
+    const paragraphs = selectParagraphs(result, range.start, range.end);
+    if (!paragraphs.length) return false; // scanned / no text: let the old path say so
+
+    const shells = await renderPdfPageShells(pdfDoc.proxy, pageNumbers, translationViewer, () => !signal.aborted);
+    if (signal.aborted) return true;
+    const shellByPage = new Map(shells.map(s => [s.pageNum, s]));
+    bindSyncScroll();
+
+    // One (empty) box per visible segment of each paragraph
+    const boxes = new Map(); // paragraph id → [{ el, seg, scale, index }]
+    for (const par of paragraphs) {
+      const list = [];
+      par.segments.forEach((seg, index) => {
+        const shell = shellByPage.get(seg.pageNum);
+        if (!shell) return;
+        list.push({ el: createSegmentBox(shell.wrapper, par, seg, shell.scale), seg, scale: shell.scale, index });
+      });
+      boxes.set(par.id, list);
+    }
+
+    const total = paragraphs.length;
+    const totalChunks = Math.ceil(total / LAZY_CHUNK);
+    const translatedChunks = new Set();
+
+    async function translateLayoutChunk(chunkIdx) {
+      if (signal.aborted || translatedChunks.has(chunkIdx) || chunkIdx < 0 || chunkIdx >= totalChunks) return;
+      translatedChunks.add(chunkIdx);
+      const slice = paragraphs.slice(chunkIdx * LAZY_CHUNK, (chunkIdx + 1) * LAZY_CHUNK);
+      setTranslationStatus(`${Math.round((translatedChunks.size / totalChunks) * 100)}%`);
+      try {
+        const translated = await translateWithCache(slice.map(p => p.text), lang, signal, { force });
+        if (signal.aborted) return;
+        const byId = new Map(slice.map((p, i) => [p.id, translated[i] || p.text]));
+        const pieces = await pdfAnalyzer.distribute(slice, byId);
+        if (signal.aborted) return;
+        slice.forEach((par, i) => {
+          for (const b of boxes.get(par.id) || []) fillSegment(b.el, pieces[i][b.index] || '', b.seg, b.scale);
+        });
+        if (translatedChunks.size >= totalChunks) setTranslationStatus('✓');
+      } catch (err) {
+        if (signal.aborted) return;
+        console.warn('[translate-pdf-layout] chunk error', chunkIdx, err);
+      }
+    }
+
+    const startChunk = Math.min(Math.floor((startPct / 100) * totalChunks), totalChunks - 1);
+    await translateLayoutChunk(startChunk);
+    if (signal.aborted) return true;
+    for (let i = startChunk - 1; i >= 0; i--) translateLayoutChunk(i);
+
+    lazyObserver = observeChunksLazily({
+      root: translationViewer,
+      elements: paragraphs.map(p => (boxes.get(p.id)[0] || {}).el),
+      chunkSize: LAZY_CHUNK,
+      translateChunk: translateLayoutChunk,
+      isDone: (c) => c <= startChunk,
+      signal,
+    });
+    return true;
+  } catch (err) {
+    if (signal.aborted) return true;
+    console.warn('[translate-pdf-layout] failed, falling back to the simple overlay:', err);
+    return false;
+  }
+}
+
 // Translation panel label: name of the selected language, without
 // any leading flag emoji.
 function updateTranslationLangLabel() {
@@ -3405,6 +3537,7 @@ async function translateCurrentChapter(startPct = 0, { force = false } = {}) {
   translatedChunksRef = null;
   if (translationAbortController) translationAbortController.abort();
   if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
+  translationViewer.classList.toggle('pdf-pages', currentFileType === 'pdf' && currentViewMode === 'original');
 
   if (translationHidden) {
     setTranslationStatus('');
@@ -3414,6 +3547,7 @@ async function translateCurrentChapter(startPct = 0, { force = false } = {}) {
 
   // PDF overlay mode: render canvas + translated text overlay (only in original view mode)
   if (currentFileType === 'pdf' && pdfDoc && pdfNav && currentViewMode === 'original') {
+    if (await translatePdfLayout(startPct, { force })) return;
     await translatePdfOverlay(startPct, { force });
     return;
   }
@@ -3769,6 +3903,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
   currentChapterBody = null;
   currentFileType = 'epub';
   pdfDoc = null;
+  pdfAnalyzer = null;
   pdfNav = null;
 
   hideNoBookPlaceholder();
@@ -4168,7 +4303,7 @@ async function displayChapter(index, scrollPct = 0) {
       const lang = s.uiLang || 'en';
 
       // Extract text from all pages in the range
-      const paragraphs = await extractChapterText(pdfDoc.proxy, pageRange, lang);
+      const paragraphs = await extractPdfUnitText(pageRange, lang);
       if (myGeneration !== displayGeneration) return;
 
       // Store for translation use
@@ -6288,7 +6423,7 @@ async function readUnitTexts(index) {
     return paragraphTexts(currentChapterParagraphs);
   }
   if (currentFileType === 'pdf') {
-    const paragraphs = await extractChapterText(pdfDoc.proxy, pdfNav.pageRangeOf(index), loadSettings().uiLang || 'en');
+    const paragraphs = await extractPdfUnitText(pdfNav.pageRangeOf(index), loadSettings().uiLang || 'en');
     return paragraphTexts(paragraphs);
   }
   const body = await loadChapterDocument(currentSpineItems[index]);

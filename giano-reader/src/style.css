@@ -313,6 +313,14 @@ body {
   background: var(--surface);
 }
 
+/* #original-native is a flex column: a page canvas whose bitmap is not painted
+   (lazy painter, width/height 0) would be shrunk by flex-shrink, so the pane
+   would be much shorter than the translation pane and the percentage scroll
+   sync would drift. Pages keep their CSS height. */
+#original-native > canvas {
+  flex: none;
+}
+
 .native-frame {
   flex: 1;
   width: 100%;
@@ -338,6 +346,12 @@ body {
 #translation-status.sync-off { color: #e74c3c; font-weight: 600; }
 
 /* ── PDF translation overlay ── */
+/* Pages drawn edge to edge, like the original pane, so that both panes have the
+   same geometry and the percentage-based scroll sync follows the same pages. */
+#translation-viewer.pdf-pages {
+  padding: 0;
+  overflow-x: hidden;
+}
 .pdf-page-wrapper {
   overflow: hidden;
 }
@@ -354,6 +368,29 @@ body {
 .pdf-text-overlay.translated {
   background: rgba(255, 255, 255, 0.8);
   color: #000;
+}
+
+/* Translated segment laid over the original text of a PDF page (pdf-layout.js) */
+.pdf-tr-seg {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  pointer-events: none;
+}
+.pdf-tr-seg.pending {
+  background: transparent;
+  color: transparent;
+}
+.pdf-tr-seg.translated {
+  background: rgba(255, 255, 255, 0.94);
+  color: #111;
+}
+.pdf-tr-seg.translated.overflow {
+  outline: 1px dashed #d98a00;
 }
 
 /* ── Text panels — identical style ── */

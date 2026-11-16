@@ -185,6 +185,7 @@ export const translations = {
     pdf_toc_placeholder: 'No table of contents available',
     pdf_canvas_tooltip: 'Font settings do not apply in Original view',
     pdf_no_text_translate: 'No text to translate on this page',
+    pdf_layout_analyzing: 'Analyzing page layout…',
     pdf_rendering_unavailable: 'PDF rendering unavailable',
     // TTS support
     tts_play: 'Play',
@@ -357,6 +358,7 @@ export const translations = {
     pdf_toc_placeholder: '无可用目录',
     pdf_canvas_tooltip: '字体设置不适用于原始视图',
     pdf_no_text_translate: '此页面没有可翻译的文本',
+    pdf_layout_analyzing: '正在分析页面布局…',
     pdf_rendering_unavailable: 'PDF 渲染不可用',
     // TTS support
     tts_play: '播放',
@@ -566,6 +568,7 @@ export const translations = {
     pdf_toc_placeholder: 'कोई विषय सूची उपलब्ध नहीं',
     pdf_canvas_tooltip: 'फ़ॉन्ट सेटिंग्स मूल दृश्य में लागू नहीं होतीं',
     pdf_no_text_translate: 'इस पृष्ठ पर अनुवाद करने के लिए कोई पाठ नहीं',
+    pdf_layout_analyzing: 'पृष्ठ लेआउट का विश्लेषण हो रहा है…',
     pdf_rendering_unavailable: 'PDF रेंडरिंग अनुपलब्ध',
     // TTS support
     tts_play: 'चलाएं',
@@ -777,6 +780,7 @@ export const translations = {
     pdf_toc_placeholder: 'No hay tabla de contenidos disponible',
     pdf_canvas_tooltip: 'Los ajustes de fuente no se aplican en la vista Original',
     pdf_no_text_translate: 'No hay texto para traducir en esta página',
+    pdf_layout_analyzing: 'Analizando el diseño de la página…',
     pdf_rendering_unavailable: 'Renderizado de PDF no disponible',
     // TTS support
     tts_play: 'Reproducir',
@@ -987,6 +991,7 @@ export const translations = {
     pdf_toc_placeholder: 'Aucune table des matières disponible',
     pdf_canvas_tooltip: 'Les paramètres de police ne s\'appliquent pas en vue Originale',
     pdf_no_text_translate: 'Aucun texte à traduire sur cette page',
+    pdf_layout_analyzing: 'Analyse de la mise en page…',
     pdf_rendering_unavailable: 'Rendu PDF indisponible',
     // TTS support
     tts_play: 'Lire',
@@ -1194,6 +1199,7 @@ export const translations = {
     pdf_toc_placeholder: 'কোনো সূচিপত্র উপলব্ধ নেই',
     pdf_canvas_tooltip: 'ফন্ট সেটিংস মূল দৃশ্যে প্রযোজ্য নয়',
     pdf_no_text_translate: 'এই পৃষ্ঠায় অনুবাদ করার কোনো পাঠ্য নেই',
+    pdf_layout_analyzing: 'পৃষ্ঠার বিন্যাস বিশ্লেষণ করা হচ্ছে…',
     pdf_rendering_unavailable: 'PDF রেন্ডারিং অনুপলব্ধ',
     // TTS support
     tts_play: 'চালান',
@@ -1405,6 +1411,7 @@ export const translations = {
     pdf_toc_placeholder: 'Nenhum índice disponível',
     pdf_canvas_tooltip: 'As definições de tipo de letra não se aplicam na vista Original',
     pdf_no_text_translate: 'Não há texto para traduzir nesta página',
+    pdf_layout_analyzing: 'A analisar o esquema da página…',
     pdf_rendering_unavailable: 'Apresentação de PDF indisponível',
     // TTS support
     tts_play: 'Reproduzir',
@@ -1614,6 +1621,7 @@ export const translations = {
     pdf_toc_placeholder: 'Nenhum sumário disponível',
     pdf_canvas_tooltip: 'As configurações de fonte não se aplicam na visualização Original',
     pdf_no_text_translate: 'Nenhum texto para traduzir nesta página',
+    pdf_layout_analyzing: 'Analisando o layout da página…',
     pdf_rendering_unavailable: 'Renderização de PDF indisponível',
     // TTS support
     tts_play: 'Reproduzir',
@@ -1821,6 +1829,7 @@ export const translations = {
     pdf_toc_placeholder: 'Оглавление недоступно',
     pdf_canvas_tooltip: 'Настройки шрифта не применяются в режиме оригинала',
     pdf_no_text_translate: 'На этой странице нет текста для перевода',
+    pdf_layout_analyzing: 'Анализ макета страницы…',
     pdf_rendering_unavailable: 'Отображение PDF недоступно',
     // TTS support
     tts_play: 'Воспроизвести',
@@ -2030,6 +2039,7 @@ export const translations = {
     pdf_toc_placeholder: '目次はありません',
     pdf_canvas_tooltip: 'フォント設定はオリジナル表示には適用されません',
     pdf_no_text_translate: 'このページには翻訳するテキストがありません',
+    pdf_layout_analyzing: 'ページのレイアウトを解析中…',
     pdf_rendering_unavailable: 'PDF レンダリングが利用できません',
     // TTS support
     tts_play: '再生',
@@ -2239,6 +2249,7 @@ export const translations = {
     pdf_toc_placeholder: 'Tidak ada daftar isi yang tersedia',
     pdf_canvas_tooltip: 'Pengaturan font tidak berlaku di tampilan Asli',
     pdf_no_text_translate: 'Tidak ada teks untuk diterjemahkan di halaman ini',
+    pdf_layout_analyzing: 'Menganalisis tata letak halaman…',
     pdf_rendering_unavailable: 'Rendering PDF tidak tersedia',
     // TTS support
     tts_play: 'Putar',
@@ -2450,6 +2461,7 @@ export const translations = {
     pdf_toc_placeholder: 'Kein Inhaltsverzeichnis verfügbar',
     pdf_canvas_tooltip: 'Schrifteinstellungen gelten nicht in der Originalansicht',
     pdf_no_text_translate: 'Kein Text zum Übersetzen auf dieser Seite',
+    pdf_layout_analyzing: 'Seitenlayout wird analysiert…',
     pdf_rendering_unavailable: 'PDF-Rendering nicht verfügbar',
     // TTS support
     tts_play: 'Abspielen',
@@ -2657,6 +2669,7 @@ export const translations = {
     pdf_toc_placeholder: '목차를 사용할 수 없습니다',
     pdf_canvas_tooltip: '글꼴 설정은 원본 보기에 적용되지 않습니다',
     pdf_no_text_translate: '이 페이지에 번역할 텍스트가 없습니다',
+    pdf_layout_analyzing: '페이지 레이아웃 분석 중…',
     pdf_rendering_unavailable: 'PDF 렌더링을 사용할 수 없습니다',
     // TTS support
     tts_play: '재생',
@@ -2905,6 +2918,7 @@ export const translations = {
     pdf_toc_placeholder: 'Nessun indice disponibile',
     pdf_canvas_tooltip: 'Le impostazioni del carattere non si applicano nella vista Originale',
     pdf_no_text_translate: 'Nessun testo da tradurre in questa pagina',
+    pdf_layout_analyzing: 'Analisi del layout della pagina…',
     pdf_rendering_unavailable: 'Rendering PDF non disponibile',
     // TTS support
     tts_play: 'Riproduci',
@@ -3077,6 +3091,7 @@ export const translations = {
     pdf_toc_placeholder: 'ไม่มีสารบัญ',
     pdf_canvas_tooltip: 'การตั้งค่าแบบอักษรไม่มีผลในมุมมองต้นฉบับ',
     pdf_no_text_translate: 'ไม่มีข้อความให้แปลในหน้านี้',
+    pdf_layout_analyzing: 'กำลังวิเคราะห์เลย์เอาต์ของหน้า…',
     pdf_rendering_unavailable: 'การแสดงผล PDF ไม่พร้อมใช้งาน',
     // TTS support
     tts_play: 'เล่น',
@@ -3286,6 +3301,7 @@ export const translations = {
     pdf_toc_placeholder: 'Walang talaan ng nilalaman na magagamit',
     pdf_canvas_tooltip: 'Ang mga setting ng font ay hindi nalalapat sa Original na view',
     pdf_no_text_translate: 'Walang teksto na isasalin sa pahinang ito',
+    pdf_layout_analyzing: 'Sinusuri ang layout ng pahina…',
     pdf_rendering_unavailable: 'Hindi available ang PDF rendering',
     // TTS support
     tts_play: 'I-play',
@@ -3495,6 +3511,7 @@ export const translations = {
     pdf_toc_placeholder: 'لا يوجد جدول محتويات متاح',
     pdf_canvas_tooltip: 'إعدادات الخط لا تنطبق في العرض الأصلي',
     pdf_no_text_translate: 'لا يوجد نص للترجمة في هذه الصفحة',
+    pdf_layout_analyzing: 'جارٍ تحليل تخطيط الصفحة…',
     pdf_rendering_unavailable: 'عرض PDF غير متاح',
     // TTS support
     tts_play: 'تشغيل',
@@ -3697,6 +3714,7 @@ export const translations = {
     pdf_toc_placeholder: 'فهرست مطالبی موجود نیست',
     pdf_canvas_tooltip: 'تنظیمات قلم در نمای اصلی اعمال نمی‌شود',
     pdf_no_text_translate: 'در این صفحه متنی برای ترجمه وجود ندارد',
+    pdf_layout_analyzing: 'در حال تحلیل چیدمان صفحه…',
     pdf_rendering_unavailable: 'رندر PDF در دسترس نیست',
     // TTS support
     tts_play: 'پخش',
@@ -3913,6 +3931,7 @@ export const translations = {
     pdf_toc_placeholder: 'Nuk ka tabelë përmbajtjeje të disponueshme',
     pdf_canvas_tooltip: 'Cilësimet e fontit nuk zbatohen në pamjen Origjinale',
     pdf_no_text_translate: 'Nuk ka tekst për të përkthyer në këtë faqe',
+    pdf_layout_analyzing: 'Duke analizuar paraqitjen e faqes…',
     pdf_rendering_unavailable: 'Renderimi i PDF nuk është i disponueshëm',
     // TTS support
     tts_play: 'Luaj',
@@ -4123,6 +4142,7 @@ export const translations = {
     pdf_toc_placeholder: 'Ingen innehållsförteckning tillgänglig',
     pdf_canvas_tooltip: 'Typsnittsinställningar gäller inte i originalvyn',
     pdf_no_text_translate: 'Ingen text att översätta på denna sida',
+    pdf_layout_analyzing: 'Analyserar sidans layout…',
     pdf_rendering_unavailable: 'PDF-rendering inte tillgänglig',
     tts_play: 'Spela',
     tts_pause: 'Paus',
@@ -4332,6 +4352,7 @@ export const translations = {
     pdf_toc_placeholder: 'Зміст недоступний',
     pdf_canvas_tooltip: 'Налаштування шрифту не застосовуються в оригінальному вигляді',
     pdf_no_text_translate: 'На цій сторінці немає тексту для перекладу',
+    pdf_layout_analyzing: 'Аналіз макета сторінки…',
     pdf_rendering_unavailable: 'Рендеринг PDF недоступний',
     tts_play: 'Відтворити',
     tts_pause: 'Пауза',
@@ -4541,6 +4562,7 @@ export const translations = {
     pdf_toc_placeholder: 'Kazalo vsebine ni na voljo',
     pdf_canvas_tooltip: 'Nastavitve pisave ne veljajo v izvirnem pogledu',
     pdf_no_text_translate: 'Na tej strani ni besedila za prevod',
+    pdf_layout_analyzing: 'Analiza postavitve strani…',
     pdf_rendering_unavailable: 'Upodabljanje PDF ni na voljo',
     tts_play: 'Predvajaj',
     tts_pause: 'Premor',
@@ -4736,6 +4758,7 @@ export const translations = {
     pdf_toc_placeholder: 'Không có mục lục',
     pdf_canvas_tooltip: 'Cài đặt phông chữ không áp dụng trong chế độ xem Gốc',
     pdf_no_text_translate: 'Không có văn bản để dịch trên trang này',
+    pdf_layout_analyzing: 'Đang phân tích bố cục trang…',
     pdf_rendering_unavailable: 'Không thể hiển thị PDF',
     tts_play: 'Phát',
     tts_pause: 'Tạm dừng',
