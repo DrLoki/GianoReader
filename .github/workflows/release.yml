@@ -72,6 +72,9 @@ jobs:
         env:
           # Print full Rust backtraces on failure
           RUST_BACKTRACE: '1'
+          # Signs the update bundles (createUpdaterArtifacts) for the in-app updater
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Upload artifacts (Windows)
         if: matrix.platform == 'windows-latest'
@@ -81,6 +84,7 @@ jobs:
           path: |
             giano-reader/src-tauri/target/release/bundle/msi/*.msi
             giano-reader/src-tauri/target/release/bundle/nsis/*.exe
+            giano-reader/src-tauri/target/release/bundle/nsis/*.exe.sig
           if-no-files-found: warn
 
       - name: Upload artifacts (macOS)
@@ -88,7 +92,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-installers
-          path: giano-reader/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          path: |
+            giano-reader/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            giano-reader/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+            giano-reader/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: warn
 
       - name: Patch AppImage – add .DirIcon (required by AppDir spec)
@@ -171,6 +178,15 @@ jobs:
           # Clean up
           rm -rf /tmp/squashfs-root /tmp/input.AppImage /tmp/runtime /tmp/new.squashfs
 
+          # The AppImage changed: the signature written by `tauri build` no longer
+          # matches it, and the updater would reject the download. Sign it again.
+          rm -f "$APPIMAGE.sig"
+          (cd giano-reader && npx tauri signer sign "../$APPIMAGE")
+          ls -la "$APPIMAGE.sig"
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
       - name: Upload artifacts (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
@@ -179,6 +195,7 @@ jobs:
           path: |
             giano-reader/src-tauri/target/release/bundle/deb/*.deb
             giano-reader/src-tauri/target/release/bundle/appimage/*.AppImage
+            giano-reader/src-tauri/target/release/bundle/appimage/*.AppImage.sig
           if-no-files-found: warn
 
   release:
@@ -195,6 +212,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Updater manifest (latest.json)
+        run: node scripts/make-latest-json.mjs artifacts "${{ github.ref_name }}" "${{ github.repository }}" artifacts/latest.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
