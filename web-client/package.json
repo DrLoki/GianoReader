@@ -17,10 +17,13 @@
     "jsdom": "^29.1.1",
     "typescript": "^5.4.0",
     "vite": "^6.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.12"
   },
   "dependencies": {
     "epubjs": "^0.3.93",
     "giano-reader": "file:../giano-reader"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "^0.8.15"
   }
 }

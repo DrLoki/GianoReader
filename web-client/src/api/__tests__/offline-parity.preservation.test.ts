@@ -375,7 +375,7 @@ describe('Preservation: Online Mode API Call', () => {
       json: () => Promise.resolve({ translations: ['translated'] }),
     });
     originalFetch = globalThis.fetch;
-    globalThis.fetch = mockFetch;
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
   });
 
   afterEach(() => {

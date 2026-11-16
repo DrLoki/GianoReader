@@ -163,7 +163,7 @@ describe('Bug Condition: Source Language Passthrough (Property 1)', () => {
       ok: true,
       json: async () => [[['translated text', 'original text']]],
     });
-    globalThis.fetch = fetchSpy;
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
   });
 
   afterEach(() => {
