@@ -29,7 +29,8 @@ Named after the Roman god of dualities and transitions, Giano provides a **synch
 
 ## ✨ Key Features
 
-- Open and read EPUB files
+- Open and read EPUB and PDF files
+- **PDF translation over the page**: in Original view the translation is written over the original text of each PDF page, in the same place and style. A layout engine (columns, boxes, headings, captions, running heads, reading order) rebuilds the paragraphs, even when they continue in another column or on the next page
 - Navigable table of contents (TOC)
 - Chapter navigation with progress bar and chapter tick marks
 - Side-by-side translation (original + translated) with synchronized scroll
@@ -136,6 +137,9 @@ giano-reader/
 │   ├── main.js             # All frontend logic: reader, UI, bookmarks, library, scroll sync
 │   ├── tts.js              # Text-to-Speech engine (FREE/PRO, multi-model, audio download)
 │   ├── translator.js       # Google Translate integration (chunked, lazy)
+│   ├── pdf.js              # PDF loading, navigation, page rendering
+│   ├── pdf-extract.js      # PDF page extraction for the layout engine (text runs, tags, boxes, images)
+│   ├── pdf-layout.js       # PDF translation laid over the original page
 │   ├── i18n.js             # UI translations (23 languages); exports t(lang, key, vars)
 │   ├── settings-utils.js   # Pure utility functions (no DOM); used by main.js and tests
 │   └── style.css           # All styles (dark mode via body.dark)
@@ -147,7 +151,9 @@ giano-reader/
     │   └── default.json    # Tauri capability declarations
     └── src/
         ├── main.rs         # Tauri entry point (calls lib::run)
-        └── lib.rs          # Plugin registration + DevTools in debug builds
+        ├── lib.rs          # Plugin registration, Tauri commands, DevTools in debug builds
+        ├── pdf_layout/     # PDF layout engine (lines, XY-Cut, roles, reading order, paragraph stitching)
+        └── web_server/     # LAN web server for the mobile PWA
 ```
 
 ---
@@ -163,6 +169,8 @@ Giano Reader implements a flexible three-tier translation engine:
 For all modes, translation is entirely **lazy**: the app begins translating from your current reading position and expands downward as you scroll. When you open a bookmark, translation starts directly from the saved position, saving bandwidth and system load.
 
 Translation is available in **both view modes**: the reflowed text view (with images and inline formatting preserved) and the Original EPUB view (the native iframe on the left, the translation on the right). A chain-link button in the header toggles **scroll synchronization** on/off; because the two panels can have different heights (especially with images or comic-style EPUBs), the sync works by percentage, remembers the current offset when re-enabled for manual realignment, and can be reset with a double-click on the percentage indicator.
+
+For **PDFs**, the desktop app analyses the page layout first: lines and blocks, columns, boxes, headings, captions, footnotes, running heads and page numbers, and the reading order. Paragraphs split across columns, pages or figures are joined again, so each paragraph is translated once and as a whole. In Original view, the translated paragraph is then split over its pieces and written over the original text of the page, keeping font style, alignment and line spacing, and shrinking the text when the translation is longer.
 
 ---
 

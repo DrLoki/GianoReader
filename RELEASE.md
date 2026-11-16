@@ -1,4 +1,4 @@
-# 🚀 GianoReader Release v0.9.5
+# 🚀 GianoReader Release v0.10.0
 
 This is a **security and reliability release**. It closes several ways a crafted EPUB could run code inside the desktop app, hardens the LAN web server used by the mobile PWA, and fixes bookmarks created from the phone being lost when the desktop app saves.
 
@@ -43,6 +43,10 @@ It also adds **book ratings** (1 to 5 stars, editable from the desktop and from 
 
 ### 📄 PDF
 
+- **Translation laid over the page**: In Original view, the right panel shows the PDF pages with the translation written over the original text, in the same position, with the original font family, weight, italic, alignment and line spacing. When the translation is longer than the original, the text shrinks (down to 45 %) to fit its box, and a box that still overflows gets a dashed orange outline. Page numbers are not translated. This needs the desktop app; in a browser the previous simple overlay is used.
+- **New layout engine**: The PDF layout analysis of the companion project PDF X-Ray now runs inside the app (Rust). It rebuilds lines and blocks with a recursive XY-Cut, recognises columns, boxes, tables, headings, captions, footnotes, running heads and page numbers, works out the reading order, and stitches paragraphs split across columns, pages, figures or boxes, rejoining hyphenated words. Tagged PDFs use their structure tree. Each logical paragraph is translated once, as a whole, and the translation is split over its pieces on the page. Pages are analysed together with the 2 pages before and after the ones shown, so a paragraph that continues on the next page is handled correctly.
+- **Better text view**: The text view and the "Book translation" window use the same paragraphs. Justified text is no longer split into fragments, which happened because wide word spacing was taken for a column gap. Typographic ligatures (ﬁ, ﬀ, ﬂ…) are expanded, so words such as "different" or "identified" no longer lose letters.
+- **Scroll sync in Original view**: Pages that were not painted yet were squeezed by the panel layout, so the original panel was much shorter than the translation panel and a small scroll on one side jumped several pages on the other. Both panels now have the same height and scroll page by page together.
 - **Sharp, lighter pages**: Page canvases are painted at the screen's pixel density (up to 2×), so text is sharp on HiDPI screens. Only pages near the viewport are painted, and pages far away are freed, which saves memory on long documents.
 - **Table of contents**: An outline entry now leads to the chapter that contains its start page. Before, entries could point to the wrong chapter when the outline was not in page order.
 - **Page labels** such as "Page N / Total" are shown in the interface language when a PDF is read by pages.
@@ -79,10 +83,12 @@ It also adds **book ratings** (1 to 5 stars, editable from the desktop and from 
 - **Tests on every push**: A new `tests.yml` workflow runs the Vitest suites of both projects, the PWA type check and `cargo test` on pushes to `main` and on pull requests. A release is built only from a commit whose tests pass.
 - **New dependencies**: `jszip` (translated EPUB export) and `qrcode-generator` (local QR code).
 - **Removed unused code**: The old `intermediate-json`, `protocol-messages` and `translation-batcher` modules and their tests.
+- **Dependency audit**: `npm audit` reports no vulnerabilities in either project. `@xmldom/xmldom` (used by epubjs) is pinned to 0.8.15 or later, Vite is updated to 6.4.6, and the PWA moves from Vitest 3 to Vitest 4.
 
 ### 🧪 Testing
 
 - New Vitest suites: `translation-cache`, `book-export`, `library-scan`, `lazy-chunks`, `pro-segments`, `retry`, `storage-file`, `qr-code`, `text-limits`, `text-blocks`, `pdf-lazy-render`, `pdf-toc-mapping` and `tts-pause-prefetch`. On the PWA side: `sha256`, `text-limits` and `text-blocks`.
+- New Vitest suite `pdf-layout` (paragraph selection, box style, page window and extraction cache). The PDF layout engine brings its Rust unit tests and its pipeline tests on sample pages (no text lost with any setting, drop caps, run-in headings, hanging indents, stitching across columns and pages, Tagged PDF).
 - New Rust tests for password hashing and conversion of an old plain-text password, BASIC gating, byte-limit splitting, UTF-8-safe error truncation, error messages with the URL removed, and the bookmark scroll position.
 - The Chinese locale had renamed placeholders (`libScanDone`), which broke the scan summary. They are fixed, and a test now checks that every locale uses the same placeholders as English.
 

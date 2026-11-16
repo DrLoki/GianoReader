@@ -53,7 +53,7 @@ Starting with **v0.9.0**, Giano Reader includes a **Web Server Mode** that lets 
 
 ## Opening a Book
 
-Click the **+ Open book** button in the left sidebar. A native file dialog will open to let you select an `.epub` file.
+Click the **+ Open book** button in the left sidebar. A native file dialog will open to let you select an `.epub` or `.pdf` file.
 
 Once the book is loaded:
 
@@ -136,6 +136,19 @@ Click the **chain-link** icon in the header to turn scroll synchronization on or
 ### Original EPUB View
 
 Click the **image** icon (file-image) to toggle the original EPUB view: the chapter is rendered in an iframe with its native, original EPUB styling (fonts, images, layout). **The translation is generated in the right panel in this mode too**, so you read the faithful original on the left next to the translation on the right. Scroll synchronization works by percentage between the two panels (see [Scroll Synchronization](#scroll-synchronization-sync-toggle) above). Internal links within the book work normally.
+
+### PDF Original View
+
+For a PDF, the same icon shows the original pages on the left and, on the right, **the same pages with the translation written over the original text** (desktop app only).
+
+- Before translating, Giano Reader analyses the layout of the pages: columns, boxes and tables, headings, captions, footnotes, running heads and page numbers, and the reading order. The status in the translation header shows *Analyzing page layout…* with a percentage while this happens.
+- A paragraph interrupted by a column break, a page break, a figure or a box is recognised as one paragraph: it is translated as a whole, and the translation is divided among its pieces on the page. Hyphenated words split at the end of a line are joined again.
+- Each translated box keeps the font family, bold, italic, alignment and line spacing of the original. When the translation is longer, the text is made smaller (down to 45 %) to fit; a box that still does not fit has a dashed orange outline.
+- Page numbers are not translated.
+- Both panels show the pages at the same size, so with scroll sync on they move together page by page.
+- In the text view, PDF paragraphs come from the same analysis, so the reflowed text and the page overlay use the same translations.
+
+> In a browser (without the desktop app) a simpler overlay is used: one box per text block, without paragraph stitching.
 
 ### Paragraph-Level Helpers & Interactive Alignment
 
