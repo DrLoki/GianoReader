@@ -213,6 +213,9 @@ jobs:
         with:
           path: artifacts
 
+      - name: Release notes (latest section of RELEASE.md)
+        run: node scripts/release-notes.mjs RELEASE.md > release-notes.md
+
       - name: Updater manifest (latest.json)
         run: node scripts/make-latest-json.mjs artifacts "${{ github.ref_name }}" "${{ github.repository }}" artifacts/latest.json
 
@@ -222,5 +225,5 @@ jobs:
           name: Giano Reader ${{ github.ref_name }}
           draft: true
           prerelease: false
-          body_path: giano-reader/RELEASE_NOTES.md
+          body_path: release-notes.md
           files: artifacts/**/*
