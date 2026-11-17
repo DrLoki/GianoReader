@@ -74,6 +74,33 @@ describe('library-screen component', () => {
     expect(cards[0].querySelector('.book-cover')?.getAttribute('src')).toBe('/api/books/b1/cover');
   });
 
+  it('free-text search matches title, author and publisher', async () => {
+    mockGetBooks.mockResolvedValueOnce([
+      { id: 'b1', title: 'Book One', author: 'Author A', publisher: 'Tor Books', coverUrl: null, progress: 0 },
+      { id: 'b2', title: 'Book Two', author: 'Author B', coverUrl: null, progress: 0 },
+    ]);
+
+    const el = document.createElement('library-screen');
+    document.body.appendChild(el);
+    await vi.waitFor(() => {
+      expect(el.querySelectorAll('.book-card').length).toBe(2);
+    });
+
+    const input = el.querySelector('.filter-search-input') as HTMLInputElement;
+    const titles = () => [...el.querySelectorAll('.book-card .book-title')].map((n) => n.textContent);
+    const search = (value: string) => {
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    };
+
+    search('tor');
+    expect(titles()).toEqual(['Book One']);
+    search('author b');
+    expect(titles()).toEqual(['Book Two']);
+    search('two');
+    expect(titles()).toEqual(['Book Two']);
+  });
+
   it('renders empty state when no books returned', async () => {
     mockGetBooks.mockResolvedValueOnce([]);
 

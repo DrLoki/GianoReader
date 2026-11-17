@@ -10,6 +10,9 @@ pub struct BookSummary {
     pub id: String,
     pub title: String,
     pub author: String,
+    /// Publisher (user-edited in the desktop library, else from the EPUB); omitted when unknown
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
     pub cover_url: Option<String>, // "/api/books/{id}/cover" or null
     pub progress: u8,              // 0–100
     pub status: Option<String>,    // "to-read" | "reading" | "read" | null

@@ -9,8 +9,9 @@ import { StorageReadError, readJsonFile, writeJsonFileAtomic } from './storage-f
 import { TEXT_BLOCK_TAGS, ownTextSource } from './text-blocks.js';
 import { retryWithBackoff, abortableDelay } from './retry.js';
 import { qrCodeDataUrl } from './qr-code.js';
-import { fileFingerprint, planScan, mergeReanalysis, markEditedFields } from './library-scan.js';
-import { BookTranslationCache, textKey, variantKey, parseVariant } from './translation-cache.js';
+import { fileFingerprint, planScan, mergeReanalysis, markEditedFields, pathKey, samePath, dedupeLibrary } from './library-scan.js';
+import { filterLibrary, sortLibrary, normalizeLibrarySort } from './library-view.js';
+import { BookTranslationCache, textKey, variantKey, parseVariant, mergeCacheData } from './translation-cache.js';
 import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from './book-export.js';
 import { observeChunksLazily } from './lazy-chunks.js';
 import JSZip from 'jszip';
@@ -21,7 +22,7 @@ const TRANSLATION_RETRY_DELAYS_MS = [1500, 4000];
 // (see vite.config.js): it no longer needs to be updated by hand in the code.
 // eslint-disable-next-line no-undef
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
-import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfPageShells, renderPdfWithOverlayPlaceholders } from './pdf.js';
+import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfPageShells, renderPdfWithOverlayPlaceholders, renderPdfCoverDataUrl } from './pdf.js';
 import { PdfLayoutAnalyzer, selectParagraphs, paragraphTextsForRange, createSegmentBox, fillSegment } from './pdf-layout.js';
 import { clearSegmentationCache } from './pdf-xycut-segmenter.js';
 import ttsController, { isProModeAvailable, makeDownloadFilename, LANG_TO_BCP47 } from './tts.js';
@@ -78,6 +79,17 @@ const bookInfo = document.getElementById('book-info');
 const bookTitle = document.getElementById('book-title');
 const bookAuthor = document.getElementById('book-author');
 const coverImg = document.getElementById('cover-img');
+// Sidebar cover: without an image the <img> is hidden, because an empty `src`
+// resolves to the page URL and shows the broken-image icon.
+function setSidebarCover(url) {
+  if (url) {
+    coverImg.src = url;
+    coverImg.classList.remove('hidden');
+  } else {
+    coverImg.removeAttribute('src');
+    coverImg.classList.add('hidden');
+  }
+}
 // Bookmarks
 const addBookmarkBtn = document.getElementById('add-bookmark-btn');
 const bookmarksList = document.getElementById('bookmarks-list');
@@ -826,6 +838,15 @@ function applyUiLang(lang) {
     const noneOpt = _libRatingFilter.querySelector('option[value="none"]');
     if (allOpt) allOpt.textContent = t(lang, 'libFilterAllRatings');
     if (noneOpt) noneOpt.textContent = t(lang, 'ratingNone');
+  }
+  const _libSort = document.getElementById('lib-sort');
+  if (_libSort) {
+    _libSort.title = t(lang, 'libSortLabel');
+    _libSort.setAttribute('aria-label', t(lang, 'libSortLabel'));
+    for (const [value, key] of [['added', 'libSortAdded'], ['title', 'libSortTitle'], ['author', 'libSortAuthor']]) {
+      const opt = _libSort.querySelector(`option[value="${value}"]`);
+      if (opt) opt.textContent = t(lang, key);
+    }
   }
   // Search depth label
   const _searchDepthLabel = document.getElementById('search-depth-label');
@@ -3850,6 +3871,8 @@ function isOomError(err) {
 }
 
 async function loadEpub(arrayBuffer, filePath = '') {
+  // Same spelling as the library entry: translation cache and chapter lengths are keyed by it
+  filePath = await libraryPathFor(filePath);
   // Stop TTS before loading new book
   ttsController.stop();
   showLoading(ui('loadingEpub'));
@@ -3928,7 +3951,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
     }
 
     let coverUrl = null;
-    try { coverUrl = (await book.coverUrl()) || null; if (coverUrl) coverImg.src = coverUrl; } catch (_) { }
+    try { coverUrl = (await book.coverUrl()) || null; } catch (_) { }
+    setSidebarCover(coverUrl);
 
     // Auto-add to the library when a book is opened (Tauri only, with an absolute path)
     if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
@@ -4141,6 +4165,8 @@ function updatePdfTocActive() {
 
 // ────────────────────────────────────────────────────────────────────────────
 async function loadPdfFile(arrayBuffer, filePath = '') {
+  // Same spelling as the library entry: translation cache and chapter lengths are keyed by it
+  filePath = await libraryPathFor(filePath);
   // Stop TTS before loading new book
   ttsController.stop();
   showLoading(ui('readingFile'));
@@ -4245,12 +4271,17 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     bookAuthor.textContent = doc.author || '';
     bookInfo.classList.remove('hidden');
     tocPlaceholder.style.display = 'none';
-    coverImg.src = '';
+    setSidebarCover(null);
 
-    // Auto-add to library (Tauri with absolute path)
-    if (filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath))) {
-      autoAddToLibrary(arrayBuffer, filePath, { title: doc.title, creator: doc.author }, pdfByteLength);
-    }
+    // Cover = first page of the PDF, rendered in the background. The same
+    // thumbnail goes to the library entry (and so to the PWA).
+    const isLibraryPath = filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\\/]/.test(filePath));
+    renderPdfCoverDataUrl(doc.proxy).then(coverDataUrl => {
+      if (pdfDoc === doc) setSidebarCover(coverDataUrl);
+      if (isLibraryPath) {
+        autoAddToLibrary(arrayBuffer, filePath, { title: doc.title, creator: doc.author }, pdfByteLength, coverDataUrl);
+      }
+    });
 
     addBookmarkBtn.disabled = false;
     if (bookTranslationBtn) bookTranslationBtn.disabled = false;
@@ -4441,7 +4472,7 @@ async function loadChapterDocument(spineItem) {
 async function getCachedChapterLengths(filePath, fileSize, chapterCount) {
   if (!filePath || !fileSize) return null;
   try {
-    const entry = (await loadLibrary()).find(e => e.filePath === filePath);
+    const entry = (await loadLibrary()).find(e => samePath(e.filePath, filePath));
     const lengths = entry && entry.chapterLengths;
     if (!Array.isArray(lengths) || lengths.length !== chapterCount) return null;
     if (entry.chapterLengthsFileSize !== fileSize) return null;
@@ -4456,7 +4487,7 @@ async function saveChapterLengthsToLibrary({ filePath, fileSize }, lengths) {
   if (!filePath || !fileSize) return;
   try {
     const lib = await loadLibrary();
-    const entry = lib.find(e => e.filePath === filePath);
+    const entry = lib.find(e => samePath(e.filePath, filePath));
     if (!entry) return; // book not in the library (e.g. opened in browser mode)
     entry.chapterLengths = lengths;
     entry.chapterLengthsFileSize = fileSize;
@@ -5268,14 +5299,64 @@ let _cachedLibrary = null;
 
 async function loadLibrary() {
   if (_cachedLibrary) return _cachedLibrary;
+  let stored;
   try {
-    _cachedLibrary = await PersistentStorage.get(LIBRARY_KEY, []);
+    stored = await PersistentStorage.get(LIBRARY_KEY, []);
   } catch (e) {
     // Unreadable file: empty list not cached, so it is retried on the next read
     if (!reportStorageReadError(e)) throw e;
     return [];
   }
+  // Older folder scans added a second entry for a book already in the library
+  // when its path was spelled differently ("C:\Books/a.epub"): merged here.
+  const { library, merged } = dedupeLibrary(Array.isArray(stored) ? stored : []);
+  _cachedLibrary = library;
+  if (merged.length) {
+    console.info(`[library] merged ${merged.length} duplicate entries`);
+    await saveLibrary(library);
+    for (const { entry, otherPaths } of merged) {
+      await mergeTranslationCaches(entry.filePath, otherPaths, entry.title);
+    }
+  }
   return _cachedLibrary;
+}
+
+/**
+ * Moves the translations saved under other spellings of a book's path into the
+ * cache of `keptPath` (caches are keyed by a hash of the path string).
+ * Skipped for the open book: its cache is in memory and would overwrite the merge.
+ */
+async function mergeTranslationCaches(keptPath, otherPaths, title) {
+  try {
+    const kept = await loadBookTranslationCache(keptPath, title);
+    const others = [];
+    for (const p of otherPaths) {
+      const other = await loadBookTranslationCache(p, title);
+      if (other.id !== kept.id) others.push({ path: p, cache: other });
+    }
+    const ids = [kept.id, ...others.map(o => o.cache.id)];
+    if (currentTranslationCache && ids.includes(currentTranslationCache.id)) return;
+    const useful = others.filter(o => Object.keys(o.cache.data.translations).length || o.cache.data.structure);
+    if (!useful.length) return;
+    for (const { cache } of useful) kept.data = mergeCacheData(kept.data, cache.data);
+    kept.dirty = true;
+    await saveBookTranslationCache(kept);
+    if (kept.dirty) return; // not saved: keep the other files
+    for (const { path } of useful) await deleteBookTranslationCache(path, title);
+  } catch (e) {
+    console.warn('[library] translation caches not merged:', e);
+  }
+}
+
+/** The path of the library entry for `filePath` (same file, maybe spelled differently), or `filePath`. */
+async function libraryPathFor(filePath) {
+  if (!filePath) return filePath;
+  try {
+    const entry = (await loadLibrary()).find(e => samePath(e.filePath, filePath));
+    return entry ? entry.filePath : filePath;
+  } catch {
+    return filePath;
+  }
 }
 async function saveLibrary(entries) {
   // The web server writes the ratings given by the PWA to the same file:
@@ -5299,14 +5380,15 @@ async function saveLibrary(entries) {
 
 async function addEntries(newEntries) {
   const lib = await loadLibrary();
-  const existingPaths = new Set(lib.map(e => e.filePath));
+  const existingPaths = new Set(lib.map(e => pathKey(e.filePath)));
   let added = 0, skipped = 0;
   for (const entry of newEntries) {
-    if (existingPaths.has(entry.filePath)) {
+    const key = pathKey(entry.filePath);
+    if (existingPaths.has(key)) {
       skipped++;
     } else {
       lib.push(entry);
-      existingPaths.add(entry.filePath);
+      existingPaths.add(key);
       added++;
     }
   }
@@ -5320,18 +5402,20 @@ async function removeEntry(id) {
   await saveLibrary(lib.filter(e => e.id !== id));
   // The saved translations of the deleted book are no longer needed
   if (removed) await deleteBookTranslationCache(removed.filePath, removed.title);
-  const { query, status } = getLibFilters();
-  await renderLibraryGrid(query, status);
+  await renderLibraryGrid({ keepPosition: true });
 }
 
 async function readDirRecursive(dirPath, maxDepth = 3) {
   const { readDir } = await import('@tauri-apps/plugin-fs');
+  const { join } = await import('@tauri-apps/api/path');
   const results = [];
   async function walk(path, currentDepth) {
     let entries;
     try { entries = await readDir(path); } catch { return; }
     for (const entry of entries) {
-      const entryPath = entry.path || (path + '/' + entry.name);
+      // Tauri 2 entries have no `path`: joined with the system separator, so
+      // the path is spelled like the one the file dialog returns
+      const entryPath = entry.path || await join(path, entry.name);
       const isDir = entry.isDirectory === true || entry.children !== undefined;
       if (isDir) {
         if (currentDepth < maxDepth) {
@@ -5364,7 +5448,8 @@ async function extractMetadata(filePath) {
       const fileSize = buffer.byteLength;
       try {
         const doc = await loadPdf(buffer, fileName);
-        const entry = { id, filePath, fileName, title: doc.title || titleFallback, author: doc.author || '', publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: doc.pageCount || 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
+        const coverDataUrl = await renderPdfCoverDataUrl(doc.proxy);
+        const entry = { id, filePath, fileName, title: doc.title || titleFallback, author: doc.author || '', publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: doc.pageCount || 0, coverDataUrl, fileType: 'pdf', status: 'to-read', notes: '', addedAt };
         // Only the metadata was needed: the document must be released, otherwise a
         // scan with many PDFs keeps them all in memory.
         try { await doc.proxy.destroy(); } catch (_) { }
@@ -5486,18 +5571,28 @@ let scanInProgress = false;
 // if the book has no cover; undefined = to be extracted by reopening the file.
 async function autoAddToLibrary(arrayBuffer, filePath, meta, knownSize, knownCoverUrl) {
   try {
+    const isPdf = /\.pdf$/i.test(filePath);
     const lib = await loadLibrary();
-    if (lib.some(e => e.filePath === filePath)) return; // already in library
+    const existing = lib.find(e => samePath(e.filePath, filePath));
+    if (existing) {
+      // Already in library: a PDF added without a cover gets the one just rendered
+      if (isPdf && !existing.coverDataUrl && typeof knownCoverUrl === 'string' && knownCoverUrl) {
+        existing.coverDataUrl = knownCoverUrl;
+        await saveLibrary(lib);
+      }
+      return;
+    }
     const fileName = filePath.split(/[\\/]/).pop();
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
     const addedAt = Date.now();
     const fileSize = knownSize || arrayBuffer.byteLength || 0;
 
     // ── PDF branch ──────────────────────────────────────────────────────
-    if (currentFileType === 'pdf') {
+    if (isPdf) {
       const title = meta.title || fileName.replace(/\.pdf$/i, '');
       const author = meta.creator || '';
-      await addEntries([{ id, filePath, fileName, title, author, publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: 0, coverDataUrl: null, fileType: 'pdf', status: 'to-read', notes: '', addedAt }]);
+      const coverDataUrl = typeof knownCoverUrl === 'string' && knownCoverUrl ? knownCoverUrl : null;
+      await addEntries([{ id, filePath, fileName, title, author, publisher: '', language: '', pubdate: '', description: '', fileSize, pageCount: 0, coverDataUrl, fileType: 'pdf', status: 'to-read', notes: '', addedAt }]);
       return;
     }
 
@@ -5543,7 +5638,7 @@ async function autoAddToLibrary(arrayBuffer, filePath, meta, knownSize, knownCov
         });
         if (coverDataUrl) {
           const current = await loadLibrary();
-          const idx = current.findIndex(e => e.filePath === filePath);
+          const idx = current.findIndex(e => samePath(e.filePath, filePath));
           if (idx >= 0) { current[idx].coverDataUrl = coverDataUrl; await saveLibrary(current); }
         }
       }
@@ -5602,9 +5697,10 @@ async function scanFolder(rootPath) {
         const idx = lib.findIndex(e => e.id === merged.id);
         if (idx >= 0) lib[idx] = merged;
       }
-      const known = new Set(lib.map(e => e.filePath));
+      const known = new Set(lib.map(e => pathKey(e.filePath)));
       for (const entry of pendingNew) {
-        if (!known.has(entry.filePath)) { lib.push(entry); known.add(entry.filePath); }
+        const key = pathKey(entry.filePath);
+        if (!known.has(key)) { lib.push(entry); known.add(key); }
       }
       await saveLibrary(lib);
       pendingNew = [];
@@ -5648,168 +5744,169 @@ async function scanFolder(rootPath) {
   }
 }
 
-const ITEMS_PER_PAGE = 60;
-let _renderedCount = ITEMS_PER_PAGE;
+// The list is drawn in pages of LIB_PAGE_SIZE cards: the next page is added
+// when the list is scrolled near its end (no "load more" button).
+const LIB_PAGE_SIZE = 60;
+const LIB_FILL_MARGIN_PX = 600;
+let _libVisible = [];    // entries matching the filters, in display order
+let _libRendered = 0;    // how many of them have a card
 
-async function renderLibraryGrid(query = '', statusFilter = '', appendMore = false) {
+/**
+ * Redraws the library list with the current search, filters and sort order.
+ * `keepPosition`: after a book is deleted or edited, the cards already shown
+ * and the scroll position are kept instead of going back to the top.
+ */
+async function renderLibraryGrid({ keepPosition = false } = {}) {
   const lib = await loadLibrary();
-  const q = query.trim().toLowerCase();
-  let filtered = q
-    ? lib.filter(e => (e.title || '').toLowerCase().includes(q) || (e.author || '').toLowerCase().includes(q))
-    : lib;
-  if (statusFilter) {
-    filtered = filtered.filter(e => e.status === statusFilter);
-  }
-  const ratingFilter = document.getElementById('lib-rating-filter')?.value || '';
-  if (ratingFilter) {
-    filtered = filtered.filter(e => matchesRatingFilter(e, ratingFilter));
-  }
   const grid = document.getElementById('lib-grid');
   const placeholder = document.getElementById('lib-placeholder');
   if (!grid || !placeholder) return;
+  const { query, status, rating, sort } = getLibFilters();
+  _libVisible = sortLibrary(filterLibrary(lib, { query, status, rating }), sort, loadSettings().uiLang || 'en');
   // Updates the modal title with the count
   const titleEl = document.getElementById('library-modal-title');
   if (titleEl) titleEl.textContent = ui('libraryTitle', { count: lib.length });
 
-  if (!appendMore) {
-    grid.innerHTML = '';
-    _renderedCount = ITEMS_PER_PAGE;
-  }
+  const scrollTop = keepPosition ? grid.scrollTop : 0;
+  const shown = keepPosition ? _libRendered : 0;
+  grid.innerHTML = '';
+  _libRendered = 0;
 
-  // Remove existing Load More button if any
-  const existingLoadMore = document.getElementById('lib-load-more-btn');
-  if (existingLoadMore) existingLoadMore.remove();
-
-  if (!filtered.length && !appendMore) {
+  if (!_libVisible.length) {
     placeholder.classList.remove('hidden');
-    placeholder.textContent = q ? ui('libNoResults', { query }) : ui('libEmpty');
+    placeholder.textContent = query.trim() ? ui('libNoResults', { query }) : ui('libEmpty');
     grid.classList.add('hidden');
     return;
   }
   placeholder.classList.add('hidden');
   grid.classList.remove('hidden');
 
-  const startIdx = appendMore ? _renderedCount : 0;
-  const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, filtered.length);
-  const chunk = filtered.slice(startIdx, endIdx);
+  appendLibraryCards(Math.max(LIB_PAGE_SIZE, shown));
+  grid.scrollTop = scrollTop;
+  fillLibraryGrid();
+}
 
-  for (const entry of chunk) {
-    const card = document.createElement('div');
-    card.className = 'lib-book-card';
-    card.dataset.id = entry.id;
-    const img = document.createElement('img');
-    img.className = 'lib-book-cover';
-    img.alt = entry.title || ui('libCoverPlaceholder');
-    img.loading = 'lazy'; // Native lazy loading
-    if (entry.coverDataUrl) {
-      img.src = entry.coverDataUrl;
-    } else {
-      img.src = '';
-      img.style.background = '#2a2a2a';
-      if (entry.fileType === 'pdf') {
-        img.style.display = 'none';
-        const placeholder = document.createElement('div');
-        placeholder.className = 'lib-book-cover lib-pdf-placeholder';
-        placeholder.textContent = 'PDF';
-        card.appendChild(placeholder);
-      }
-    }
-    const info = document.createElement('div');
-    info.className = 'lib-book-info';
-    // Title row: title text + action buttons right-aligned
-    const titleRow = document.createElement('div');
-    titleRow.className = 'lib-book-title-row';
-    const titleTextEl = document.createElement('span');
-    titleTextEl.className = 'lib-book-title';
-    titleTextEl.textContent = entry.title || ui('libCoverPlaceholder');
-    titleTextEl.title = entry.title || '';
-    const infoBtn = document.createElement('button');
-    infoBtn.className = 'lib-book-action-btn';
-    infoBtn.title = ui('detailInfoBtn');
-    infoBtn.innerHTML = 'ⓘ';
-    infoBtn.addEventListener('click', async e => { e.stopPropagation(); await openBookDetail(entry.id); });
-    const delBtn = document.createElement('button');
-    delBtn.className = 'lib-book-action-btn lib-book-action-btn--danger';
-    delBtn.title = ui('libDeleteBook');
-    delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
-    delBtn.addEventListener('click', async e => { e.stopPropagation(); await removeEntry(entry.id); });
-    titleRow.appendChild(titleTextEl);
-    titleRow.appendChild(infoBtn);
-    titleRow.appendChild(delBtn);
-    // Author row with status badge
-    const authorRow = document.createElement('div');
-    authorRow.style.display = 'flex';
-    authorRow.style.alignItems = 'center';
-    authorRow.style.gap = '6px';
-    authorRow.style.justifyContent = 'space-between';
-    const authorEl = document.createElement('span');
-    authorEl.className = 'lib-book-author';
-    authorEl.textContent = entry.author || '';
-    authorEl.style.flex = '1';
-    authorEl.style.minWidth = '0';
-    authorRow.appendChild(authorEl);
-    const rating = normalizeRating(entry.rating);
-    if (rating) {
-      const ratingEl = document.createElement('span');
-      ratingEl.className = 'lib-rating';
-      ratingEl.textContent = ratingStars(rating);
-      ratingEl.title = `${rating}/5`;
-      ratingEl.setAttribute('aria-label', `${ui('detailRating')}: ${rating}/5`);
-      authorRow.appendChild(ratingEl);
-    }
-    if (entry.status) {
-      const badge = document.createElement('span');
-      badge.className = `lib-status-badge lib-status-badge--${entry.status}`;
-      const statusLabels = {
-        'to-read': ui('statusToRead'),
-        'reading': ui('statusReading'),
-        'read': ui('statusRead'),
-      };
-      badge.textContent = statusLabels[entry.status] || entry.status;
-      authorRow.appendChild(badge);
-    }
-    const metaEl = document.createElement('span');
-    metaEl.className = 'lib-book-meta';
-    const parts = [];
-    if (entry.publisher) parts.push(entry.publisher);
-    if (entry.pubdate) parts.push(entry.pubdate);
-    if (entry.language) parts.push(entry.language.toUpperCase());
-    metaEl.textContent = parts.join(' · ');
-    const sizeEl = document.createElement('span');
-    sizeEl.className = 'lib-book-size';
-    const sizeParts = [];
-    if (entry.pageCount > 0) sizeParts.push(`~${entry.pageCount} pp.`);
-    if (entry.fileSize > 0) {
-      const mb = entry.fileSize / (1024 * 1024);
-      sizeParts.push(mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(entry.fileSize / 1024)} KB`);
-    }
-    sizeEl.textContent = sizeParts.join(' · ');
-    const metaRow = document.createElement('div');
-    metaRow.className = 'lib-book-meta-row';
-    metaRow.appendChild(metaEl);
-    metaRow.appendChild(sizeEl);
-    info.appendChild(titleRow);
-    info.appendChild(authorRow);
-    info.appendChild(metaRow);
-    card.appendChild(img);
-    card.appendChild(info);
-    card.addEventListener('click', () => openBookFromLibrary(entry));
-    grid.appendChild(card);
+/** Adds the cards of the next `count` visible entries. */
+function appendLibraryCards(count) {
+  const grid = document.getElementById('lib-grid');
+  const end = Math.min(_libRendered + count, _libVisible.length);
+  const fragment = document.createDocumentFragment();
+  for (let i = _libRendered; i < end; i++) fragment.appendChild(createLibraryCard(_libVisible[i]));
+  grid.appendChild(fragment);
+  _libRendered = end;
+}
+
+/** Adds pages of cards while the end of the list is (nearly) in view. */
+function fillLibraryGrid() {
+  const grid = document.getElementById('lib-grid');
+  // Hidden dialog: no size, every page would look "in view"
+  if (!grid || !grid.clientHeight) return;
+  while (_libRendered < _libVisible.length &&
+    grid.scrollHeight - grid.scrollTop - grid.clientHeight < LIB_FILL_MARGIN_PX) {
+    appendLibraryCards(LIB_PAGE_SIZE);
   }
+}
 
-  _renderedCount = endIdx;
-
-  if (endIdx < filtered.length) {
-    const loadMoreBtn = document.createElement('button');
-    loadMoreBtn.id = 'lib-load-more-btn';
-    loadMoreBtn.className = 'lib-load-more-btn';
-    loadMoreBtn.textContent = ui('loadMore');
-    loadMoreBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await renderLibraryGrid(query, statusFilter, true);
-    });
-    grid.after(loadMoreBtn);
+function createLibraryCard(entry) {
+  const card = document.createElement('div');
+  card.className = 'lib-book-card';
+  card.dataset.id = entry.id;
+  // Without a cover: a box with the file type (an <img> with an empty `src`
+  // would show the broken-image icon)
+  let cover;
+  if (entry.coverDataUrl) {
+    cover = document.createElement('img');
+    cover.className = 'lib-book-cover';
+    cover.alt = entry.title || ui('libCoverPlaceholder');
+    cover.loading = 'lazy'; // Native lazy loading
+    cover.src = entry.coverDataUrl;
+  } else {
+    const isPdf = entry.fileType === 'pdf' || /\.pdf$/i.test(entry.filePath || '');
+    cover = document.createElement('div');
+    cover.className = `lib-book-cover lib-cover-placeholder${isPdf ? ' lib-pdf-placeholder' : ''}`;
+    cover.textContent = isPdf ? 'PDF' : 'EPUB';
   }
+  const info = document.createElement('div');
+  info.className = 'lib-book-info';
+  // Title row: title text + action buttons right-aligned
+  const titleRow = document.createElement('div');
+  titleRow.className = 'lib-book-title-row';
+  const titleTextEl = document.createElement('span');
+  titleTextEl.className = 'lib-book-title';
+  titleTextEl.textContent = entry.title || ui('libCoverPlaceholder');
+  titleTextEl.title = entry.title || '';
+  const infoBtn = document.createElement('button');
+  infoBtn.className = 'lib-book-action-btn';
+  infoBtn.title = ui('detailInfoBtn');
+  infoBtn.innerHTML = 'ⓘ';
+  infoBtn.addEventListener('click', async e => { e.stopPropagation(); await openBookDetail(entry.id); });
+  const delBtn = document.createElement('button');
+  delBtn.className = 'lib-book-action-btn lib-book-action-btn--danger';
+  delBtn.title = ui('libDeleteBook');
+  delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+  delBtn.addEventListener('click', async e => { e.stopPropagation(); await removeEntry(entry.id); });
+  titleRow.appendChild(titleTextEl);
+  titleRow.appendChild(infoBtn);
+  titleRow.appendChild(delBtn);
+  // Author row with status badge
+  const authorRow = document.createElement('div');
+  authorRow.style.display = 'flex';
+  authorRow.style.alignItems = 'center';
+  authorRow.style.gap = '6px';
+  authorRow.style.justifyContent = 'space-between';
+  const authorEl = document.createElement('span');
+  authorEl.className = 'lib-book-author';
+  authorEl.textContent = entry.author || '';
+  authorEl.style.flex = '1';
+  authorEl.style.minWidth = '0';
+  authorRow.appendChild(authorEl);
+  const rating = normalizeRating(entry.rating);
+  if (rating) {
+    const ratingEl = document.createElement('span');
+    ratingEl.className = 'lib-rating';
+    ratingEl.textContent = ratingStars(rating);
+    ratingEl.title = `${rating}/5`;
+    ratingEl.setAttribute('aria-label', `${ui('detailRating')}: ${rating}/5`);
+    authorRow.appendChild(ratingEl);
+  }
+  if (entry.status) {
+    const badge = document.createElement('span');
+    badge.className = `lib-status-badge lib-status-badge--${entry.status}`;
+    const statusLabels = {
+      'to-read': ui('statusToRead'),
+      'reading': ui('statusReading'),
+      'read': ui('statusRead'),
+    };
+    badge.textContent = statusLabels[entry.status] || entry.status;
+    authorRow.appendChild(badge);
+  }
+  const metaEl = document.createElement('span');
+  metaEl.className = 'lib-book-meta';
+  const parts = [];
+  if (entry.publisher) parts.push(entry.publisher);
+  if (entry.pubdate) parts.push(entry.pubdate);
+  if (entry.language) parts.push(entry.language.toUpperCase());
+  metaEl.textContent = parts.join(' · ');
+  const sizeEl = document.createElement('span');
+  sizeEl.className = 'lib-book-size';
+  const sizeParts = [];
+  if (entry.pageCount > 0) sizeParts.push(`~${entry.pageCount} pp.`);
+  if (entry.fileSize > 0) {
+    const mb = entry.fileSize / (1024 * 1024);
+    sizeParts.push(mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(entry.fileSize / 1024)} KB`);
+  }
+  sizeEl.textContent = sizeParts.join(' · ');
+  const metaRow = document.createElement('div');
+  metaRow.className = 'lib-book-meta-row';
+  metaRow.appendChild(metaEl);
+  metaRow.appendChild(sizeEl);
+  info.appendChild(titleRow);
+  info.appendChild(authorRow);
+  info.appendChild(metaRow);
+  card.appendChild(cover);
+  card.appendChild(info);
+  card.addEventListener('click', () => openBookFromLibrary(entry));
+  return card;
 }
 
 // Open book detail modal for editing metadata
@@ -5872,8 +5969,7 @@ async function openBookDetail(entryId) {
     const idx = lib.findIndex(e => e.id === entryId);
     if (idx >= 0) { lib[idx] = entry; await saveLibrary(lib); }
     modal.classList.add('hidden');
-    const { query, status } = getLibFilters();
-    await renderLibraryGrid(query, status);
+    await renderLibraryGrid({ keepPosition: true });
   };
   // Wire delete button
   const delBtn = document.getElementById('book-detail-delete-btn');
@@ -6018,11 +6114,14 @@ const libPlaceholder = document.getElementById('lib-placeholder');
 const libSearchInput = document.getElementById('lib-search-input');
 const libStatusFilter = document.getElementById('lib-status-filter');
 const libRatingFilter = document.getElementById('lib-rating-filter');
+const libSortSelect = document.getElementById('lib-sort');
 
 function getLibFilters() {
   return {
     query: libSearchInput.value,
     status: libStatusFilter ? libStatusFilter.value : '',
+    rating: libRatingFilter ? libRatingFilter.value : '',
+    sort: normalizeLibrarySort(libSortSelect ? libSortSelect.value : ''),
   };
 }
 
@@ -6031,6 +6130,8 @@ libraryBtn.addEventListener('click', async () => {
   libSearchInput.value = '';
   if (libStatusFilter) libStatusFilter.value = '';
   if (libRatingFilter) libRatingFilter.value = '';
+  // The sort order is remembered between sessions
+  if (libSortSelect) libSortSelect.value = normalizeLibrarySort(loadSettings().librarySort);
   // Re-reads the file: the ratings given by the PWA come from the web server
   _cachedLibrary = null;
   await renderLibraryGrid();
@@ -6043,10 +6144,9 @@ function closeLibraryModal() {
   libStatus.classList.add('hidden');
 }
 
+// Closed only with its button: a click outside the dialog (or a text selection
+// released outside it) must not close the library.
 libCloseBtn.addEventListener('click', closeLibraryModal);
-libraryModal.addEventListener('click', e => {
-  if (e.target === libraryModal) closeLibraryModal();
-});
 
 libScanBtn.addEventListener('click', async () => {
   const isTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
@@ -6070,22 +6170,20 @@ libImportBtn.addEventListener('click', () => importLibrary());
 libExportBtn.addEventListener('click', () => exportLibrary());
 
 // Live search filtering
-libSearchInput.addEventListener('input', async () => {
-  const { query, status } = getLibFilters();
-  await renderLibraryGrid(query, status);
-});
-if (libStatusFilter) {
-  libStatusFilter.addEventListener('change', async () => {
-    const { query, status } = getLibFilters();
-    await renderLibraryGrid(query, status);
+libSearchInput.addEventListener('input', () => renderLibraryGrid());
+if (libStatusFilter) libStatusFilter.addEventListener('change', () => renderLibraryGrid());
+if (libRatingFilter) libRatingFilter.addEventListener('change', () => renderLibraryGrid());
+if (libSortSelect) {
+  libSortSelect.addEventListener('change', () => {
+    const settings = loadSettings();
+    settings.librarySort = normalizeLibrarySort(libSortSelect.value);
+    saveSettings(settings);
+    renderLibraryGrid();
   });
 }
-if (libRatingFilter) {
-  libRatingFilter.addEventListener('change', async () => {
-    const { query, status } = getLibFilters();
-    await renderLibraryGrid(query, status);
-  });
-}
+// Next cards while scrolling, and when the dialog is resized
+libGrid.addEventListener('scroll', fillLibraryGrid, { passive: true });
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => fillLibraryGrid()).observe(libGrid);
 
 // Book detail rating (1–5 stars): a click on the active star resets the rating
 const detailRatingEl = document.getElementById('detail-rating');
@@ -6111,7 +6209,7 @@ detailRatingEl.addEventListener('click', e => {
 // Book detail modal close
 const bookDetailModal = document.getElementById('book-detail-modal');
 document.getElementById('book-detail-close-btn').addEventListener('click', () => bookDetailModal.classList.add('hidden'));
-bookDetailModal.addEventListener('click', e => { if (e.target === bookDetailModal) bookDetailModal.classList.add('hidden'); });
+// No close on a click outside: it would discard the edits not saved yet
 
 document.getElementById('lib-clear-btn').addEventListener('click', async () => {
   const lib = await loadLibrary();
@@ -6155,7 +6253,7 @@ libCheckRemoveBtn.addEventListener('click', async () => {
   const lib = await loadLibrary();
   const cleaned = lib.filter(e => !brokenIds.has(e.id));
   await saveLibrary(cleaned);
-  await renderLibraryGrid();
+  await renderLibraryGrid({ keepPosition: true });
   libStatus.textContent = ui('libCheckRemoved', { count: _brokenEntries.length });
   libStatus.classList.remove('hidden');
   _brokenEntries = [];
@@ -6819,7 +6917,7 @@ async function renderDetailTranslation(entry) {
   if (!el) return;
   el.textContent = '';
   try {
-    const isCurrent = currentTranslationCache && currentFilePath && entry.filePath === currentFilePath;
+    const isCurrent = currentTranslationCache && currentFilePath && samePath(entry.filePath, currentFilePath);
     const cache = isCurrent ? currentTranslationCache : await loadBookTranslationCache(entry.filePath, entry.title);
     const variants = cache.variants(isCurrent ? currentBookFileSize : entry.fileSize);
     el.textContent = variants.length

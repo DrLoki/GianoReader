@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
+    "build:local": "tauri build --config src-tauri/tauri.local.conf.json",
     "test": "vitest --run"
   },
   "dependencies": {

@@ -11,7 +11,7 @@
   "library.error": "ライブラリを読み込めませんでした。接続を確認してください。",
   "library.retry": "再試行",
   "library.progress": "{progress}% 既読",
-  "library.searchPlaceholder": "タイトルまたは著者で検索…",
+  "library.searchPlaceholder": "タイトル、著者、出版社で検索…",
   "library.filterAll": "すべて",
   "library.filterToRead": "未読",
   "library.filterReading": "読書中",

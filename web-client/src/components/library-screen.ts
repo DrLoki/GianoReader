@@ -261,10 +261,8 @@ class LibraryScreen extends HTMLElement {
   private applyFilters(): void {
     const q = this.searchQuery.trim().toLowerCase();
     let filtered = q
-      ? this.books.filter(
-          (b) =>
-            b.title.toLowerCase().includes(q) ||
-            b.author.toLowerCase().includes(q),
+      ? this.books.filter((b) =>
+          [b.title, b.author, b.publisher].some((v) => (v ?? '').toLowerCase().includes(q)),
         )
       : this.books.slice();
 
@@ -419,6 +417,7 @@ class LibraryScreen extends HTMLElement {
         getCoverUrl(bookId),
         toc,
         (done, total) => this.updateDownloadProgress(bookId, done, total),
+        book.publisher ?? null,
       );
       const rating = normalizeRating(book.rating);
       if (rating !== null) {

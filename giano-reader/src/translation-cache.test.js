@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import {
-  BookTranslationCache, textKey, variantKey, parseVariant, normalizeCacheData, CACHE_VERSION,
+  BookTranslationCache, textKey, variantKey, parseVariant, normalizeCacheData, CACHE_VERSION, mergeCacheData,
 } from './translation-cache.js';
 
 const IT_FREE = variantKey('it', 'free');
@@ -129,5 +129,31 @@ describe('normalizeCacheData', () => {
     });
     expect(data.translations).toEqual({ 'it|free': { k1: 'ok' } });
     expect(data.structure).toBeNull();
+  });
+});
+
+describe('mergeCacheData', () => {
+  const data = (translations, structure = null, updatedAt = 0) =>
+    ({ version: CACHE_VERSION, book: { filePath: 'p', title: 't' }, updatedAt, translations, structure });
+
+  it('adds the translations of the other cache, keeping its own on a conflict', () => {
+    const merged = mergeCacheData(
+      data({ 'it|free': { a: 'base A' } }, null, 5),
+      data({ 'it|free': { a: 'other A', b: 'other B' }, 'it|pro': { c: 'pro C' } }, { fileSize: 3, chapters: [] }, 9),
+    );
+    expect(merged.translations).toEqual({
+      'it|free': { a: 'base A', b: 'other B' },
+      'it|pro': { c: 'pro C' },
+    });
+    expect(merged.structure).toEqual({ fileSize: 3, chapters: [] });
+    expect(merged.updatedAt).toBe(9);
+    expect(merged.book).toEqual({ filePath: 'p', title: 't' });
+  });
+
+  it('keeps its own structure and ignores invalid data', () => {
+    const own = { fileSize: 1, chapters: [{ keys: ['k'], lengths: [4] }] };
+    const merged = mergeCacheData(data({}, own), { garbage: true });
+    expect(merged.structure).toEqual(own);
+    expect(merged.translations).toEqual({});
   });
 });

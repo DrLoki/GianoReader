@@ -92,6 +92,23 @@ export function normalizeCacheData(data, book = {}) {
   return out;
 }
 
+/**
+ * Merges the cache of the same book saved under another identifier (the file
+ * path spelled differently) into `base`. On a conflict the translation in
+ * `base` wins; the structure of `extra` is used only when `base` has none.
+ * @returns {object} new cache data
+ */
+export function mergeCacheData(base, extra) {
+  const out = normalizeCacheData(base);
+  const other = normalizeCacheData(extra);
+  for (const [variant, entries] of Object.entries(other.translations)) {
+    out.translations[variant] = { ...entries, ...(out.translations[variant] || {}) };
+  }
+  if (!out.structure && other.structure) out.structure = other.structure;
+  out.updatedAt = Math.max(out.updatedAt, other.updatedAt);
+  return out;
+}
+
 function isValidChapter(ch) {
   return ch && Array.isArray(ch.keys) && Array.isArray(ch.lengths) && ch.keys.length === ch.lengths.length;
 }

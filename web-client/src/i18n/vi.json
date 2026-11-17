@@ -11,7 +11,7 @@
   "library.error": "Không thể tải thư viện. Vui lòng kiểm tra kết nối.",
   "library.retry": "Thử lại",
   "library.progress": "Đã đọc {progress}%",
-  "library.searchPlaceholder": "Tìm theo tên sách hoặc tác giả…",
+  "library.searchPlaceholder": "Tìm theo tên sách, tác giả hoặc nhà xuất bản…",
   "library.filterAll": "Tất cả",
   "library.filterToRead": "Chưa đọc",
   "library.filterReading": "Đang đọc",

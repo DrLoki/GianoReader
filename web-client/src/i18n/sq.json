@@ -11,7 +11,7 @@
   "library.error": "Nuk u ngarkua biblioteka. Kontrolloni lidhjen tuaj.",
   "library.retry": "Riprovo",
   "library.progress": "{progress}% lexuar",
-  "library.searchPlaceholder": "Kërko sipas titullit ose autorit…",
+  "library.searchPlaceholder": "Kërko sipas titullit, autorit ose botuesit…",
   "library.filterAll": "Të gjitha",
   "library.filterToRead": "Për të lexuar",
   "library.filterReading": "Duke lexuar",

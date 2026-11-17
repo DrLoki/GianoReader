@@ -1322,12 +1322,13 @@ body.theme-sepia {
   margin-bottom: 10px;
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
 #lib-search-input {
   flex: 1;
-  min-width: 0;
+  min-width: 160px; /* the filters wrap to a new line before it shrinks more */
   padding: 7px 12px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -1341,7 +1342,8 @@ body.theme-sepia {
 #lib-search-input::placeholder { color: var(--text-muted); }
 
 #lib-status-filter,
-#lib-rating-filter {
+#lib-rating-filter,
+#lib-sort {
   flex-shrink: 0;
   padding: 7px 28px 7px 10px;
   border: 1px solid var(--border);
@@ -1359,9 +1361,11 @@ body.theme-sepia {
   background-position: right 9px center;
 }
 #lib-status-filter:focus,
-#lib-rating-filter:focus { border-color: var(--accent); }
+#lib-rating-filter:focus,
+#lib-sort:focus { border-color: var(--accent); }
 #lib-status-filter option,
-#lib-rating-filter option { background: var(--bg); color: var(--text); }
+#lib-rating-filter option,
+#lib-sort option { background: var(--bg); color: var(--text); }
 
 /* Book rating (1–5 stars) */
 :root { --rating-star: #f5b301; }
@@ -1429,6 +1433,16 @@ body.theme-sepia {
   display: block;
 }
 
+.lib-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-weight: bold;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
 .lib-pdf-placeholder {
   display: flex;
   align-items: center;
@@ -1468,23 +1482,6 @@ body.theme-sepia {
   font-size: 0.68rem; color: var(--modal-text-muted);
   white-space: nowrap; flex-shrink: 0;
   text-align: right;
-}
-
-.lib-load-more-btn {
-  display: block;
-  margin: 16px auto;
-  padding: 8px 24px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
-}
-.lib-load-more-btn:hover {
-  opacity: 0.85;
 }
 
 /* RTL support for library */

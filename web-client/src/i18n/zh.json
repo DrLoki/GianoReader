@@ -11,7 +11,7 @@
   "library.error": "无法加载书库。请检查您的连接。",
   "library.retry": "重试",
   "library.progress": "已读 {progress}%",
-  "library.searchPlaceholder": "按标题或作者搜索…",
+  "library.searchPlaceholder": "按标题、作者或出版社搜索…",
   "library.filterAll": "全部",
   "library.filterToRead": "待读",
   "library.filterReading": "在读",

@@ -775,6 +775,33 @@ function paintPage(page, viewport, canvas) {
 }
 
 /**
+ * Renders the first page of `proxy` (a pdf.js PDFDocumentProxy) as a JPEG data
+ * URL at most `maxWidth` pixels wide, to use as the book cover.
+ * @returns {Promise<string|null>} null if the page cannot be rendered
+ */
+export async function renderPdfCoverDataUrl(proxy, maxWidth = 200) {
+  try {
+    const page = await proxy.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: maxWidth / base.width });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(viewport.width));
+    canvas.height = Math.max(1, Math.round(viewport.height));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    // White background: transparent areas would turn black in the JPEG
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const url = canvas.toDataURL('image/jpeg', 0.8);
+    canvas.width = canvas.height = 0;
+    return url && url.startsWith('data:image/') ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Paints page canvases only while they are near the visible part of `root`
  * (the scrolling container) and frees their pixels when they scroll far away.
  * A chapter of several hundred pages would otherwise keep one full-size bitmap

@@ -11,7 +11,7 @@
   "library.error": "Не удалось загрузить библиотеку. Проверьте подключение.",
   "library.retry": "Повторить",
   "library.progress": "{progress}% прочитано",
-  "library.searchPlaceholder": "Поиск по названию или автору…",
+  "library.searchPlaceholder": "Поиск по названию, автору или издательству…",
   "library.filterAll": "Все",
   "library.filterToRead": "Хочу прочитать",
   "library.filterReading": "Читаю",

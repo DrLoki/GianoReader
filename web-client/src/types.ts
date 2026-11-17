@@ -4,6 +4,8 @@ export interface BookSummary {
   id: string;
   title: string;
   author: string;
+  /** Absent when unknown. */
+  publisher?: string | null;
   coverUrl: string | null;
   progress: number; // 0–100
   status?: 'to-read' | 'reading' | 'read' | null;

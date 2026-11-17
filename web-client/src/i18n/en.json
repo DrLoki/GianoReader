@@ -11,7 +11,7 @@
   "library.error": "Could not load library. Please check your connection.",
   "library.retry": "Retry",
   "library.progress": "{progress}% read",
-  "library.searchPlaceholder": "Search by title or author…",
+  "library.searchPlaceholder": "Search by title, author or publisher…",
   "library.filterAll": "All",
   "library.filterToRead": "To read",
   "library.filterReading": "Reading",

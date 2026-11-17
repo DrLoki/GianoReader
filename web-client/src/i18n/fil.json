@@ -11,7 +11,7 @@
   "library.error": "Hindi ma-load ang aklatan. Pakisuri ang iyong koneksyon.",
   "library.retry": "Subukang muli",
   "library.progress": "{progress}% nabasa",
-  "library.searchPlaceholder": "Maghanap sa pamagat o may-akda…",
+  "library.searchPlaceholder": "Maghanap sa pamagat, may-akda o tagapaglathala…",
   "library.filterAll": "Lahat",
   "library.filterToRead": "Babasahin",
   "library.filterReading": "Binabasa",

@@ -155,7 +155,8 @@ export async function saveLocalBook(
   author: string,
   coverUrl: string | null,
   toc: TocEntry[],
-  chapters: { chapterIndex: number; paragraphs: any[] }[]
+  chapters: { chapterIndex: number; paragraphs: any[] }[],
+  publisher: string | null = null,
 ): Promise<void> {
   const db = await initDB();
 
@@ -170,6 +171,7 @@ export async function saveLocalBook(
       id,
       title,
       author,
+      ...(publisher ? { publisher } : {}),
       coverUrl,
       progress: 0,
       status: 'to-read',
@@ -595,6 +597,7 @@ export async function parseAndSaveEpub(file: File): Promise<string> {
     const bookId = `local-book-${Date.now()}`;
     const title = meta.title || file.name.replace(/\.epub$/i, '');
     const author = meta.creator || 'Unknown Author';
+    const publisher = (meta.publisher || '').trim() || null;
 
     // Get cover image as Base64 Data URL
     let coverUrl: string | null = null;
@@ -675,7 +678,7 @@ export async function parseAndSaveEpub(file: File): Promise<string> {
     }
 
     // Save parsed book to local DB
-    await saveLocalBook(bookId, title, author, coverUrl, toc, chapters);
+    await saveLocalBook(bookId, title, author, coverUrl, toc, chapters, publisher);
 
     // Keep track of the last opened book ID
     localStorage.setItem('giano-last-opened-book-id', bookId);
@@ -718,6 +721,7 @@ export async function removeOfflineBook(serverBookId: string): Promise<void> {
  * @param serverCoverUrl Relative URL like `/api/books/{id}/cover`.
  * @param toc            TOC entries fetched from the server.
  * @param onProgress     Optional callback: (downloadedChapters, totalChapters).
+ * @param publisher      Book publisher, when known.
  */
 export async function downloadBookForOffline(
   serverBookId: string,
@@ -726,6 +730,7 @@ export async function downloadBookForOffline(
   serverCoverUrl: string | null,
   toc: import('../types').TocEntry[],
   onProgress?: (done: number, total: number) => void,
+  publisher: string | null = null,
 ): Promise<void> {
   const localId = `offline-${serverBookId}`;
 
@@ -778,7 +783,7 @@ export async function downloadBookForOffline(
     throw new Error(`No chapters could be downloaded for book ${serverBookId}`);
   }
 
-  await saveLocalBook(localId, title, author, coverUrl, toc, chapters);
+  await saveLocalBook(localId, title, author, coverUrl, toc, chapters, publisher);
 }
 
 /**

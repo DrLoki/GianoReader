@@ -16,8 +16,139 @@
  * Pure functions, no DOM, filesystem or storage access.
  */
 
+import { normalizeRating } from './library-sync.js';
+
 /** Book metadata read from the file that the user can also edit in the app. */
 export const EDITABLE_META_FIELDS = ['title', 'author', 'publisher', 'pubdate', 'language', 'description'];
+
+/**
+ * Key that identifies a file whatever the spelling of its path.
+ *
+ * The same Windows file can reach the library as `C:\Books\a.epub` (file
+ * dialog) or `C:\Books/a.epub` (older folder scans joined paths with "/"), and
+ * Windows paths are case-insensitive. Separators become "/", repeated
+ * separators collapse (except a leading UNC `//`) and Windows paths are
+ * lowercased. POSIX paths keep their case.
+ * @param {string} path
+ */
+export function pathKey(path) {
+  if (typeof path !== 'string' || !path) return '';
+  const windows = /^[A-Za-z]:[\\/]/.test(path) || path.includes('\\');
+  const key = path.replace(/\\/g, '/').replace(/(?<!^)\/{2,}/g, '/');
+  return windows ? key.toLowerCase() : key;
+}
+
+/** True when two paths point to the same file (see `pathKey`). */
+export function samePath(a, b) {
+  const ka = pathKey(a);
+  return ka !== '' && ka === pathKey(b);
+}
+
+/** True when a path mixes "/" and "\" separators. */
+function hasMixedSeparators(path) {
+  return path.includes('/') && path.includes('\\');
+}
+
+const STATUS_RANK = { 'to-read': 1, reading: 2, read: 3 };
+
+/**
+ * Merges library entries that point to the same file (same `pathKey`).
+ *
+ * Kept: the entry added first (its id and place in the list), completed with
+ * what the others know. The most advanced reading status wins, the most
+ * recent rating wins, notes are joined, fields the user edited in any copy are
+ * kept, and file size/time come from the most recent analysis. The path
+ * spelling kept is one without mixed separators when there is one.
+ *
+ * @param {object[]} library
+ * @returns {{ library: object[], merged: Array<{ entry: object, otherPaths: string[], removedIds: string[] }> }}
+ *   `otherPaths`: the other spellings of the path, whose per-book data (the
+ *   translation cache) has to be moved to `entry.filePath`.
+ */
+export function dedupeLibrary(library) {
+  const groups = new Map();
+  const out = [];
+  for (const entry of Array.isArray(library) ? library : []) {
+    const key = entry && pathKey(entry.filePath);
+    if (!key) { out.push(entry); continue; }
+    if (!groups.has(key)) {
+      groups.set(key, [entry]);
+      out.push(key); // placeholder, replaced below
+    } else {
+      groups.get(key).push(entry);
+    }
+  }
+  const merged = [];
+  const result = out.map(item => {
+    if (typeof item !== 'string') return item;
+    const group = groups.get(item);
+    if (group.length === 1) return group[0];
+    const entry = mergeDuplicateEntries(group);
+    const otherPaths = [...new Set(group.map(e => e.filePath))].filter(p => p !== entry.filePath);
+    const removedIds = group.map(e => e.id).filter(id => id !== entry.id);
+    merged.push({ entry, otherPaths, removedIds });
+    return entry;
+  });
+  return { library: result, merged };
+}
+
+function isEmptyValue(v) {
+  return v === undefined || v === null || v === '';
+}
+
+function mergeDuplicateEntries(group) {
+  const sorted = group.slice().sort((a, b) => (Number(a.addedAt) || 0) - (Number(b.addedAt) || 0));
+  const base = sorted[0];
+  const merged = { ...base };
+  const edited = new Set(Array.isArray(base.editedFields) ? base.editedFields : []);
+
+  for (const other of sorted.slice(1)) {
+    // Fields edited by the user in another copy are kept
+    for (const field of Array.isArray(other.editedFields) ? other.editedFields : []) {
+      if (!edited.has(field)) { merged[field] = other[field]; edited.add(field); }
+    }
+    // Whatever the first copy does not know
+    for (const [key, value] of Object.entries(other)) {
+      if (isEmptyValue(merged[key]) && !isEmptyValue(value)) merged[key] = value;
+    }
+  }
+  if (edited.size) merged.editedFields = [...edited];
+
+  // Most advanced reading status
+  const status = group.map(e => e.status).filter(s => STATUS_RANK[s])
+    .sort((a, b) => STATUS_RANK[b] - STATUS_RANK[a])[0];
+  if (status) merged.status = status;
+
+  // Most recent rating (a rating cleared later counts too)
+  const rated = group.slice().sort((a, b) => (Number(b.ratingUpdatedAt) || 0) - (Number(a.ratingUpdatedAt) || 0));
+  const newest = rated[0];
+  if (Number(newest.ratingUpdatedAt) > 0) {
+    merged.rating = normalizeRating(newest.rating);
+    merged.ratingUpdatedAt = Number(newest.ratingUpdatedAt);
+  } else {
+    const any = group.map(e => normalizeRating(e.rating)).find(r => r !== null);
+    if (any) merged.rating = any;
+  }
+
+  // Notes of every copy
+  const notes = [...new Set(group.map(e => (e.notes || '').trim()).filter(Boolean))];
+  if (notes.length) merged.notes = notes.join('\n\n');
+
+  // File size and time from the most recent analysis
+  const analysed = group.filter(e => e.fileMtime != null)
+    .sort((a, b) => Number(b.fileMtime) - Number(a.fileMtime))[0];
+  if (analysed) {
+    merged.fileSize = analysed.fileSize;
+    merged.fileMtime = analysed.fileMtime;
+  }
+
+  // Path spelling: prefer one with consistent separators
+  if (hasMixedSeparators(merged.filePath || '')) {
+    const clean = sorted.find(e => e.filePath && !hasMixedSeparators(e.filePath));
+    if (clean) merged.filePath = clean.filePath;
+  }
+  return merged;
+}
 
 /**
  * Size and modification time of a file, from a `stat()` result.
@@ -61,16 +192,19 @@ export function hasFileChanged(entry, fingerprint) {
  * }}
  */
 export function planScan(library, files) {
+  // Paths are compared by `pathKey`: the same file spelled with other
+  // separators or another case is not a new book
   const byPath = new Map();
   for (const entry of library) {
-    if (entry && entry.filePath) byPath.set(entry.filePath, entry);
+    if (entry && entry.filePath && !byPath.has(pathKey(entry.filePath))) byPath.set(pathKey(entry.filePath), entry);
   }
   const plan = { added: [], changed: [], unchanged: [] };
   const seen = new Set();
   for (const file of files) {
-    if (seen.has(file.path)) continue; // same file reached twice (links)
-    seen.add(file.path);
-    const entry = byPath.get(file.path);
+    const key = pathKey(file.path);
+    if (seen.has(key)) continue; // same file reached twice (links)
+    seen.add(key);
+    const entry = byPath.get(key);
     if (!entry) plan.added.push(file);
     else if (hasFileChanged(entry, file.fingerprint)) plan.changed.push({ entry, ...file });
     else plan.unchanged.push({ entry, ...file });

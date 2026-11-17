@@ -30,8 +30,16 @@ fn library_json_mtime(library_path: &Path) -> Option<SystemTime> {
     file_mtime(&library_path.parent().unwrap_or(library_path).join("giano-reader-library.json"))
 }
 
-/// path → (mtime, EPUB title, EPUB creator).
-type MetaEntry = (Option<SystemTime>, Option<String>, Option<String>);
+/// Metadata read from the EPUB file itself.
+#[derive(Clone, Default)]
+struct EpubMeta {
+    title: Option<String>,
+    author: Option<String>,
+    publisher: Option<String>,
+}
+
+/// path → (mtime, EPUB metadata).
+type MetaEntry = (Option<SystemTime>, EpubMeta);
 fn meta_cache() -> &'static Mutex<HashMap<PathBuf, MetaEntry>> {
     static C: OnceLock<Mutex<HashMap<PathBuf, MetaEntry>>> = OnceLock::new();
     C.get_or_init(|| Mutex::new(HashMap::new()))
@@ -49,24 +57,27 @@ fn file_mtime(path: &Path) -> Option<SystemTime> {
     fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
-/// Returns (title, creator) from the EPUB metadata, using the cache when the
-/// file has not changed. Returns `None` if the file cannot be opened.
-fn epub_metadata(path: &Path) -> Option<(Option<String>, Option<String>)> {
+/// Returns title, creator and publisher from the EPUB metadata, using the
+/// cache when the file has not changed. Returns `None` if the file cannot be opened.
+fn epub_metadata(path: &Path) -> Option<EpubMeta> {
     let mtime = file_mtime(path);
     if let Ok(cache) = meta_cache().lock() {
-        if let Some((cached_mtime, title, author)) = cache.get(path) {
+        if let Some((cached_mtime, meta)) = cache.get(path) {
             if *cached_mtime == mtime {
-                return Some((title.clone(), author.clone()));
+                return Some(meta.clone());
             }
         }
     }
     let doc = EpubDoc::new(path).ok()?;
-    let title = doc.get_title();
-    let author = doc.mdata("creator").map(|item| item.value.clone());
+    let meta = EpubMeta {
+        title: doc.get_title(),
+        author: doc.mdata("creator").map(|item| item.value.clone()),
+        publisher: doc.mdata("publisher").map(|item| item.value.clone()),
+    };
     if let Ok(mut cache) = meta_cache().lock() {
-        cache.insert(path.to_path_buf(), (mtime, title.clone(), author.clone()));
+        cache.insert(path.to_path_buf(), (mtime, meta.clone()));
     }
-    Some((title, author))
+    Some(meta)
 }
 
 /// Scans `library_path` for `.epub` files and returns a summary for each one.
@@ -104,14 +115,7 @@ pub fn list_books(library_path: &Path, store: &PersistenceStore) -> Vec<BookSumm
                         if !path.exists() {
                             continue;
                         }
-                        if let Some(book) = book_summary_from_path(
-                            &path,
-                            store,
-                            entry.status.clone(),
-                            entry.rating,
-                            entry.title.clone(),
-                            entry.author.clone(),
-                        ) {
+                        if let Some(book) = book_summary_from_path(&path, store, Some(entry)) {
                             books.push(book);
                         }
                     }
@@ -144,6 +148,8 @@ struct LibraryEntry {
     #[serde(default)]
     author: Option<String>,
     #[serde(default)]
+    publisher: Option<String>,
+    #[serde(default)]
     status: Option<String>,
     /// Invalid values (0, 7, "4", …) are ignored rather than failing the parse.
     #[serde(default, deserialize_with = "super::library_rating::deserialize_rating")]
@@ -152,27 +158,28 @@ struct LibraryEntry {
 
 /// Creates a BookSummary from an epub file path.
 ///
-/// `title_override` and `author_override` come from the desktop library JSON
-/// (user-editable). When present and non-empty, they take precedence over the
-/// metadata parsed from the EPUB file itself.
+/// `entry` is the book's record in the desktop library JSON, when there is one.
+/// Its title, author and publisher are user-editable: when present and
+/// non-empty, they take precedence over the metadata parsed from the EPUB file.
 fn book_summary_from_path(
     path: &Path,
     store: &PersistenceStore,
-    status: Option<String>,
-    rating: Option<u8>,
-    title_override: Option<String>,
-    author_override: Option<String>,
+    entry: Option<&LibraryEntry>,
 ) -> Option<BookSummary> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let id = generate_book_id(&canonical);
 
     // Skip unreadable files (metadata comes from the cache when possible)
-    let (epub_title, epub_author) = epub_metadata(path)?;
+    let meta = epub_metadata(path)?;
+    let edited = |field: fn(&LibraryEntry) -> &Option<String>| {
+        entry
+            .and_then(|e| field(e).clone())
+            .filter(|v| !v.trim().is_empty())
+    };
 
     // Prefer the user-edited title from the desktop library, fall back to EPUB metadata.
-    let title = title_override
-        .filter(|t| !t.trim().is_empty())
-        .or(epub_title)
+    let title = edited(|e| &e.title)
+        .or(meta.title)
         .unwrap_or_else(|| {
             path.file_stem()
                 .and_then(|s| s.to_str())
@@ -181,10 +188,13 @@ fn book_summary_from_path(
         });
 
     // Prefer the user-edited author from the desktop library, fall back to EPUB metadata.
-    let author = author_override
-        .filter(|a| !a.trim().is_empty())
-        .or(epub_author)
+    let author = edited(|e| &e.author)
+        .or(meta.author)
         .unwrap_or_else(|| "Unknown".to_string());
+
+    let publisher = edited(|e| &e.publisher)
+        .or(meta.publisher)
+        .filter(|p| !p.trim().is_empty());
 
     let cover_url = Some(format!("/api/books/{}/cover", id));
 
@@ -197,10 +207,11 @@ fn book_summary_from_path(
         id,
         title,
         author,
+        publisher,
         cover_url,
         progress,
-        status,
-        rating,
+        status: entry.and_then(|e| e.status.clone()),
+        rating: entry.and_then(|e| e.rating),
     })
 }
 
@@ -233,7 +244,7 @@ fn list_books_from_directory(library_path: &Path, store: &PersistenceStore) -> V
             _ => continue,
         }
 
-        if let Some(book) = book_summary_from_path(&path, store, None, None, None, None) {
+        if let Some(book) = book_summary_from_path(&path, store, None) {
             books.push(book);
         }
     }
@@ -278,7 +289,7 @@ pub fn find_epub_by_id(library_path: &Path, book_id: &str) -> Option<PathBuf> {
 pub fn book_file_info(library_path: &Path, book_id: &str) -> Option<(PathBuf, String)> {
     let path = find_epub_by_id(library_path, book_id)?;
     let title = epub_metadata(&path)
-        .and_then(|(title, _)| title)
+        .and_then(|meta| meta.title)
         .filter(|t| !t.trim().is_empty())
         .unwrap_or_else(|| {
             path.file_stem()
@@ -1684,6 +1695,39 @@ mod tests {
         // Unknown book: no thumbnail, and no EPUB to fall back to
         assert!(get_cover(&library, "0000000000000000").is_none());
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_books_reports_the_publisher() {
+        let dir = std::env::temp_dir().join(format!("giano-test-pub-{}", uuid::Uuid::new_v4()));
+        let library = dir.join("library");
+        fs::create_dir_all(&library).unwrap();
+        // Fake files: their EPUB metadata is put straight into the cache
+        let edited = dir.join("edited.epub");
+        let from_epub = dir.join("from-epub.epub");
+        let unknown = dir.join("unknown.epub");
+        for (path, publisher) in [(&edited, "EPUB Pub"), (&from_epub, "EPUB Pub"), (&unknown, " ")] {
+            fs::write(path, b"x").unwrap();
+            let meta = EpubMeta { title: Some("T".into()), author: None, publisher: Some(publisher.into()) };
+            meta_cache().lock().unwrap().insert(path.clone(), (file_mtime(path), meta));
+        }
+        let entries = serde_json::json!([
+            { "filePath": edited.to_string_lossy(), "publisher": "Edited Pub" },
+            { "filePath": from_epub.to_string_lossy(), "publisher": "" },
+            { "filePath": unknown.to_string_lossy() },
+        ]);
+        fs::write(dir.join("giano-reader-library.json"), entries.to_string()).unwrap();
+        let store = PersistenceStore::open(dir.join("db")).unwrap();
+
+        let books = list_books(&library, &store);
+        let publishers: Vec<Option<&str>> = books.iter().map(|b| b.publisher.as_deref()).collect();
+        assert_eq!(publishers, vec![Some("Edited Pub"), Some("EPUB Pub"), None]);
+        // Omitted from the JSON when unknown
+        let json = serde_json::to_value(&books[2]).unwrap();
+        assert!(json.get("publisher").is_none());
+
+        drop(store);
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fileFingerprint, hasFileChanged, planScan, markEditedFields, mergeReanalysis,
+  pathKey, samePath, dedupeLibrary,
 } from './library-scan.js';
 
 const fp = (size, mtime = null) => ({ size, mtime });
@@ -121,5 +122,81 @@ describe('mergeReanalysis', () => {
     const failed = { title: 'x', author: '', fileSize: 0, pageCount: 0, coverDataUrl: null };
     const merged = mergeReanalysis({ ...oldEntry, editedFields: [] }, failed, fp(120, 2));
     expect(merged).toMatchObject({ coverDataUrl: 'data:old', pageCount: 50, author: 'Old author', fileSize: 120 });
+  });
+});
+
+describe('pathKey / samePath', () => {
+  it('treats Windows paths with mixed separators or another case as the same file', () => {
+    expect(samePath('C:\\Books\\Saga/Vol 1.epub', 'C:\\Books\\Saga\\Vol 1.epub')).toBe(true);
+    expect(samePath('c:/books/saga/vol 1.epub', 'C:\\Books\\Saga\\Vol 1.epub')).toBe(true);
+    expect(samePath('C:\\Books\\\\Saga\\Vol 1.epub', 'C:\\Books\\Saga\\Vol 1.epub')).toBe(true);
+    expect(samePath('C:\\Books\\Vol 1.epub', 'C:\\Books\\Vol 2.epub')).toBe(false);
+  });
+
+  it('keeps the case of POSIX paths and the leading // of UNC paths', () => {
+    expect(samePath('/home/a/Book.epub', '/home/a/book.epub')).toBe(false);
+    expect(samePath('/home/a//Book.epub', '/home/a/Book.epub')).toBe(true);
+    expect(pathKey('\\\\server\\share\\a.epub')).toBe('//server/share/a.epub');
+  });
+
+  it('never matches empty paths', () => {
+    expect(pathKey('')).toBe('');
+    expect(samePath('', '')).toBe(false);
+    expect(samePath(undefined, null)).toBe(false);
+  });
+});
+
+describe('planScan with differently spelled paths', () => {
+  it('does not add again a book indexed with another spelling of its path', () => {
+    const lib = [{ id: '1', filePath: 'C:\\Books\\Saga/a.epub', fileSize: 10, fileMtime: 5 }];
+    const plan = planScan(lib, [{ path: 'C:\\Books\\Saga\\a.epub', fingerprint: fp(10, 5) }]);
+    expect(plan.added).toEqual([]);
+    expect(plan.unchanged.map(f => f.entry.id)).toEqual(['1']);
+  });
+
+  it('analyses a file found twice under two spellings only once', () => {
+    const plan = planScan([], [
+      { path: 'C:\\B\\a.epub', fingerprint: fp(1) },
+      { path: 'C:\\B/a.epub', fingerprint: fp(1) },
+    ]);
+    expect(plan.added.length).toBe(1);
+  });
+});
+
+describe('dedupeLibrary', () => {
+  it('leaves a library without duplicates unchanged', () => {
+    const lib = [{ id: 'a', filePath: 'C:\\x.epub' }, { id: 'b', filePath: 'C:\\y.epub' }, { id: 'c' }];
+    const { library, merged } = dedupeLibrary(lib);
+    expect(library).toEqual(lib);
+    expect(merged).toEqual([]);
+  });
+
+  it('merges the copies of one file into the first added, in its place', () => {
+    const lib = [
+      { id: 'other', filePath: 'C:\\o.epub', addedAt: 0 },
+      { id: 'old', filePath: 'C:\\S/a.epub', addedAt: 100, status: 'reading', notes: 'mine',
+        title: 'A', coverDataUrl: null, rating: 3, ratingUpdatedAt: 10 },
+      { id: 'new', filePath: 'C:\\S\\a.epub', addedAt: 200, status: 'to-read', notes: 'mine',
+        title: 'A edited', editedFields: ['title'], coverDataUrl: 'data:c', fileSize: 9, fileMtime: 50,
+        rating: 5, ratingUpdatedAt: 20 },
+    ];
+    const { library, merged } = dedupeLibrary(lib);
+    expect(library.map(e => e.id)).toEqual(['other', 'old']);
+    expect(library[1]).toMatchObject({
+      id: 'old', addedAt: 100,
+      filePath: 'C:\\S\\a.epub', // spelling without mixed separators
+      status: 'reading', notes: 'mine', title: 'A edited', editedFields: ['title'],
+      coverDataUrl: 'data:c', fileSize: 9, fileMtime: 50, rating: 5, ratingUpdatedAt: 20,
+    });
+    expect(merged).toEqual([{ entry: library[1], otherPaths: ['C:\\S/a.epub'], removedIds: ['new'] }]);
+  });
+
+  it('keeps the most advanced status, a rating cleared later and both notes', () => {
+    const { library } = dedupeLibrary([
+      { id: '1', filePath: 'C:\\a.epub', addedAt: 1, status: 'read', notes: 'one', rating: 4, ratingUpdatedAt: 5 },
+      { id: '2', filePath: 'c:/A.epub', addedAt: 2, status: 'reading', notes: 'two', rating: null, ratingUpdatedAt: 9 },
+    ]);
+    expect(library).toHaveLength(1);
+    expect(library[0]).toMatchObject({ id: '1', status: 'read', notes: 'one\n\ntwo', rating: null, ratingUpdatedAt: 9 });
   });
 });
