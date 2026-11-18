@@ -59,7 +59,7 @@ Once the book is loaded:
 
 - The title and author will appear at the top of the sidebar.
 - The table of contents (TOC) is populated automatically.
-- The first chapter containing actual text will be displayed.
+- The first chapter containing actual text will be displayed. If you have read the book before, it reopens where you left off instead: the reading position is saved automatically when you open another book or close the app.
 - The book is added automatically to the Library (desktop app only).
 
 > **Browser Note:** In the web browser, the native dialog is not available. A standard `<input type="file">` is used instead. Library management and automatic bookmark reopening require the desktop app.
