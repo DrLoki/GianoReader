@@ -14,7 +14,7 @@ import { filterLibrary, sortLibrary, normalizeLibrarySort } from './library-view
 import { BookTranslationCache, textKey, variantKey, parseVariant, mergeCacheData } from './translation-cache.js';
 import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from './book-export.js';
 import { observeChunksLazily } from './lazy-chunks.js';
-import { alignByParagraph } from './paragraph-align.js';
+import { alignByParagraph, syncByParagraph, paragraphOffset } from './paragraph-align.js';
 import { getReadingPosition, setReadingPosition, samePosition, resolveRestoreTarget } from './reading-positions.js';
 import JSZip from 'jszip';
 
@@ -40,6 +40,7 @@ let chapterCumulativePct = [];      // cumulative % position of each chapter (0â
 let syncingScroll = false;          // lock to avoid loops in synchronized scrolling
 let syncScrollEnabled = true;       // sync scroll on/off (user toggle, default on)
 let syncOffsetPct = 0;              // offset (percentage delta) kept between the two panels
+let syncOffsetPx = 0;               // text view: offset (px) of the right panel from the paragraph-aligned position
 let translationAbortController = null;
 let lazyObserver = null;            // IntersectionObserver for lazy translation
 let currentFilePath = null;         // absolute path of the open file (Tauri only)
@@ -2821,8 +2822,9 @@ function makeScrollable(kind) {
 // abruptly realigning the percentages (allows manual realignment).
 function recomputeSyncOffset() {
   const { left, right } = getSyncPair();
-  if (!left || !right) { syncOffsetPct = 0; return; }
+  if (!left || !right) { syncOffsetPct = 0; syncOffsetPx = 0; return; }
   syncOffsetPct = right.getPct() - left.getPct();
+  syncOffsetPx = currentViewMode === 'text' ? paragraphOffset(left.el, right.el) : 0;
 }
 
 // Determines the pair of scrollable panels based on mode/file type.
@@ -2868,12 +2870,19 @@ function bindSyncScroll() {
     syncingScroll = true;
     const sp = source.getPct();
     if (SCROLL_DEBUG()) logScrollSync(isLeftSource, left, right);
-    // offset is defined as right - left; if the source is the right panel
-    // (right) the offset must be subtracted, if it is the left one it must be added.
-    const targetPct = isLeftSource
-      ? computeSyncedPct(sp, syncOffsetPct)
-      : computeSyncedPct(sp, -syncOffsetPct);
-    target.setPct(targetPct);
+    // Text view: follow the paragraphs (same data-idx at the top of both
+    // panels, plus the manual offset in px), so the panels do not drift when
+    // the translation is longer/shorter than the original.
+    const byParagraph = currentViewMode === 'text'
+      && syncByParagraph(source.el, target.el, syncOffsetPx, isLeftSource);
+    if (!byParagraph) {
+      // offset is defined as right - left; if the source is the right panel
+      // (right) the offset must be subtracted, if it is the left one it must be added.
+      const targetPct = isLeftSource
+        ? computeSyncedPct(sp, syncOffsetPct)
+        : computeSyncedPct(sp, -syncOffsetPct);
+      target.setPct(targetPct);
+    }
     updateProgress();
 
     if (syncTimeout) clearTimeout(syncTimeout);
@@ -2897,6 +2906,7 @@ function setViewMode(mode, { skipRender = false } = {}) {
   const isOriginal = mode === 'original';
   // New view â†’ start over with alignment without offset
   syncOffsetPct = 0;
+  syncOffsetPx = 0;
 
   // Shows/hides the containers
   originalViewer.classList.toggle('hidden', isOriginal);
@@ -3114,6 +3124,7 @@ if (translationStatus) {
   translationStatus.title = ui('resyncHint');
   translationStatus.addEventListener('dblclick', () => {
     syncOffsetPct = 0;
+    syncOffsetPx = 0;
     const { left, right } = getSyncPair();
     if (left && right) {
       syncingScroll = true;
