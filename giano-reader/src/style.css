@@ -894,6 +894,17 @@ body.theme-sepia {
   color: var(--text-muted);
   margin-top: 2px;
 }
+/* Monthly BASIC usage (settings → BASIC) */
+.basic-usage-bar {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--border);
+}
+#basic-usage-fill {
+  height: 100%; width: 0; background: var(--accent);
+  transition: width 0.3s;
+}
+#basic-usage-fill.over { background: #e74c3c; }
+
 /* EPUB links have no href (data-epub-href), so the browser would show the text cursor */
 .text-panel a[data-epub-href] { cursor: pointer; }
 

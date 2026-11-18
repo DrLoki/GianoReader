@@ -8,6 +8,7 @@
 
 import { FREE_BYTE_LIMIT, utf8Length, splitByByteLimit } from './text-limits.js';
 import { segmentMarker, buildNumberedBatch, parseNumberedBatch, stripSegmentMarkers } from './pro-segments.js';
+import { recordBasicUsage, billedChars } from './basic-usage.js';
 
 function loadSettings() {
   try {
@@ -228,6 +229,9 @@ async function translateChunkBasic(paragraphs, targetLang, apiKey, signal) {
     if (res.status === 429) message = `Google Cloud Translation quota exceeded: ${message}`;
     throw new Error(message);
   }
+
+  // Google bills the request once accepted: count it toward the monthly usage
+  recordBasicUsage(billedChars(paragraphs)).catch(() => {});
 
   const data = await res.json();
   const translations = (data.data && data.data.translations) || [];

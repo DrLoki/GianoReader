@@ -15,6 +15,7 @@ import { BookTranslationCache, textKey, variantKey, parseVariant, mergeCacheData
 import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from './book-export.js';
 import { observeChunksLazily } from './lazy-chunks.js';
 import { alignByParagraph, syncByParagraph, paragraphOffset } from './paragraph-align.js';
+import { getBasicUsage, usageSummary } from './basic-usage.js';
 import { getReadingPosition, setReadingPosition, samePosition, resolveRestoreTarget } from './reading-positions.js';
 import JSZip from 'jszip';
 
@@ -967,6 +968,11 @@ function applyUiLang(lang) {
   // Google Cloud labels
   const _gcApiKeyLabel = document.getElementById('gcloud-api-key-label');
   if (_gcApiKeyLabel) _gcApiKeyLabel.textContent = t(lang, 'gcloudApiKey');
+  const _basicUsageLabel = document.getElementById('basic-usage-label');
+  if (_basicUsageLabel) _basicUsageLabel.textContent = t(lang, 'basicUsageLabel');
+  const _basicUsageNote = document.getElementById('basic-usage-note');
+  if (_basicUsageNote) _basicUsageNote.textContent = t(lang, 'basicUsageNote');
+  refreshBasicUsage();
   // Cloudflare subdomain label
   const _cfLabel = document.getElementById('cloudflare-subdomain-label');
   if (_cfLabel) _cfLabel.textContent = t(lang, 'cloudflareWorkerSubdomain');
@@ -1928,7 +1934,26 @@ if (translationModeSelect) {
   });
 }
 
-settingsBtn.addEventListener('click', () => { updateWebServerBasicHint(); settingsModal.classList.remove('hidden'); });
+// Monthly BASIC usage shown in the BASIC settings tab (count kept by the app,
+// see basic-usage.js). Refreshed when settings or that tab are opened.
+async function refreshBasicUsage() {
+  const textEl = document.getElementById('basic-usage-text');
+  const fillEl = document.getElementById('basic-usage-fill');
+  if (!textEl || !fillEl) return;
+  const usage = await getBasicUsage();
+  const sum = usageSummary(usage.chars);
+  const lang = loadSettings().uiLang || 'en';
+  const fmt = n => n.toLocaleString(lang);
+  textEl.textContent = t(lang, 'basicUsageText', {
+    used: fmt(sum.used),
+    free: fmt(sum.freeChars),
+    pct: sum.pct.toLocaleString(lang, { maximumFractionDigits: 1 }),
+  });
+  fillEl.style.width = `${Math.min(100, sum.pct)}%`;
+  fillEl.classList.toggle('over', sum.over);
+}
+
+settingsBtn.addEventListener('click', () => { updateWebServerBasicHint(); refreshBasicUsage(); settingsModal.classList.remove('hidden'); });
 settingsCloseBtn.addEventListener('click', () => { settingsModal.classList.add('hidden'); updateTranslationModeSelect(); });
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); updateTranslationModeSelect(); } });
 
@@ -1944,6 +1969,7 @@ settingsModal.addEventListener('click', e => { if (e.target === settingsModal) {
       tab.setAttribute('aria-selected', 'true');
       const panel = document.getElementById(tab.getAttribute('aria-controls'));
       if (panel) { panel.classList.add('active'); panel.hidden = false; }
+      if (tab.id === 'settings-tab-basic') refreshBasicUsage();
     });
   });
 })();

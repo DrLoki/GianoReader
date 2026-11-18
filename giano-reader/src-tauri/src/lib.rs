@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use sysinfo::System;
 use tauri::Manager;
 
+mod basic_usage;
 mod pdf_layout;
 mod web_server;
 
@@ -113,6 +114,19 @@ fn set_web_server_secrets(
     web_server::handlers::prefs::set_secrets(&app_state.store, password, gcloud_api_key)
 }
 
+/// Characters translated with BASIC (Google Cloud) in the current month,
+/// desktop and web server together.
+#[tauri::command]
+fn get_basic_usage() -> basic_usage::BasicUsage {
+    basic_usage::get()
+}
+
+/// Adds the characters of a BASIC request made by the desktop frontend.
+#[tauri::command]
+fn record_basic_usage(chars: u64) -> basic_usage::BasicUsage {
+    basic_usage::record(chars)
+}
+
 /// Validates a URL before handing it to the OS: only absolute http(s) URLs with
 /// a host are accepted, and the normalised (percent-encoded) form is returned.
 /// The URL can come from links inside an untrusted EPUB.
@@ -175,6 +189,8 @@ pub fn run() {
             stop_web_server,
             get_server_status,
             set_web_server_secrets,
+            get_basic_usage,
+            record_basic_usage,
             open_browser_url
         ])
         .setup(|app| {
@@ -196,6 +212,8 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir).map_err(|e| {
                 Box::new(e) as Box<dyn std::error::Error>
             })?;
+
+            basic_usage::init(app_data_dir.clone());
 
             let library_path = app_data_dir.join("library");
             std::fs::create_dir_all(&library_path).map_err(|e| {

@@ -166,6 +166,9 @@ export const translations = {
     settingsTabWebServer: 'Web Server',
     gcloudProjectId: 'Google Cloud Project ID',
     gcloudApiKey: 'Google Cloud API Key',
+    basicUsageLabel: 'Usage this month',
+    basicUsageText: '{used} of {free} free characters ({pct}%)',
+    basicUsageNote: 'Counted by Giano Reader (desktop and web server). Characters translated with the same key elsewhere are not included; check the Google Cloud console for the billed figure.',
     gcloudModel: 'Translation Model',
     gcloudModelNmt: 'NMT (Standard)',
     gcloudModelTllm: 'Translation LLM (Literary)',
@@ -426,6 +429,9 @@ export const translations = {
     detailTranslationNone: '翻译：没有保存',
     libScanAnalysing: '正在分析 {n} 个（共 {total} 个）...',
     libScanSummary: '扫描完成：{added}已添加，{updated}已更新，{unchanged}未更改。',
+    basicUsageLabel: '本月使用情况',
+    basicUsageText: '{used} 个，共 {free} 个免费字符 ({pct}%)',
+    basicUsageNote: '由 Giano Reader（桌面和 Web 服务器）计数。不包括在其他地方用相同键翻译的字符；检查 Google Cloud 控制台中的账单金额。',
   },
   hi: {
     viewToggle: 'मूल दृश्य बदलें',
@@ -639,6 +645,9 @@ export const translations = {
     detailTranslationNone: 'अनुवाद: कोई भी सहेजा नहीं गया',
     libScanAnalysing: '{n} में से {total} का विश्लेषण...',
     libScanSummary: 'स्कैन पूरा हुआ: {added} जोड़ा गया, {updated} अपडेट किया गया, {unchanged} अपरिवर्तित।',
+    basicUsageLabel: 'इस माह उपयोग',
+    basicUsageText: '{free} निःशुल्क वर्णों का {used} ({pct}%)',
+    basicUsageNote: 'जियानो रीडर (डेस्कटॉप और वेब सर्वर) द्वारा गिना गया। अन्यत्र समान कुंजी से अनुवादित वर्ण शामिल नहीं हैं; बिल किए गए आंकड़े के लिए Google क्लाउड कंसोल की जाँच करें।',
   },
   es: {
     viewToggle: 'Alternar vista original',
@@ -852,6 +861,9 @@ export const translations = {
     detailTranslationNone: 'Traducción: ninguno salvo',
     libScanAnalysing: 'Analizando {n} de {total}…',
     libScanSummary: 'Escaneo completo: {added} agregado, {updated} actualizado, {unchanged} sin cambios.',
+    basicUsageLabel: 'Uso este mes',
+    basicUsageText: '{used} de {free} caracteres gratuitos ({pct}%)',
+    basicUsageNote: 'Contado por Giano Reader (escritorio y servidor web). No se incluyen los caracteres traducidos con la misma clave en otros lugares; Consulta en la consola de Google Cloud la cifra facturada.',
   },
   fr: {
     viewToggle: 'Afficher vue originale',
@@ -1066,6 +1078,9 @@ export const translations = {
     detailTranslationNone: 'Traduction: aucun enregistré',
     libScanAnalysing: 'Analyse de {n} sur {total}…',
     libScanSummary: 'Analyse terminée : {added} ajouté, {updated} mis à jour, {unchanged} inchangé.',
+    basicUsageLabel: 'Utilisation ce mois-ci',
+    basicUsageText: '{used} sur {free} caractères gratuits ({pct} %)',
+    basicUsageNote: 'Compté par Giano Reader (ordinateur de bureau et serveur Web). Les caractères traduits avec la même clé ailleurs ne sont pas inclus ; consultez la console Google Cloud pour connaître le montant facturé.',
   },
   bn: {
     viewToggle: 'মূল দৃশ্য পরিবর্তন করুন',
@@ -1279,6 +1294,9 @@ export const translations = {
     detailTranslationNone: 'অনুবাদ: কেউ সংরক্ষিত হয়নি',
     libScanAnalysing: '{total} এর মধ্যে {n}টি বিশ্লেষণ করা হচ্ছে…',
     libScanSummary: 'স্ক্যান সম্পূর্ণ: {added} যোগ করা হয়েছে, {updated} আপডেট করা হয়েছে, {unchanged} অপরিবর্তিত।',
+    basicUsageLabel: 'এই মাসে ব্যবহার',
+    basicUsageText: '{free} বিনামূল্যের অক্ষরের {used} ({pct}%)',
+    basicUsageNote: 'গিয়ানো রিডার (ডেস্কটপ এবং ওয়েব সার্ভার) দ্বারা গণনা করা হয়েছে। অন্য কোথাও একই কী দিয়ে অনুবাদ করা অক্ষর অন্তর্ভুক্ত নয়; বিল করা চিত্রের জন্য Google ক্লাউড কনসোল পরীক্ষা করুন।',
   },
   pt: {
     viewToggle: 'Alternar vista original',
@@ -1492,6 +1510,9 @@ export const translations = {
     detailTranslationNone: 'Tradução: nenhum salvo',
     libScanAnalysing: 'Analisando {n} de {total}…',
     libScanSummary: 'Verificação concluída: adicionado {added}, {updated} atualizado, {unchanged} inalterado.',
+    basicUsageLabel: 'Uso este mês',
+    basicUsageText: '{used} de {free} caracteres gratuitos ({pct}%)',
+    basicUsageNote: 'Contado por Giano Reader (desktop e servidor web). Os caracteres traduzidos com a mesma chave noutros locais não estão incluídos; verifique a consola do Google Cloud para obter o valor faturado.',
   },
   'pt-BR': {
     viewToggle: 'Alternar visualização original',
@@ -1705,6 +1726,9 @@ export const translations = {
     detailTranslationNone: 'Tradução: nenhum salvo',
     libScanAnalysing: 'Analisando {n} de {total}…',
     libScanSummary: 'Verificação concluída: {added} adicionado, {updated} atualizado, {unchanged} inalterado.',
+    basicUsageLabel: 'Uso este mês',
+    basicUsageText: '{used} de {free} caracteres gratuitos ({pct}%)',
+    basicUsageNote: 'Contado por Giano Reader (desktop e servidor web). Os caracteres traduzidos com a mesma chave em outros lugares não estão incluídos; verifique o console do Google Cloud para obter o valor faturado.',
   },
   ru: {
     viewToggle: 'Переключить оригинальный вид',
@@ -1918,6 +1942,9 @@ export const translations = {
     detailTranslationNone: 'Перевод: ничего не сохранилось',
     libScanAnalysing: 'Анализ {n} из {total}…',
     libScanSummary: 'Сканирование завершено: {added} добавлено, {updated} обновлено, {unchanged} без изменений.',
+    basicUsageLabel: 'Использование в этом месяце',
+    basicUsageText: '{used} из {free} бесплатных символов ({pct}%)',
+    basicUsageNote: 'Подсчитывается Giano Reader (настольный компьютер и веб-сервер). Символы, переведенные тем же ключом в другом месте, не включаются; проверьте консоль Google Cloud на наличие выставленного счета.',
   },
   ja: {
     viewToggle: '元の表示に切り替え',
@@ -2131,6 +2158,9 @@ export const translations = {
     detailTranslationNone: '翻訳: 何も保存されていません',
     libScanAnalysing: '{total} 個中 {n} 個を分析中…',
     libScanSummary: 'スキャン完了: {added} 追加、{updated} 更新、{unchanged} 変更なし。',
+    basicUsageLabel: '今月の利用状況',
+    basicUsageText: '{free} 個のフリー文字のうち {used} 個 ({pct}%)',
+    basicUsageNote: 'Giano Reader (デスクトップおよび Web サーバー) によってカウントされます。他の場所で同じキーで変換された文字は含まれません。請求額については、Google Cloud コンソールを確認してください。',
   },
   id: {
     viewToggle: 'Alihkan tampilan asli',
@@ -2344,6 +2374,9 @@ export const translations = {
     detailTranslationNone: 'Terjemahan: tidak ada yang disimpan',
     libScanAnalysing: 'Menganalisis {n} dari {total}…',
     libScanSummary: 'Pemindaian selesai: {added} ditambahkan, {updated} diperbarui, {unchanged} tidak diubah.',
+    basicUsageLabel: 'Penggunaan bulan ini',
+    basicUsageText: '{used} dari {free} karakter gratis ({pct}%)',
+    basicUsageNote: 'Dihitung oleh Giano Reader (desktop dan server web). Karakter yang diterjemahkan dengan kunci yang sama di tempat lain tidak disertakan; periksa konsol Google Cloud untuk mengetahui jumlah tagihannya.',
   },
   de: {
     viewToggle: 'Originalansicht umschalten',
@@ -2557,6 +2590,9 @@ export const translations = {
     detailTranslationNone: 'Übersetzung: keine gespeichert',
     libScanAnalysing: 'Analysiere {n} von {total}…',
     libScanSummary: 'Scan abgeschlossen: {added} hinzugefügt, {updated} aktualisiert, {unchanged} unverändert.',
+    basicUsageLabel: 'Nutzung in diesem Monat',
+    basicUsageText: '{used} von {free} freien Zeichen ({pct}%)',
+    basicUsageNote: 'Gezählt von Giano Reader (Desktop und Webserver). Zeichen, die an anderer Stelle mit demselben Schlüssel übersetzt wurden, sind nicht enthalten. Überprüfen Sie die Google Cloud Console auf den in Rechnung gestellten Betrag.',
   },
   ko: {
     viewToggle: '원본 보기 전환',
@@ -2770,6 +2806,9 @@ export const translations = {
     detailTranslationNone: '번역: 저장되지 않음',
     libScanAnalysing: '{total} 중 {n} 분석 중…',
     libScanSummary: '스캔 완료: {added}, {updated} 업데이트, {unchanged} 변경되지 않았습니다.',
+    basicUsageLabel: '이번 달 사용량',
+    basicUsageText: '무료 문자 {free}개 중 {used}개({pct}%)',
+    basicUsageNote: 'Giano Reader(데스크톱 및 웹 서버)로 계산됩니다. 다른 곳에서 동일한 키로 번역된 문자는 포함되지 않습니다. 청구 금액은 Google Cloud 콘솔에서 확인하세요.',
   },
   it: {
     viewToggle: 'Mostra vista originale',
@@ -2985,6 +3024,9 @@ export const translations = {
     updateLater: 'Dopo',
     updateDownloading: 'Download in corso... {pct}%',
     updateError: 'Errore aggiornamento: {error}',
+    basicUsageLabel: 'Utilizzo questo mese',
+    basicUsageText: '{used} di {free} caratteri gratuiti ({pct}%)',
+    basicUsageNote: 'Conteggiato da Giano Reader (desktop e web server). Non sono compresi i caratteri tradotti con la stessa chiave altrove; controlla la cifra fatturata sulla console Google Cloud.',
   },
   th: {
     viewToggle: 'สลับมุมมองต้นฉบับ',
@@ -3198,6 +3240,9 @@ export const translations = {
     detailTranslationNone: 'การแปล: ไม่มีการบันทึก',
     libScanAnalysing: 'กำลังวิเคราะห์ {n} จาก {total}...',
     libScanSummary: 'สแกนเสร็จแล้ว: เพิ่ม {added}, {updated} อัปเดตแล้ว, {unchanged} ไม่เปลี่ยนแปลง',
+    basicUsageLabel: 'การใช้งานเดือนนี้',
+    basicUsageText: '{used} จากอักขระฟรี {free} ตัว ({pct}%)',
+    basicUsageNote: 'นับโดย Giano Reader (เดสก์ท็อปและเว็บเซิร์ฟเวอร์) ไม่รวมอักขระที่แปลด้วยคีย์เดียวกันที่อื่น ตรวจสอบคอนโซล Google Cloud เพื่อดูตัวเลขที่เรียกเก็บเงิน',
   },
   fil: {
     viewToggle: 'I-toggle ang orihinal na view',
@@ -3411,6 +3456,9 @@ export const translations = {
     detailTranslationNone: 'Pagsasalin: walang na-save',
     libScanAnalysing: 'Sinusuri ang {n} ng {total}...',
     libScanSummary: 'Tapos na ang pag-scan: idinagdag ang {added}, na-update ang {updated}, hindi binago ang {unchanged}.',
+    basicUsageLabel: 'Paggamit ngayong buwan',
+    basicUsageText: '{used} ng {free} libreng character ({pct}%)',
+    basicUsageNote: 'Binibilang ng Giano Reader (desktop at web server). Hindi kasama ang mga character na isinalin gamit ang parehong key sa ibang lugar; tingnan ang Google Cloud console para sa sinisingil na numero.',
   },
   ar: {
     viewToggle: 'تبديل العرض الأصلي',
@@ -3624,6 +3672,9 @@ export const translations = {
     detailTranslationNone: 'الترجمة: لم يتم حفظ أي شيء',
     libScanAnalysing: 'جارٍ تحليل {n} من {total}...',
     libScanSummary: 'اكتمل المسح: تمت إضافة {added}، {updated} تم تحديثه، {unchanged} بدون تغيير.',
+    basicUsageLabel: 'الاستخدام هذا الشهر',
+    basicUsageText: '{used} من {free} حرفًا مجانيًا ({pct}%)',
+    basicUsageNote: 'يتم عدها بواسطة Giano Reader (سطح المكتب وخادم الويب). لا يتم تضمين الأحرف المترجمة بنفس المفتاح في مكان آخر؛ تحقق من وحدة تحكم Google Cloud لمعرفة الرقم المفوتر.',
   },
   fa: {
     viewToggle: 'تغییر نمای اصلی',
@@ -3837,6 +3888,9 @@ export const translations = {
     detailTranslationNone: 'ترجمه: هیچ یک ذخیره نشد',
     libScanAnalysing: 'در حال تجزیه و تحلیل {n} از {total}…',
     libScanSummary: 'اسکن کامل شد: {added} اضافه شد، {updated} به روز شد، {unchanged} بدون تغییر.',
+    basicUsageLabel: 'استفاده در این ماه',
+    basicUsageText: '{used} از {free} نویسه رایگان ({pct}%)',
+    basicUsageNote: 'شمارش شده توسط Giano Reader (رومیزی و وب سرور). کاراکترهای ترجمه شده با همان کلید در جاهای دیگر گنجانده نشده است. کنسول Google Cloud را برای رقم صورتحساب بررسی کنید.',
   },
   sq: {
     viewToggle: 'Kalo pamjen origjinale',
@@ -4050,6 +4104,9 @@ export const translations = {
     detailTranslationNone: 'Përkthimi: asnjë nuk u ruajt',
     libScanAnalysing: 'Po analizon {n} nga {total}…',
     libScanSummary: 'Skanimi përfundoi: {added} shtuar, {updated} përditësuar, {unchanged} i pandryshuar.',
+    basicUsageLabel: 'Përdorimi këtë muaj',
+    basicUsageText: '{used} nga {free} karaktere falas ({pct}%)',
+    basicUsageNote: 'Numëruar nga Giano Reader (desktop dhe server në internet). Personazhet e përkthyera me të njëjtin çelës diku tjetër nuk janë përfshirë; kontrolloni tastierën e Google Cloud për shifrën e faturuar.',
   },
   sv: {
     viewToggle: 'Växla originalvy',
@@ -4263,6 +4320,9 @@ export const translations = {
     detailTranslationNone: 'Översättning: ingen sparad',
     libScanAnalysing: 'Analyserar {n} av {total}...',
     libScanSummary: 'Genomsökningen slutförd: {added} tillagd, {updated} uppdaterad, {unchanged} oförändrad.',
+    basicUsageLabel: 'Användning denna månad',
+    basicUsageText: '{used} av {free} gratis tecken ({pct}%)',
+    basicUsageNote: 'Räknat av Giano Reader (skrivbord och webbserver). Tecken som översatts med samma nyckel någon annanstans ingår inte; kolla Google Cloud-konsolen för faktureringsbeloppet.',
   },
   uk: {
     viewToggle: 'Перемкнути оригінальний вигляд',
@@ -4476,6 +4536,9 @@ export const translations = {
     detailTranslationNone: 'Переклад: нічого не збережено',
     libScanAnalysing: 'Аналіз {n} із {total}…',
     libScanSummary: 'Сканування завершено: {added} додано, {updated} оновлено, {unchanged} без змін.',
+    basicUsageLabel: 'Використання цього місяця',
+    basicUsageText: '{used} з {free} вільних символів ({pct}%)',
+    basicUsageNote: 'Підраховано Giano Reader (настільний комп’ютер і веб-сервер). Символи, перекладені з тим самим ключем в іншому місці, не включені; перевірте консоль Google Cloud, щоб дізнатися суму, яку виставили.',
   },
   sl: {
     viewToggle: 'Preklopi izvirni pogled',
@@ -4689,6 +4752,9 @@ export const translations = {
     detailTranslationNone: 'Prevod: nič shranjeno',
     libScanAnalysing: 'Analiziram {n} od {total} …',
     libScanSummary: 'Pregled končan: {added} dodano, {updated} posodobljeno, {unchanged} nespremenjeno.',
+    basicUsageLabel: 'Uporaba ta mesec',
+    basicUsageText: '{used} od {free} prostih znakov ({pct}%)',
+    basicUsageNote: 'Šteje Giano Reader (namizje in spletni strežnik). Znaki, prevedeni z istim ključem drugje, niso vključeni; poiščite zaračunano številko v konzoli Google Cloud.',
   },
   vi: {
     viewToggle: 'Chuyển chế độ xem gốc',
@@ -4900,6 +4966,9 @@ export const translations = {
     detailTranslationNone: 'Bản dịch: không được lưu',
     libScanAnalysing: 'Đang phân tích {n} trong số {total}…',
     libScanSummary: 'Quá trình quét hoàn tất: đã thêm {added}, đã cập nhật {updated}, {unchanged} không thay đổi.',
+    basicUsageLabel: 'Mức sử dụng trong tháng này',
+    basicUsageText: '{used} trong số {free} ký tự miễn phí ({pct}%)',
+    basicUsageNote: 'Được tính bằng Giano Reader (máy tính để bàn và máy chủ web). Các ký tự được dịch có cùng khóa ở nơi khác sẽ không được bao gồm; hãy kiểm tra bảng điều khiển Google Cloud để biết số liệu được thanh toán.',
   },
 };
 

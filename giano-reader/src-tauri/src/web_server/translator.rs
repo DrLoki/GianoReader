@@ -274,6 +274,9 @@ async fn translate_chunk_v2(
         )));
     }
 
+    // Google bills the request once accepted: count it toward the monthly usage.
+    crate::basic_usage::record(crate::basic_usage::billed_chars(&q));
+
     let data: TranslateV2Response = response.json().await.map_err(|e| {
         TranslateError::NetworkFailure(format!(
             "Failed to parse v2 response: {}",
