@@ -14,6 +14,7 @@ import { filterLibrary, sortLibrary, normalizeLibrarySort } from './library-view
 import { BookTranslationCache, textKey, variantKey, parseVariant, mergeCacheData } from './translation-cache.js';
 import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from './book-export.js';
 import { observeChunksLazily } from './lazy-chunks.js';
+import { alignByParagraph } from './paragraph-align.js';
 import { getReadingPosition, setReadingPosition, samePosition, resolveRestoreTarget } from './reading-positions.js';
 import JSZip from 'jszip';
 
@@ -3103,8 +3104,11 @@ if (toggleSyncBtn) {
   });
 }
 
-// Double click on the percentage: automatic realignment → resets the offset and
-// brings both panels to the same percentage (that of the left panel).
+// Double click on the percentage: automatic realignment. In text view the right
+// panel is scrolled to the same paragraph as the left one (same paragraph index,
+// same point inside it), and the resulting offset is kept for the scroll sync.
+// Where there are no matching paragraphs (EPUB iframe, PDF) it falls back to
+// the same percentage.
 if (translationStatus) {
   translationStatus.style.cursor = 'pointer';
   translationStatus.title = ui('resyncHint');
@@ -3113,7 +3117,10 @@ if (translationStatus) {
     const { left, right } = getSyncPair();
     if (left && right) {
       syncingScroll = true;
-      right.setPct(left.getPct());
+      const byParagraph = currentViewMode === 'text'
+        && alignByParagraph(left.el, right.el);
+      if (byParagraph) syncOffsetPct = right.getPct() - left.getPct();
+      else right.setPct(left.getPct());
       updateProgress();
       setTimeout(() => { syncingScroll = false; activeScrollSource = null; }, 60);
     }
