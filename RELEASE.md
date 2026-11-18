@@ -1,11 +1,15 @@
 # 🚀 GianoReader Release v0.10.0
 
-This is a **security and reliability release**. It closes several ways a crafted EPUB could run code inside the desktop app, hardens the LAN web server used by the mobile PWA, and fixes bookmarks created from the phone being lost when the desktop app saves.
+This release brings **full PDF support** to side-by-side translation. The layout engine of PDF X-Ray now runs inside the app: it recognises columns, boxes, tables, headings, footnotes and running heads, puts paragraphs back together across columns and pages, and writes the translation **over the original page**, in the same position and style. It was tested on complex layouts such as multi-column RPG rulebooks.
 
-It also adds **book ratings** (1 to 5 stars, editable from the desktop and from the phone) and **Brazilian Portuguese** as a separate language.
+Translations are now **saved per book**, so reopening a chapter costs no new requests. The new **Book translation** window shows how much of the book is translated, completes the translation in the background and **downloads the translated book as an EPUB** (from an EPUB or from a PDF).
+
+Books now **reopen where you left off**, and the two panels stay **aligned paragraph by paragraph** while you scroll. Settings shows how much of your **Google Cloud free quota** you used this month.
+
+It also makes library scans incremental and adds sorting to the library, makes translation and data saving more reliable, and hardens the web server used by the mobile PWA.
 
 > [!IMPORTANT]
-> Upgrading is strongly recommended if you open EPUB files from untrusted sources or use Web Server mode on a shared network.
+> If you use the BASIC engine (your Google Cloud key) from the phone, set a web server password: without one, the server now answers BASIC requests with the FREE engine.
 
 ---
 
@@ -25,6 +29,20 @@ It also adds **book ratings** (1 to 5 stars, editable from the desktop and from 
 - **Download translated book**: Saves an EPUB with the translated text. For an EPUB, the copy keeps the original layout, styles, images and table of contents (formatting inside a paragraph, such as italic or links, is not kept). For a PDF, a new simple EPUB is created with one section per chapter or page. Paragraphs not translated yet stay in the original language, and you are asked to confirm when the book is not fully translated.
 - **Retranslate chapter** translates the chapter on screen again and replaces its saved translation. **Delete saved translations** removes them for the current language and engine.
 
+### 📖 Reading
+
+- **Reopen where you left off**: The reading position of each book (chapter, or PDF section, and scroll position) is saved automatically shortly after you scroll or navigate, when you open another book and when you close the app. Opening the same file again brings you back there. Opening a bookmark still goes to the bookmark. On close, the app waits up to 2 seconds for pending saves, which also makes saving the translations on close reliable.
+- **Panels aligned by paragraph**: In Text view, scrolling one panel keeps the paragraph with the same number at the top of the other one. Before, the panels were matched by scroll percentage, so they drifted apart by several paragraphs when the translation was longer or shorter than the original. A manual offset (sync turned off, one panel moved, sync turned on again) is kept all along the chapter. Original view (EPUB page or PDF) keeps the percentage sync.
+- **Double-click realignment**: Double-clicking the percentage in the translation panel header now brings the right panel to the same paragraph as the left one, at the same point inside it, instead of the same percentage.
+- **Narrow fonts**: New condensed fonts help a translation that is longer than the original fit in the same space. **Roboto Condensed** comes with the app, so it is available everywhere. The font list also offers the narrow fonts of each system: Arial Narrow, Bahnschrift SemiCondensed (Windows), Avenir Next Condensed (macOS), Liberation Sans Narrow and DejaVu Sans Condensed (Linux). The list shows only the fonts installed on your computer.
+- **Font controls no longer stuck**: After a PDF in Original view, the font family and text size controls could stay greyed out, even with another book open. They now follow the current file and view.
+- **Clickable links in both panels**: Links in the book (notes, cross-references, web addresses) now show the hand cursor, and they also work in the translation panel when the link covers the whole paragraph. Links to web pages open in the system browser.
+
+### 📊 BASIC Monthly Usage
+
+- **Free quota at a glance**: Settings → BASIC shows the characters translated with your Google Cloud key this month, against the 500,000 characters per month of Google's free tier, with a bar that turns red when you go over it.
+- **Counted by the app**: Google does not let a key read its own usage, so Giano Reader counts the characters it sends, the way Google bills them (every character, spaces included, once a request is accepted). The count includes the translations made on the desktop and the BASIC translations the web server makes for the phone, and starts over every month. Characters translated with the same key outside Giano Reader are not included: the Google Cloud console has the billed figure.
+
 ### 🌍 Translation Reliability
 
 - **Automatic retries**: A failed block (network error, rate limit) is tried again twice, after 1.5 and 4 seconds, before the original text is shown.
@@ -41,10 +59,17 @@ It also adds **book ratings** (1 to 5 stars, editable from the desktop and from 
 - **A scan never removes books**: Books on a drive that is not connected stay in the library. Use the library check command to remove missing files.
 - **Lighter scans**: Results are saved in groups, so an interruption does not lose the work done. PDF documents are released right after their metadata is read, and the cover of the book being opened is reused instead of opening the EPUB twice.
 
+### 🗂️ Library Sorting & Publisher
+
+- **Sort the library**: A new menu in the library sorts the books by date added, title or author. The choice is remembered.
+- **Publisher**: The publisher is read from the EPUB metadata, shown and editable in the book details, and included in the library search, on the desktop and in the phone app (also for books saved offline).
+
 ### 📄 PDF
 
 - **Translation laid over the page**: In Original view, the right panel shows the PDF pages with the translation written over the original text, in the same position, with the original font family, weight, italic, alignment and line spacing. When the translation is longer than the original, the text shrinks (down to 45 %) to fit its box, and a box that still overflows gets a dashed orange outline. Page numbers are not translated. This needs the desktop app; in a browser the previous simple overlay is used.
 - **New layout engine**: The PDF layout analysis of the companion project PDF X-Ray now runs inside the app (Rust). It rebuilds lines and blocks with a recursive XY-Cut, recognises columns, boxes, tables, headings, captions, footnotes, running heads and page numbers, works out the reading order, and stitches paragraphs split across columns, pages, figures or boxes, rejoining hyphenated words. Tagged PDFs use their structure tree. Each logical paragraph is translated once, as a whole, and the translation is split over its pieces on the page. Pages are analysed together with the 2 pages before and after the ones shown, so a paragraph that continues on the next page is handled correctly.
+- **Your font on the page**: In Original view, the translation boxes laid over the page use the font family you chose (for example a narrow one, so that less text has to shrink). Changing it updates the boxes already translated without redrawing the page. If you never chose a font, the boxes keep the family of the original text. Text size stays tied to the original in this view.
+- **Ornaments and decorated pages**: Fonts used only for ornaments (friezes, symbols stacked in a margin) are recognised, and their glyphs are kept out of the text instead of being read as words or breaking the column detection. An ornamental border drawn along a page edge is no longer taken for a sidebar, and boxes with rounded corners are now recognised as boxes, like square ones. A large heading no longer bridges the gutter between two columns.
 - **Better text view**: The text view and the "Book translation" window use the same paragraphs. Justified text is no longer split into fragments, which happened because wide word spacing was taken for a column gap. Typographic ligatures (ﬁ, ﬀ, ﬂ…) are expanded, so words such as "different" or "identified" no longer lose letters.
 - **Scroll sync in Original view**: Pages that were not painted yet were squeezed by the panel layout, so the original panel was much shorter than the translation panel and a small scroll on one side jumped several pages on the other. Both panels now have the same height and scroll page by page together.
 - **Sharp, lighter pages**: Page canvases are painted at the screen's pixel density (up to 2×), so text is sharp on HiDPI screens. Only pages near the viewport are painted, and pages far away are freed, which saves memory on long documents.
@@ -76,6 +101,7 @@ It also adds **book ratings** (1 to 5 stars, editable from the desktop and from 
 - **Bookmarks from the phone open on the desktop**: Bookmarks created in the PWA now store the book's file path and title, and the scroll position of the paragraph. The desktop can open them at the right place. A bookmark is reported as saved only if the file was actually written.
 - **Reliable offline download**: A network or server error in the middle of a download now stops it with an error instead of saving a truncated book. A book with no readable chapter is not saved.
 - **Clear errors**: API calls that get an error status now fail with a message instead of reading the error as if it were data.
+- **Text size changes only the book**: The "Font size" setting of the PWA now enlarges only the book text. Before, it scaled the whole interface (headers, buttons, sheets).
 - **Offline import over plain HTTP**: Book import no longer depends on `crypto.subtle`, which browsers do not provide on `http://<LAN address>` pages.
 
 ### 🛠️ Build & CI

@@ -904,6 +904,10 @@ function applyUiLang(lang) {
   // Settings about footer
   document.getElementById('settings-developed-by').textContent = t(lang, 'developedBy', { author: 'Giampaolo Bolzonella' });
   document.getElementById('settings-version').textContent = t(lang, 'version', { version: APP_VERSION });
+  for (const [id, key] of [['settings-manual-link', 'settingsManualLink'], ['settings-issues-link', 'settingsIssuesLink']]) {
+    const a = document.getElementById(id);
+    if (a) { a.title = t(lang, key); a.setAttribute('aria-label', t(lang, key)); }
+  }
   // Library modal
   const _libBtn = document.getElementById('library-btn');
   const _libModalTitle = document.getElementById('library-modal-title');
@@ -3424,6 +3428,13 @@ function followEpubTextLink(href) {
     scrollToAnchor();
   }
 }
+
+// Manual and issue tracker links in the settings footer: open them in the
+// system browser, never inside the app window.
+['settings-manual-link', 'settings-issues-link'].forEach(id => {
+  const a = document.getElementById(id);
+  if (a) a.addEventListener('click', e => { e.preventDefault(); openExternalLink(a.href); });
+});
 
 [originalViewer, translationViewer].forEach(panel => {
   panel.addEventListener('click', e => {

@@ -7,6 +7,8 @@ export const translations = {
     toggleNumbers: 'Toggle paragraph numbers',
     toggleSync: 'Toggle scroll sync',
     resyncHint: 'Double-click to realign both panels',
+    settingsManualLink: 'User manual',
+    settingsIssuesLink: 'Report an issue',
     syncDisabled: '⚠ scroll sync off',
     openBook: '+ Open book',
     translationLanguage: 'Translation language',
@@ -432,6 +434,8 @@ export const translations = {
     basicUsageLabel: '本月使用情况',
     basicUsageText: '{used} 个，共 {free} 个免费字符 ({pct}%)',
     basicUsageNote: '由 Giano Reader（桌面和 Web 服务器）计数。不包括在其他地方用相同键翻译的字符；检查 Google Cloud 控制台中的账单金额。',
+    settingsManualLink: '用户手册',
+    settingsIssuesLink: '报告问题',
   },
   hi: {
     viewToggle: 'मूल दृश्य बदलें',
@@ -648,6 +652,8 @@ export const translations = {
     basicUsageLabel: 'इस माह उपयोग',
     basicUsageText: '{free} निःशुल्क वर्णों का {used} ({pct}%)',
     basicUsageNote: 'जियानो रीडर (डेस्कटॉप और वेब सर्वर) द्वारा गिना गया। अन्यत्र समान कुंजी से अनुवादित वर्ण शामिल नहीं हैं; बिल किए गए आंकड़े के लिए Google क्लाउड कंसोल की जाँच करें।',
+    settingsManualLink: 'उपयोगकर्ता पुस्तिका',
+    settingsIssuesLink: 'किसी समस्या की रिपोर्ट करें',
   },
   es: {
     viewToggle: 'Alternar vista original',
@@ -864,6 +870,8 @@ export const translations = {
     basicUsageLabel: 'Uso este mes',
     basicUsageText: '{used} de {free} caracteres gratuitos ({pct}%)',
     basicUsageNote: 'Contado por Giano Reader (escritorio y servidor web). No se incluyen los caracteres traducidos con la misma clave en otros lugares; Consulta en la consola de Google Cloud la cifra facturada.',
+    settingsManualLink: 'manual de usuario',
+    settingsIssuesLink: 'Informar un problema',
   },
   fr: {
     viewToggle: 'Afficher vue originale',
@@ -1081,6 +1089,8 @@ export const translations = {
     basicUsageLabel: 'Utilisation ce mois-ci',
     basicUsageText: '{used} sur {free} caractères gratuits ({pct} %)',
     basicUsageNote: 'Compté par Giano Reader (ordinateur de bureau et serveur Web). Les caractères traduits avec la même clé ailleurs ne sont pas inclus ; consultez la console Google Cloud pour connaître le montant facturé.',
+    settingsManualLink: 'Manuel d\'utilisation',
+    settingsIssuesLink: 'Signaler un problème',
   },
   bn: {
     viewToggle: 'মূল দৃশ্য পরিবর্তন করুন',
@@ -1297,6 +1307,8 @@ export const translations = {
     basicUsageLabel: 'এই মাসে ব্যবহার',
     basicUsageText: '{free} বিনামূল্যের অক্ষরের {used} ({pct}%)',
     basicUsageNote: 'গিয়ানো রিডার (ডেস্কটপ এবং ওয়েব সার্ভার) দ্বারা গণনা করা হয়েছে। অন্য কোথাও একই কী দিয়ে অনুবাদ করা অক্ষর অন্তর্ভুক্ত নয়; বিল করা চিত্রের জন্য Google ক্লাউড কনসোল পরীক্ষা করুন।',
+    settingsManualLink: 'ব্যবহারকারীর ম্যানুয়াল',
+    settingsIssuesLink: 'একটি সমস্যা রিপোর্ট করুন',
   },
   pt: {
     viewToggle: 'Alternar vista original',
@@ -1513,6 +1525,8 @@ export const translations = {
     basicUsageLabel: 'Uso este mês',
     basicUsageText: '{used} de {free} caracteres gratuitos ({pct}%)',
     basicUsageNote: 'Contado por Giano Reader (desktop e servidor web). Os caracteres traduzidos com a mesma chave noutros locais não estão incluídos; verifique a consola do Google Cloud para obter o valor faturado.',
+    settingsManualLink: 'Manual do utilizador',
+    settingsIssuesLink: 'Informar um problema',
   },
   'pt-BR': {
     viewToggle: 'Alternar visualização original',
@@ -1729,6 +1743,8 @@ export const translations = {
     basicUsageLabel: 'Uso este mês',
     basicUsageText: '{used} de {free} caracteres gratuitos ({pct}%)',
     basicUsageNote: 'Contado por Giano Reader (desktop e servidor web). Os caracteres traduzidos com a mesma chave em outros lugares não estão incluídos; verifique o console do Google Cloud para obter o valor faturado.',
+    settingsManualLink: 'Manual do usuário',
+    settingsIssuesLink: 'Informar um problema',
   },
   ru: {
     viewToggle: 'Переключить оригинальный вид',
@@ -1945,6 +1961,8 @@ export const translations = {
     basicUsageLabel: 'Использование в этом месяце',
     basicUsageText: '{used} из {free} бесплатных символов ({pct}%)',
     basicUsageNote: 'Подсчитывается Giano Reader (настольный компьютер и веб-сервер). Символы, переведенные тем же ключом в другом месте, не включаются; проверьте консоль Google Cloud на наличие выставленного счета.',
+    settingsManualLink: 'Руководство пользователя',
+    settingsIssuesLink: 'Сообщить о проблеме',
   },
   ja: {
     viewToggle: '元の表示に切り替え',
@@ -2161,6 +2179,8 @@ export const translations = {
     basicUsageLabel: '今月の利用状況',
     basicUsageText: '{free} 個のフリー文字のうち {used} 個 ({pct}%)',
     basicUsageNote: 'Giano Reader (デスクトップおよび Web サーバー) によってカウントされます。他の場所で同じキーで変換された文字は含まれません。請求額については、Google Cloud コンソールを確認してください。',
+    settingsManualLink: 'ユーザーマニュアル',
+    settingsIssuesLink: '問題を報告する',
   },
   id: {
     viewToggle: 'Alihkan tampilan asli',
@@ -2377,6 +2397,8 @@ export const translations = {
     basicUsageLabel: 'Penggunaan bulan ini',
     basicUsageText: '{used} dari {free} karakter gratis ({pct}%)',
     basicUsageNote: 'Dihitung oleh Giano Reader (desktop dan server web). Karakter yang diterjemahkan dengan kunci yang sama di tempat lain tidak disertakan; periksa konsol Google Cloud untuk mengetahui jumlah tagihannya.',
+    settingsManualLink: 'Panduan pengguna',
+    settingsIssuesLink: 'Laporkan masalah',
   },
   de: {
     viewToggle: 'Originalansicht umschalten',
@@ -2593,6 +2615,8 @@ export const translations = {
     basicUsageLabel: 'Nutzung in diesem Monat',
     basicUsageText: '{used} von {free} freien Zeichen ({pct}%)',
     basicUsageNote: 'Gezählt von Giano Reader (Desktop und Webserver). Zeichen, die an anderer Stelle mit demselben Schlüssel übersetzt wurden, sind nicht enthalten. Überprüfen Sie die Google Cloud Console auf den in Rechnung gestellten Betrag.',
+    settingsManualLink: 'Benutzerhandbuch',
+    settingsIssuesLink: 'Problem melden',
   },
   ko: {
     viewToggle: '원본 보기 전환',
@@ -2809,6 +2833,8 @@ export const translations = {
     basicUsageLabel: '이번 달 사용량',
     basicUsageText: '무료 문자 {free}개 중 {used}개({pct}%)',
     basicUsageNote: 'Giano Reader(데스크톱 및 웹 서버)로 계산됩니다. 다른 곳에서 동일한 키로 번역된 문자는 포함되지 않습니다. 청구 금액은 Google Cloud 콘솔에서 확인하세요.',
+    settingsManualLink: '사용 설명서',
+    settingsIssuesLink: '문제 신고',
   },
   it: {
     viewToggle: 'Mostra vista originale',
@@ -3027,6 +3053,8 @@ export const translations = {
     basicUsageLabel: 'Utilizzo questo mese',
     basicUsageText: '{used} di {free} caratteri gratuiti ({pct}%)',
     basicUsageNote: 'Conteggiato da Giano Reader (desktop e web server). Non sono compresi i caratteri tradotti con la stessa chiave altrove; controlla la cifra fatturata sulla console Google Cloud.',
+    settingsManualLink: 'Manuale utente',
+    settingsIssuesLink: 'Segnala un problema',
   },
   th: {
     viewToggle: 'สลับมุมมองต้นฉบับ',
@@ -3243,6 +3271,8 @@ export const translations = {
     basicUsageLabel: 'การใช้งานเดือนนี้',
     basicUsageText: '{used} จากอักขระฟรี {free} ตัว ({pct}%)',
     basicUsageNote: 'นับโดย Giano Reader (เดสก์ท็อปและเว็บเซิร์ฟเวอร์) ไม่รวมอักขระที่แปลด้วยคีย์เดียวกันที่อื่น ตรวจสอบคอนโซล Google Cloud เพื่อดูตัวเลขที่เรียกเก็บเงิน',
+    settingsManualLink: 'คู่มือการใช้งาน',
+    settingsIssuesLink: 'รายงานปัญหา',
   },
   fil: {
     viewToggle: 'I-toggle ang orihinal na view',
@@ -3459,6 +3489,8 @@ export const translations = {
     basicUsageLabel: 'Paggamit ngayong buwan',
     basicUsageText: '{used} ng {free} libreng character ({pct}%)',
     basicUsageNote: 'Binibilang ng Giano Reader (desktop at web server). Hindi kasama ang mga character na isinalin gamit ang parehong key sa ibang lugar; tingnan ang Google Cloud console para sa sinisingil na numero.',
+    settingsManualLink: 'User manual',
+    settingsIssuesLink: 'Mag-ulat ng isyu',
   },
   ar: {
     viewToggle: 'تبديل العرض الأصلي',
@@ -3675,6 +3707,8 @@ export const translations = {
     basicUsageLabel: 'الاستخدام هذا الشهر',
     basicUsageText: '{used} من {free} حرفًا مجانيًا ({pct}%)',
     basicUsageNote: 'يتم عدها بواسطة Giano Reader (سطح المكتب وخادم الويب). لا يتم تضمين الأحرف المترجمة بنفس المفتاح في مكان آخر؛ تحقق من وحدة تحكم Google Cloud لمعرفة الرقم المفوتر.',
+    settingsManualLink: 'دليل المستخدم',
+    settingsIssuesLink: 'الإبلاغ عن مشكلة',
   },
   fa: {
     viewToggle: 'تغییر نمای اصلی',
@@ -3891,6 +3925,8 @@ export const translations = {
     basicUsageLabel: 'استفاده در این ماه',
     basicUsageText: '{used} از {free} نویسه رایگان ({pct}%)',
     basicUsageNote: 'شمارش شده توسط Giano Reader (رومیزی و وب سرور). کاراکترهای ترجمه شده با همان کلید در جاهای دیگر گنجانده نشده است. کنسول Google Cloud را برای رقم صورتحساب بررسی کنید.',
+    settingsManualLink: 'راهنمای کاربر',
+    settingsIssuesLink: 'گزارش یک مشکل',
   },
   sq: {
     viewToggle: 'Kalo pamjen origjinale',
@@ -4107,6 +4143,8 @@ export const translations = {
     basicUsageLabel: 'Përdorimi këtë muaj',
     basicUsageText: '{used} nga {free} karaktere falas ({pct}%)',
     basicUsageNote: 'Numëruar nga Giano Reader (desktop dhe server në internet). Personazhet e përkthyera me të njëjtin çelës diku tjetër nuk janë përfshirë; kontrolloni tastierën e Google Cloud për shifrën e faturuar.',
+    settingsManualLink: 'Manuali i përdorimit',
+    settingsIssuesLink: 'Raportoni një problem',
   },
   sv: {
     viewToggle: 'Växla originalvy',
@@ -4323,6 +4361,8 @@ export const translations = {
     basicUsageLabel: 'Användning denna månad',
     basicUsageText: '{used} av {free} gratis tecken ({pct}%)',
     basicUsageNote: 'Räknat av Giano Reader (skrivbord och webbserver). Tecken som översatts med samma nyckel någon annanstans ingår inte; kolla Google Cloud-konsolen för faktureringsbeloppet.',
+    settingsManualLink: 'Användarmanual',
+    settingsIssuesLink: 'Rapportera ett problem',
   },
   uk: {
     viewToggle: 'Перемкнути оригінальний вигляд',
@@ -4539,6 +4579,8 @@ export const translations = {
     basicUsageLabel: 'Використання цього місяця',
     basicUsageText: '{used} з {free} вільних символів ({pct}%)',
     basicUsageNote: 'Підраховано Giano Reader (настільний комп’ютер і веб-сервер). Символи, перекладені з тим самим ключем в іншому місці, не включені; перевірте консоль Google Cloud, щоб дізнатися суму, яку виставили.',
+    settingsManualLink: 'Посібник користувача',
+    settingsIssuesLink: 'Повідомити про проблему',
   },
   sl: {
     viewToggle: 'Preklopi izvirni pogled',
@@ -4755,6 +4797,8 @@ export const translations = {
     basicUsageLabel: 'Uporaba ta mesec',
     basicUsageText: '{used} od {free} prostih znakov ({pct}%)',
     basicUsageNote: 'Šteje Giano Reader (namizje in spletni strežnik). Znaki, prevedeni z istim ključem drugje, niso vključeni; poiščite zaračunano številko v konzoli Google Cloud.',
+    settingsManualLink: 'Uporabniški priročnik',
+    settingsIssuesLink: 'Prijavite težavo',
   },
   vi: {
     viewToggle: 'Chuyển chế độ xem gốc',
@@ -4969,6 +5013,8 @@ export const translations = {
     basicUsageLabel: 'Mức sử dụng trong tháng này',
     basicUsageText: '{used} trong số {free} ký tự miễn phí ({pct}%)',
     basicUsageNote: 'Được tính bằng Giano Reader (máy tính để bàn và máy chủ web). Các ký tự được dịch có cùng khóa ở nơi khác sẽ không được bao gồm; hãy kiểm tra bảng điều khiển Google Cloud để biết số liệu được thanh toán.',
+    settingsManualLink: 'Hướng dẫn sử dụng',
+    settingsIssuesLink: 'Báo cáo sự cố',
   },
 };
 

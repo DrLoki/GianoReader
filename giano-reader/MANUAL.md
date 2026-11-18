@@ -143,7 +143,10 @@ For a PDF, the same icon shows the original pages on the left and, on the right,
 
 - Before translating, Giano Reader analyses the layout of the pages: columns, boxes and tables, headings, captions, footnotes, running heads and page numbers, and the reading order. The status in the translation header shows *Analyzing page layout…* with a percentage while this happens.
 - A paragraph interrupted by a column break, a page break, a figure or a box is recognised as one paragraph: it is translated as a whole, and the translation is divided among its pieces on the page. Hyphenated words split at the end of a line are joined again.
-- Each translated box keeps the font family, bold, italic, alignment and line spacing of the original. When the translation is longer, the text is made smaller (down to 45 %) to fit; a box that still does not fit has a dashed orange outline.
+- Each translated box keeps the bold, italic, alignment and line spacing of the original. When the translation is longer, the text is made smaller (down to 45 %) to fit; a box that still does not fit has a dashed orange outline.
+- The boxes use the font family chosen in **Settings → Font** (or in the right-click menu). If you never chose one, they use the family of the original text. The text size always follows the original page, so the **Font size** control is disabled in this view.
+
+> **Tip: use a condensed font.** Many languages take more room than English: an Italian translation, for example, is often 10–20 % longer. With a condensed font more words fit on each line, so the translated text shrinks less, stays readable and lines up better with the original page. Choose **Roboto Condensed**, which comes with Giano Reader and is available on every system, or a narrow font of your system such as **Arial Narrow**. Changing the font updates the boxes already translated at once.
 - Page numbers are not translated.
 - Both panels show the pages at the same size, so with scroll sync on they move together page by page.
 - In the text view, PDF paragraphs come from the same analysis, so the reflowed text and the page overlay use the same translations.
@@ -384,7 +387,7 @@ The mobile web interface provides:
 - **Lazy translation** — paragraphs are translated on-the-fly as you scroll, using the same Google Translate engine (FREE mode) or Google Cloud Translation API (BASIC mode).
 - **Bookmarks** — save and navigate bookmarks from your phone.
 - **Ratings** — tap the stars under a book in the library to rate it (tap the current star again to clear it), and filter the library by rating. Ratings set from the phone are saved in the desktop library, and ratings set on the desktop show up on the phone.
-- **Settings** — change theme (light/dark/sepia), font size, translation language, and UI language.
+- **Settings** — change theme (light/dark/sepia), font size (of the book text only, the interface keeps its size), translation language, and UI language.
 - **Reading progress sync** — your position is saved automatically and restored on reconnect.
 
 ### Network Requirements
@@ -489,8 +492,8 @@ Open Settings by clicking the **gear** icon in the sidebar.
 | --- | --- |
 | **Interface language** | UI text language (23 languages available with automatic i18n alignment) |
 | **Theme** | Dark (default), Light, Monokai, Solarized Dark, Nord, Sepia |
-| **Font** | Font family for reading text |
-| **Font size** | Slider from 12px to 32px |
+| **Font** | Font family for reading text, also used for the translation over the page of a PDF in Original view. Besides the classic fonts it offers condensed ones: **Roboto Condensed** (bundled with the app) and the narrow fonts of your system (Arial Narrow, Bahnschrift SemiCondensed on Windows, Avenir Next Condensed on macOS, Liberation Sans Narrow and DejaVu Sans Condensed on Linux). Only the fonts installed on your computer are listed. See [PDF Original View](#pdf-original-view) |
+| **Font size** | Slider from 12px to 32px (not available for a PDF in Original view, where the size follows the page) |
 | **Search depth** | Subfolder depth level for library scanning (1–10, default 3) |
 | **Google Cloud API Key** | API key for Google Cloud Translation API v2 (for BASIC mode). See [`GOOGLE_CLOUD_SETUP.md`](GOOGLE_CLOUD_SETUP.md) |
 | **OpenRouter API Key** | API Key to enable advanced PRO translation using artificial intelligence models |

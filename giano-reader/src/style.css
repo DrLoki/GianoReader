@@ -1061,7 +1061,18 @@ body.theme-sepia {
   margin-top: 18px; padding-top: 12px;
   border-top: 1px solid var(--border);
   font-size: 0.75rem; color: var(--text-muted);
+  align-items: center;
 }
+/* Links to the manual and to the issue tracker (open in the system browser) */
+#settings-about .settings-links { display: flex; gap: 4px; }
+#settings-about .settings-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px 5px; border-radius: 4px;
+  opacity: 0.6; transition: opacity 0.15s, background 0.15s;
+}
+#settings-about .settings-link .icon { height: 0.95rem; }
+#settings-about .settings-link:hover,
+#settings-about .settings-link:focus-visible { opacity: 1; background: var(--modal-btn-hover); }
 
 /* ── RTL support (Arabic) ── */
 html.rtl #app                { flex-direction: row-reverse; }
