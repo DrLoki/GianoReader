@@ -14,6 +14,7 @@ import { filterLibrary, sortLibrary, normalizeLibrarySort } from './library-view
 import { BookTranslationCache, textKey, variantKey, parseVariant, mergeCacheData } from './translation-cache.js';
 import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from './book-export.js';
 import { observeChunksLazily } from './lazy-chunks.js';
+import { getReadingPosition, setReadingPosition, samePosition, resolveRestoreTarget } from './reading-positions.js';
 import JSZip from 'jszip';
 
 // Pause before the 2nd and 3rd attempt at translating a failed block
@@ -596,6 +597,98 @@ async function flushTranslationCaches() {
   const caches = [..._dirtyTranslationCaches];
   _dirtyTranslationCaches.clear();
   for (const cache of caches) await saveBookTranslationCache(cache);
+}
+
+// ── Last reading position of each book ─────────────────────────────────────
+// See reading-positions.js. Saved TO DISK READING_POSITION_SAVE_DELAY_MS after the
+// last scroll or navigation, when the book changes and when the app closes;
+// restored when the same file is opened again (not when opening a bookmark).
+const READING_POSITIONS_KEY = 'giano-reader-positions';
+const READING_POSITION_SAVE_DELAY_MS = 2000;
+let _readingPositions = {};          // filePath → position (see reading-positions.js)
+let _readingPositionsLoaded = false; // false: the map holds only positions captured in this session
+let _readingPositionsLoading = null;
+let _readingPositionsDirty = false;
+let _readingPositionTimer = null;
+let _scrollRestorePending = 0;       // restoreScrollPct still applying: the scroll is not the user's
+
+async function loadReadingPositions() {
+  if (_readingPositionsLoaded) return _readingPositions;
+  if (!_readingPositionsLoading) {
+    _readingPositionsLoading = (async () => {
+      let stored = {};
+      try {
+        stored = await PersistentStorage.get(READING_POSITIONS_KEY, {});
+      } catch (e) {
+        // Unreadable file: positions are not saved this session, so as not to overwrite it
+        if (!reportStorageReadError(e)) console.warn('[positions] load error:', e);
+        throw e;
+      }
+      // Positions captured before the load finished win over the ones on disk
+      let map = (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
+      for (const [key, pos] of Object.entries(_readingPositions)) map = setReadingPosition(map, key, pos);
+      _readingPositions = map;
+      _readingPositionsLoaded = true;
+      return map;
+    })().finally(() => { _readingPositionsLoading = null; });
+  }
+  return _readingPositionsLoading;
+}
+
+/** Current position of the open book, or null when there is nothing reliable to save. */
+function captureReadingPosition() {
+  if (!currentFilePath || _scrollRestorePending > 0) return null;
+  // Chapter still loading: the scroll would read 0
+  if (!currentChapterParagraphs || !currentChapterParagraphs.length) return null;
+  const scrollPct = currentReadingScrollPct();
+  if (currentFileType === 'pdf') {
+    if (!pdfDoc || !pdfNav) return null;
+    return { chapterIndex: pdfNav.currentIndex, scrollPct, fileType: 'pdf', pdfMode: pdfNav.mode, updatedAt: Date.now() };
+  }
+  if (!book || !currentSpineItems.length) return null;
+  return { chapterIndex: currentSpineIndex, scrollPct, fileType: 'epub', updatedAt: Date.now() };
+}
+
+/** Records the position of the open book in memory (saved by flushReadingPositions). */
+function rememberReadingPosition() {
+  const pos = captureReadingPosition();
+  if (!pos) return;
+  const key = currentFilePath;
+  if (samePosition(getReadingPosition(_readingPositions, key), pos)) return;
+  _readingPositions = setReadingPosition(_readingPositions, key, pos);
+  _readingPositionsDirty = true;
+}
+
+function scheduleReadingPositionSave() {
+  if (!currentFilePath) return;
+  clearTimeout(_readingPositionTimer);
+  _readingPositionTimer = setTimeout(() => {
+    rememberReadingPosition();
+    flushReadingPositions();
+  }, READING_POSITION_SAVE_DELAY_MS);
+}
+
+async function flushReadingPositions() {
+  clearTimeout(_readingPositionTimer);
+  if (!_readingPositionsDirty) return;
+  try {
+    await loadReadingPositions(); // merges with the positions of the other books on disk
+    _readingPositionsDirty = false;
+    await PersistentStorage.set(READING_POSITIONS_KEY, _readingPositions);
+  } catch (e) {
+    console.warn('[positions] save error:', e);
+  }
+}
+
+/** Where to reopen the book just loaded: null = default opening. */
+async function savedRestoreTarget(filePath, book) {
+  if (!filePath) return null;
+  try {
+    const map = await loadReadingPositions();
+    return resolveRestoreTarget(getReadingPosition(map, filePath), book);
+  } catch {
+    return null;
+  }
 }
 
 /** Deletes a book's cache file (book removed from the library). */
@@ -2205,6 +2298,8 @@ function pdfUnitLabel() {
 
 // ── Progress bar ───────────────────────────────────────────────────────────
 function updateProgress() {
+  // Every scroll and navigation passes from here: save the reading position shortly after
+  scheduleReadingPositionSave();
   // PDF navigation
   if (currentFileType === 'pdf' && pdfNav) {
     const total = pdfNav.totalUnits;
@@ -3870,7 +3965,7 @@ function isOomError(err) {
   return msg.includes('out of memory') || msg.includes('allocation failed') || msg.includes('memory');
 }
 
-async function loadEpub(arrayBuffer, filePath = '') {
+async function loadEpub(arrayBuffer, filePath = '', { restorePosition = true } = {}) {
   // Same spelling as the library entry: translation cache and chapter lengths are keyed by it
   filePath = await libraryPathFor(filePath);
   // Stop TTS before loading new book
@@ -3908,6 +4003,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
   }
 
   // Valid file: now the previous book can be closed
+  rememberReadingPosition();
+  flushReadingPositions();
   displayGeneration++; // stops the chapter loads still in progress for the old book
   cancelBookTranslationJob();
   flushTranslationCaches();
@@ -3967,6 +4064,10 @@ async function loadEpub(arrayBuffer, filePath = '') {
 
     updateProgress();
     buildProgressTicks(currentSpineItems, nav.toc);
+    // Where the user stopped reading this book last time
+    const restoreTarget = restorePosition
+      ? await savedRestoreTarget(filePath, { fileType: 'epub', unitCount: currentSpineItems.length })
+      : null;
     addBookmarkBtn.disabled = false;
     if (bookTranslationBtn) bookTranslationBtn.disabled = false;
     enableTTSControls(true);
@@ -3974,8 +4075,8 @@ async function loadEpub(arrayBuffer, filePath = '') {
 
     // Find the first chapter with real content (skips cover/frontmatter).
     // First pass: look for "chapter/capitolo" in the file name.
-    let bestIndex = -1;
-    for (let i = 0; i < currentSpineItems.length; i++) {
+    let bestIndex = restoreTarget ? restoreTarget.chapterIndex : -1;
+    for (let i = 0; bestIndex < 0 && i < currentSpineItems.length; i++) {
       if (/chapter|capitolo|chap/i.test(currentSpineItems[i].href)) {
         bestIndex = i; break;
       }
@@ -3998,7 +4099,7 @@ async function loadEpub(arrayBuffer, filePath = '') {
     }
     setViewMode('text');
     viewToggleBtn.disabled = false;
-    await displayChapter(bestIndex >= 0 ? bestIndex : 0);
+    await displayChapter(bestIndex >= 0 ? bestIndex : 0, restoreTarget ? restoreTarget.scrollPct : 0);
 
     // Compute chapter lengths in background for proportional progress bar
     chapterLengthsPromise = computeChapterLengths(cachedLengths, { filePath, fileSize })
@@ -4027,13 +4128,13 @@ async function loadEpub(arrayBuffer, filePath = '') {
  * Updates the UI after navigating to a new PDF unit (chapter or page).
  * Updates progress bar, page indicator, active tick, and renders content.
  */
-function displayPdfUnit() {
+function displayPdfUnit(scrollPct = 0) {
   if (!pdfNav) return;
   updateProgress();
   updatePdfActiveTick();
   updatePdfTocActive();
   // Render content for the new unit (handles both text and original modes)
-  displayChapter(pdfNav.currentIndex);
+  displayChapter(pdfNav.currentIndex, scrollPct);
 }
 
 /**
@@ -4164,7 +4265,7 @@ function updatePdfTocActive() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-async function loadPdfFile(arrayBuffer, filePath = '') {
+async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true } = {}) {
   // Same spelling as the library entry: translation cache and chapter lengths are keyed by it
   filePath = await libraryPathFor(filePath);
   // Stop TTS before loading new book
@@ -4222,6 +4323,8 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     }
 
     // Valid file: now the previous book can be closed
+    rememberReadingPosition();
+    flushReadingPositions();
     displayGeneration++; // stops the chapter loads still in progress for the old book
     cancelBookTranslationJob();
     flushTranslationCaches();
@@ -4290,10 +4393,16 @@ async function loadPdfFile(arrayBuffer, filePath = '') {
     setViewMode('text'); // Normal view mode — old pipeline handles rendering
     viewToggleBtn.disabled = false;
 
-    // Initialize PDF progress bar and navigation UI
+    // Initialize PDF progress bar and navigation UI, at the unit where the
+    // user stopped reading this PDF last time
+    const restoreTarget = restorePosition
+      ? await savedRestoreTarget(filePath, { fileType: 'pdf', unitCount: nav.totalUnits, pdfMode: nav.mode })
+      : null;
+    if (pdfNav !== nav) return; // another book was opened in the meantime
+    if (restoreTarget) nav.goTo(restoreTarget.chapterIndex);
     renderPdfTicks();
     renderPdfToc();
-    displayPdfUnit();
+    displayPdfUnit(restoreTarget ? restoreTarget.scrollPct : 0);
 
     hideLoading();
   } catch (err) {
@@ -5041,13 +5150,23 @@ function restoreScrollPct(pct) {
   // Applies to the active reading panel: text, EPUB iframe or PDF canvas.
   // The original view's iframe loads its content asynchronously: if
   // the scroll does not "take" (content not ready yet) it retries for ~2s.
+  // Until it is applied, the position on screen is not the user's: it must not be saved
+  _scrollRestorePending++;
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    _scrollRestorePending = Math.max(0, _scrollRestorePending - 1);
+    scheduleReadingPositionSave();
+  };
   const apply = (attempt) => {
-    if (generation !== displayGeneration) return; // the user has navigated elsewhere in the meantime
+    if (generation !== displayGeneration) return finish(); // the user has navigated elsewhere in the meantime
     const { left, right } = getSyncPair();
     if (left) left.setPct(target);
     if (right) right.setPct(target);
     const applied = left && (target === 0 || left.getPct() > 0);
     if (!applied && attempt < 20) setTimeout(() => apply(attempt + 1), 100);
+    else finish();
   };
   // Double rAF: ensures the layout is computed after the paragraphs are rendered
   requestAnimationFrame(() => requestAnimationFrame(() => apply(0)));
@@ -5080,7 +5199,7 @@ async function loadBookmarkFile(bm) {
 
     if (ext === 'epub') {
       const previousViewMode = currentViewMode;
-      await loadEpub(fileData, bm.filePath);
+      await loadEpub(fileData, bm.filePath, { restorePosition: false });
       if (previousViewMode === 'original') {
         setViewMode('original', { skipRender: true });
       }
@@ -5091,7 +5210,7 @@ async function loadBookmarkFile(bm) {
         restoreScrollPct(bm.scrollPct);
       }
     } else if (ext === 'pdf' || bm.fileType === 'pdf') {
-      await loadPdfFile(fileData, bm.filePath);
+      await loadPdfFile(fileData, bm.filePath, { restorePosition: false });
       // Navigate to saved unit and restore scroll position
       if (pdfNav && typeof bm.chapterIndex === 'number') {
         await displayChapter(bm.chapterIndex, bm.scrollPct ?? 0);
@@ -6907,6 +7026,32 @@ langSelect.addEventListener('change', refreshBookTranslationModal);
 if (translationModeSelect) translationModeSelect.addEventListener('change', refreshBookTranslationModal);
 // Saving of translations still pending when the app closes
 window.addEventListener('beforeunload', () => { flushTranslationCaches(); });
+
+// Reading position of the open book when the app closes. 'beforeunload' cannot
+// wait for asynchronous writes: in Tauri the window closes only after the
+// saves (at most CLOSE_SAVE_TIMEOUT_MS, so closing never hangs).
+const CLOSE_SAVE_TIMEOUT_MS = 2000;
+window.addEventListener('beforeunload', () => { rememberReadingPosition(); flushReadingPositions(); });
+if (isTauriApp()) {
+  (async () => {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().onCloseRequested(async () => {
+        try {
+          rememberReadingPosition();
+          await Promise.race([
+            Promise.allSettled([flushReadingPositions(), flushTranslationCaches()]),
+            new Promise(resolve => setTimeout(resolve, CLOSE_SAVE_TIMEOUT_MS)),
+          ]);
+        } catch (err) {
+          console.warn('[close] save error:', err);
+        }
+      });
+    } catch (err) {
+      console.warn('[close] cannot listen to the close request:', err);
+    }
+  })();
+}
 
 /**
  * "Translation" row of a library book's card: saved variants
