@@ -225,25 +225,38 @@ export async function extractGraphics(page, viewport) {
   return { rects, images };
 }
 
-/** Split DrawOPS path data into subpaths and flag axis-aligned quadrilaterals. */
+/**
+ * Split DrawOPS path data into subpaths and flag box-like ones: axis-aligned
+ * quadrilaterals, and rounded rectangles (axis-aligned sides joined by short
+ * corner curves, the sides covering most of the perimeter).
+ */
 function subpaths(data) {
   const out = [];
   let cur = null;
   let curved = false;
+  let straight = 0;      // total length of axis-aligned line segments
+  let oblique = false;   // a straight segment that is not axis-aligned
   const flush = () => {
     if (cur && cur.length >= 2) {
       const pts = cur.slice();
       const first = pts[0], last = pts[pts.length - 1];
       if (pts.length > 4 && Math.abs(first[0] - last[0]) < 0.01 && Math.abs(first[1] - last[1]) < 0.01) pts.pop();
       // (a `re` with zero width/height arrives as moveTo + lineTo: a rule, not a box)
-      const rectLike = !curved && pts.length === 4 && pts.every((p, k) => {
+      let rectLike = !curved && pts.length === 4 && pts.every((p, k) => {
         const q = pts[(k + 1) % 4];
         return Math.abs(p[0] - q[0]) < 0.01 || Math.abs(p[1] - q[1]) < 0.01;
       });
+      if (!rectLike && curved && !oblique) {
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+        rectLike = w > 0 && h > 0 && straight >= 0.7 * 2 * (w + h);
+      }
       out.push({ points: pts, rectLike });
     }
     cur = null;
     curved = false;
+    straight = 0;
+    oblique = false;
   };
   let i = 0;
   while (i < data.length) {
@@ -254,6 +267,12 @@ function subpaths(data) {
       i += 2;
     } else if (op === DRAW.lineTo) {
       if (!cur) cur = [];
+      const p = cur[cur.length - 1];
+      if (p) {
+        const dx = Math.abs(data[i] - p[0]), dy = Math.abs(data[i + 1] - p[1]);
+        if (dx < 0.01 || dy < 0.01) straight += dx + dy;
+        else oblique = true;
+      }
       cur.push([data[i], data[i + 1]]);
       i += 2;
     } else if (op === DRAW.curveTo) {
@@ -265,6 +284,12 @@ function subpaths(data) {
       if (cur) cur.push([data[i + 2], data[i + 3]]);
       i += 4;
     } else if (op === DRAW.closePath) {
+      const p = cur?.[cur.length - 1], f = cur?.[0];
+      if (p && f) {
+        const dx = Math.abs(f[0] - p[0]), dy = Math.abs(f[1] - p[1]);
+        if (dx < 0.01 || dy < 0.01) straight += dx + dy;
+        else oblique = true;
+      }
       flush();
     } else {
       break; // unknown encoding: stop rather than misread

@@ -6,9 +6,9 @@
 use crate::pdf_layout::flow::{page_units, stitch, PageFlowInput, Unit};
 use crate::pdf_layout::lines::{build_lines, group_rows, weighted_mode, PageLines};
 use crate::pdf_layout::model::*;
-use crate::pdf_layout::roles::{classify_leaf, confirm_running, running_candidates, PAGE_NUMBER};
+use crate::pdf_layout::roles::{classify_leaf, confirm_running, running_candidates, DECORATION, PAGE_NUMBER};
 use crate::pdf_layout::text::{font_is_bold, font_is_italic, normalize_fragment, visible_len};
-use crate::pdf_layout::xycut::{alignment, layout_page, PageLayout};
+use crate::pdf_layout::xycut::{alignment, figure_images, layout_page, PageLayout};
 use std::collections::HashMap;
 
 fn page_is_tagged(pl: &PageLines) -> bool {
@@ -95,12 +95,15 @@ pub fn analyze_document(pages: &[PageInput], opts: &AnalysisOptions) -> Document
         .map(|(p, pl)| layout_page(p.page_num, p.page_bounds, &pl.lines, &p.bordered_boxes, &p.images, opts))
         .collect();
 
+    let figures: Vec<Vec<Bounds>> = pages.iter().zip(&page_lines).map(|(p, pl)| figure_images(&p.images, &pl.lines, &p.page_bounds)).collect();
+
     // 3. roles: page level, then running heads / footers across pages
     let mut roles: Vec<Vec<&'static str>> = pages
         .iter()
         .zip(&page_lines)
         .zip(&layouts)
-        .map(|((p, pl), lay)| lay.leaves.iter().map(|leaf| classify_leaf(&pl.lines, leaf, &p.page_bounds, &p.images, body_fs, opts.use_tags)).collect())
+        .zip(&figures)
+        .map(|(((p, pl), lay), figs)| lay.leaves.iter().map(|leaf| classify_leaf(&pl.lines, leaf, &p.page_bounds, figs, body_fs, opts.use_tags)).collect())
         .collect();
     if pages.len() > 1 {
         let mut cands = Vec::new();
@@ -118,9 +121,7 @@ pub fn analyze_document(pages: &[PageInput], opts: &AnalysisOptions) -> Document
     for pi in 0..pages.len() {
         let lay = &mut layouts[pi];
         let blocks: Vec<Bounds> = lay.leaves.iter().map(|l| l.bounds).collect();
-        let page_area = pages[pi].page_bounds.area();
-        let seps: Vec<Bounds> = pages[pi].images.iter().filter(|b| b.area() < page_area * 0.8).copied().collect();
-        let perm = crate::pdf_layout::order::reading_order(&blocks, &roles[pi], &seps);
+        let perm = crate::pdf_layout::order::reading_order(&blocks, &roles[pi], &figures[pi]);
         lay.leaves = perm.iter().map(|&i| lay.leaves[i].clone()).collect();
         roles[pi] = perm.iter().map(|&i| roles[pi][i]).collect();
         let pos: HashMap<String, usize> = lay.leaves.iter().enumerate().map(|(k, l)| (l.id.clone(), k)).collect();
@@ -190,7 +191,7 @@ pub fn analyze_document(pages: &[PageInput], opts: &AnalysisOptions) -> Document
             id,
             role: d.role.to_string(),
             text: d.text.clone(),
-            translatable: d.role != PAGE_NUMBER,
+            translatable: d.role != PAGE_NUMBER && d.role != DECORATION,
             segments,
             joins,
         });

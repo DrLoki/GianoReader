@@ -40,6 +40,8 @@ pub struct Line {
     pub order: usize,
     /// Bounds of the drop cap merged at the start of this line, if any.
     pub drop_cap: Option<Bounds>,
+    /// Ornament set in a symbol/decorative font (see `mark_decorations`).
+    pub decor: bool,
 }
 
 impl Line {
@@ -104,12 +106,13 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
     let body_fs = weighted_mode(frags.iter().map(|f| (f.fs, visible_len(&f.text))), 10.0);
 
     // ---- 1. drop caps -----------------------------------------------------
+    let glyphs = glyph_fonts(&frags, body_fs);
     let mut keep = vec![true; frags.len()];
     let mut drops: Vec<(usize, usize)> = Vec::new(); // (drop cap frag idx, frag idx it introduces)
     for (i, f) in frags.iter().enumerate() {
         let t = f.text.trim();
         let n = t.chars().count();
-        if n == 0 || n > 2 || !t.chars().any(|c| c.is_alphabetic()) {
+        if n == 0 || n > 2 || !t.chars().any(|c| c.is_alphabetic()) || glyphs.contains(&f.font) {
             continue;
         }
         if f.fs < 2.5 * body_fs || f.b.h < 2.0 * body_fs {
@@ -134,7 +137,7 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
     }
 
     // ---- 2. lines: sweep left→right, a run joins the line whose right end
-    // is horizontally adjacent (gap ≤ 1em) and whose core overlaps it
+    // is horizontally adjacent (gap ≤ 1em of the smaller font) and whose core overlaps it
     // vertically by at least half the smaller height. Wide gaps (column
     // gutters, table cells) therefore always start a new line, and a tall
     // run in one column can never bridge two lines of another column.
@@ -145,15 +148,23 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
         core: Bounds,
         right: f32,
         fs: f32,
+        /// made of decorative-font glyphs: never mixed with real text
+        glyph: bool,
         members: Vec<usize>,
     }
     let mut clusters: Vec<Cluster> = Vec::new();
     for i in order {
         let f = &frags[i];
+        let fg = glyphs.contains(&f.font);
         let mut best: Option<(usize, f32)> = None;
         for (k, c) in clusters.iter().enumerate() {
+            if c.glyph != fg {
+                continue;
+            }
             let gap = f.b.x - c.right;
-            if gap > 1.0 * f.fs.max(c.fs) || gap < -0.5 * f.fs.max(c.fs) - f.b.w.min(c.core.w) * 0.5 {
+            // the allowance follows the *smaller* font: a display heading
+            // next to body text must not stretch it across the gutter
+            if gap > 1.0 * f.fs.min(c.fs) || gap < -0.5 * f.fs.max(c.fs) - f.b.w.min(c.core.w) * 0.5 {
                 continue;
             }
             let ov = f.b.v_overlap(&c.core);
@@ -171,7 +182,7 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
                 c.right = c.right.max(f.b.x1());
                 c.members.push(i);
             }
-            None => clusters.push(Cluster { core: f.b, right: f.b.x1(), fs: f.fs, members: vec![i] }),
+            None => clusters.push(Cluster { core: f.b, right: f.b.x1(), fs: f.fs, glyph: fg, members: vec![i] }),
         }
     }
     let mut lines: Vec<Line> = clusters.iter().map(|c| make_line(&frags, &c.members)).collect();
@@ -200,8 +211,57 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
         }
     }
 
+    mark_decorations(&mut lines, &glyphs);
     lines.sort_by(|a, b| a.b.y.total_cmp(&b.b.y).then(a.b.x.total_cmp(&b.b.x)));
     PageLines { lines, drop_caps }
+}
+
+/// Decorative fonts: ornaments drawn with glyphs (a column of symbols in the
+/// margin, a frieze). On the page the font is used only for one- or
+/// two-character runs of letters / digits, at least body size, at least four
+/// times, and the runs are stacked (each touches another one). Bullets (not
+/// alphanumeric), superscripts (smaller than body text) and drop caps
+/// (isolated, one per paragraph) never qualify.
+fn glyph_fonts(frags: &[Frag], body_fs: f32) -> Vec<String> {
+    let mut by_font: HashMap<&str, Vec<&Frag>> = HashMap::new();
+    for f in frags {
+        by_font.entry(f.font.as_str()).or_default().push(f);
+    }
+    by_font
+        .into_iter()
+        .filter(|(_, fs)| {
+            fs.len() >= 4
+                && fs.iter().all(|f| {
+                    let t = f.text.trim();
+                    t.chars().count() <= 2 && t.chars().any(|c| c.is_alphanumeric()) && f.fs >= body_fs * 0.95
+                })
+                && {
+                    let stacked = (0..fs.len())
+                        .filter(|&a| {
+                            (0..fs.len()).any(|b| {
+                                let (p, q) = (fs[a], fs[b]);
+                                b != a && (p.b.cx() - q.b.cx()).abs() <= 1.5 * p.fs && (p.b.cy() - q.b.cy()).abs() <= 1.5 * p.fs
+                            })
+                        })
+                        .count();
+                    stacked * 4 >= fs.len() * 3
+                }
+        })
+        .map(|(f, _)| f.to_string())
+        .collect()
+}
+
+/// Lines made only of decorative-font glyphs are flagged `decor` and kept
+/// out of the text flow.
+fn mark_decorations(lines: &mut [Line], glyph_fonts: &[String]) {
+    if glyph_fonts.is_empty() {
+        return;
+    }
+    for l in lines.iter_mut() {
+        if l.drop_cap.is_none() && l.chars() <= 2 && l.frags.iter().all(|f| glyph_fonts.iter().any(|g| *g == f.font)) {
+            l.decor = true;
+        }
+    }
 }
 
 fn make_line(frags: &[Frag], idxs: &[usize]) -> Line {
@@ -254,6 +314,7 @@ fn make_line(frags: &[Frag], idxs: &[usize]) -> Line {
         struct_role,
         order: idxs.iter().map(|&i| frags[i].src).min().unwrap_or(0),
         drop_cap: None,
+        decor: false,
     }
 }
 
@@ -301,6 +362,32 @@ mod tests {
         let pl = build_lines(&items);
         let texts: Vec<&str> = pl.lines.iter().map(|l| l.text.as_str()).collect();
         assert_eq!(texts, vec!["traduzione finale", "colonna"]);
+    }
+
+    #[test]
+    fn heading_does_not_bridge_gutter() {
+        // body line in the left column, 25pt heading in the right one, 23pt gutter
+        let items = vec![
+            el("left column text", 72.0, 100.0, 216.0, 9.0),
+            TextElement { text: "FOREWORD".into(), x: 311.0, y: 92.0, width: 94.0, height: 31.0, font_size: 25.0, ..Default::default() },
+        ];
+        let pl = build_lines(&items);
+        assert_eq!(pl.lines.len(), 2);
+    }
+
+    #[test]
+    fn flags_decorative_glyphs_not_bullets() {
+        let mut items = Vec::new();
+        for k in 0..6 {
+            let y = 100.0 + 24.0 * k as f32;
+            items.push(TextElement { text: ["s", "h", "o", "n", "g", "e"][k].into(), x: 27.0, y, width: 22.0, height: 22.0, font_size: 24.0, font_name: Some("ABCDEF+CthulhuianV2".into()), ..Default::default() });
+            items.push(TextElement { text: "•".into(), x: 66.0, y: y + 4.0, width: 4.0, height: 10.0, font_size: 9.0, font_name: Some("Symbol".into()), ..Default::default() });
+            items.push(TextElement { text: "body text of the list item".into(), x: 74.0, y: y + 4.0, width: 200.0, height: 10.0, font_size: 9.0, font_name: Some("Caslon".into()), ..Default::default() });
+        }
+        let pl = build_lines(&items);
+        let decor: Vec<&str> = pl.lines.iter().filter(|l| l.decor).map(|l| l.text.as_str()).collect();
+        assert_eq!(decor.len(), 6);
+        assert!(pl.lines.iter().filter(|l| !l.decor).all(|l| l.text.starts_with('•')));
     }
 
     #[test]

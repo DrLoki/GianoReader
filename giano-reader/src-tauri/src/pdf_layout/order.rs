@@ -15,7 +15,7 @@
 //! figure text, footers and folios last.
 
 use crate::pdf_layout::model::Bounds;
-use crate::pdf_layout::roles::{FIGURE_TEXT, FOOTER, FOOTNOTE, HEADER, PAGE_NUMBER};
+use crate::pdf_layout::roles::{DECORATION, FIGURE_TEXT, FOOTER, FOOTNOTE, HEADER, PAGE_NUMBER};
 
 fn h_overlaps(a: &Bounds, b: &Bounds) -> bool {
     a.h_overlap(b) > 0.5_f32.min(0.1 * a.w.min(b.w))
@@ -24,7 +24,7 @@ fn h_overlaps(a: &Bounds, b: &Bounds) -> bool {
 /// Returns a permutation of `0..blocks.len()` (indices in XY-Cut order).
 pub fn reading_order(blocks: &[Bounds], roles: &[&'static str], separators: &[Bounds]) -> Vec<usize> {
     let n = blocks.len();
-    let tail_role = |r: &str| matches!(r, FOOTNOTE | FIGURE_TEXT | FOOTER | PAGE_NUMBER);
+    let tail_role = |r: &str| matches!(r, FOOTNOTE | FIGURE_TEXT | DECORATION | FOOTER | PAGE_NUMBER);
     let flow: Vec<usize> = (0..n).filter(|&i| roles[i] != HEADER && !tail_role(roles[i])).collect();
 
     // nodes: flow blocks followed by separators (figures) that take part in rule 2 only
@@ -94,6 +94,7 @@ pub fn reading_order(blocks: &[Bounds], roles: &[&'static str], separators: &[Bo
     let rank = |r: &str| match r {
         FOOTNOTE => 0,
         FIGURE_TEXT => 1,
+        DECORATION => 3,
         _ => 2,
     };
     let mut tails: Vec<usize> = (0..n).filter(|&i| tail_role(roles[i])).collect();

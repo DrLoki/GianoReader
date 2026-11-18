@@ -195,3 +195,70 @@ fn tagged_pdf_uses_structure_order_and_artifacts() {
     assert_eq!(find(&r, "A tagged caption").role, "caption");
     assert_eq!(find(&r, "Chapter Title").role, "header");
 }
+
+// ---------------------------------------------------------------------------
+// Page decoration (snapshots of an illustrated RPG book): an ornamental page
+// edge drawn as box + image across the right column, and a column of glyphs
+// set in a decorative font in the left margin.
+// ---------------------------------------------------------------------------
+
+fn decorated_page() -> PageInput {
+    let words = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa", "lambda", "mu"];
+    let mut items = Vec::new();
+    for (k, w) in words.iter().enumerate() {
+        let y = 100.0 + 12.0 * k as f32;
+        let end = if k == words.len() - 1 { "." } else { "" };
+        for (x, col) in [(66.0, "left"), (306.0, "right")] {
+            items.push(TextElement {
+                text: format!("{col} column line {w} with some running text{end}"),
+                x,
+                y,
+                width: 216.0,
+                height: 15.0,
+                font_size: 9.0,
+                font_name: Some("ABCDEF+Caslon-Regular".into()),
+                ..Default::default()
+            });
+        }
+    }
+    for (k, g) in ["s", "h", "o", "o", "t", "i"].iter().enumerate() {
+        items.push(TextElement {
+            text: (*g).into(),
+            x: 27.0,
+            y: 60.0 + 24.0 * k as f32,
+            width: 22.0,
+            height: 22.0,
+            font_size: 24.0,
+            font_name: Some("GHIJKL+Ornaments".into()),
+            ..Default::default()
+        });
+    }
+    let edge = Bounds { x: 411.0, y: 60.0, w: 190.0, h: 700.0 };
+    PageInput {
+        page_num: 1,
+        page_bounds: Bounds { x: 0.0, y: 0.0, w: 594.0, h: 774.0 },
+        items,
+        bordered_boxes: vec![edge],
+        images: vec![edge, Bounds { x: 418.0, y: 66.0, w: 175.0, h: 690.0 }],
+    }
+}
+
+#[test]
+fn page_edge_ornament_is_not_a_sidebar() {
+    let r = analyze(&[decorated_page()]);
+    assert!(r.paragraphs.iter().all(|p| p.role != "sidebar"), "{:#?}", r.paragraphs.iter().map(|p| (&p.role, &p.text)).collect::<Vec<_>>());
+    let right = find(&r, "right column line alpha");
+    assert!(right.text.contains("right column line mu"), "right column split: {:?}", right.text);
+    assert_eq!(r.stats.input_chars, r.stats.output_chars);
+}
+
+#[test]
+fn decorative_glyphs_stay_out_of_the_text() {
+    let r = analyze(&[decorated_page()]);
+    let left = find(&r, "left column line alpha");
+    assert!(left.text.contains("left column line mu"));
+    assert!(r.paragraphs.iter().filter(|p| p.role != "decoration").all(|p| !p.text.split_whitespace().any(|w| w.len() == 1)));
+    let deco = r.paragraphs.iter().find(|p| p.role == "decoration").expect("decoration paragraph");
+    assert!(!deco.translatable);
+    assert_eq!(r.stats.input_chars, r.stats.output_chars);
+}

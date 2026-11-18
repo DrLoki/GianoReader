@@ -21,6 +21,8 @@ pub const FOOTNOTE: &str = "footnote";
 pub const SIDEBAR: &str = "sidebar";
 pub const TABLE: &str = "table";
 pub const FIGURE_TEXT: &str = "figure-text";
+/// Ornamental glyphs set in a decorative font: not text, never translated.
+pub const DECORATION: &str = "decoration";
 
 /// Maps a (role-mapped) structure type to one of our roles.
 pub fn struct_role_to_role(r: &str) -> Option<&'static str> {
@@ -69,6 +71,10 @@ pub fn classify_leaf(lines: &[Line], leaf: &Leaf, page: &Bounds, images: &[Bound
                 return r;
             }
         }
+    }
+
+    if ls.iter().all(|l| l.decor) {
+        return DECORATION;
     }
 
     // --- boxes -------------------------------------------------------------

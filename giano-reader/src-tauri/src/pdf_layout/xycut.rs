@@ -208,6 +208,10 @@ impl<'a> Ctx<'a> {
         let mut boxes: Vec<Bounds> = idxs.iter().map(|&i| self.lines[i].b).collect();
         let bb = self.bbox(idxs);
         for o in &self.obstacles {
+            // text printed on it: artwork behind this block, not a figure beside it
+            if idxs.iter().any(|&i| o.contains_point(self.lines[i].b.cx(), self.lines[i].b.cy())) {
+                continue;
+            }
             // clip the obstacle to the block; ignore it if it does not overlap
             let x0 = o.x.max(bb.x);
             let y0 = o.y.max(bb.y);
@@ -300,7 +304,13 @@ impl<'a> Ctx<'a> {
         if !ys.is_empty() {
             return Some(Plan { axis: Axis::Y, splits: ys, strength: min_gap, kind: "per-row-isolate" });
         }
-        // Cannot isolate the crossing lines: still cut, assigning them by centre.
+        // Cannot isolate the crossing lines. When more lines run across the
+        // split than vote for it, the votes are word spaces of loosely
+        // justified lines, not a column boundary.
+        if crossing.len() > count {
+            return None;
+        }
+        // Otherwise still cut, assigning the crossing lines by centre.
         Some(Plan { axis: Axis::X, splits: vec![split], strength: min_gap * 0.5, kind: "per-row-centre" })
     }
 
@@ -622,10 +632,40 @@ fn walk_order(node: &mut LayoutNode, order: &mut Vec<String>) {
 /// Gap between consecutive lines × this factor = vertical cut threshold.
 const LEADING_FACTOR: f32 = 3.5;
 
+/// `r` extends past the page edge (bleed).
+fn bleeds(r: &Bounds, page: &Bounds) -> bool {
+    r.x < page.x - 2.0 || r.y < page.y - 2.0 || r.x1() > page.x1() + 2.0 || r.y1() > page.y1() + 2.0
+}
+
+/// Lines cut by the edge of `r` (a sizeable part inside and outside).
+/// Text flows around figures and inside boxes, never across their border:
+/// a rectangle whose edge runs through several lines is page decoration
+/// (an ornamental page edge, a texture strip), not a container or obstacle.
+fn straddling_lines(r: &Bounds, lines: &[Line]) -> usize {
+    lines
+        .iter()
+        .filter(|l| {
+            let a = l.b.area();
+            if a <= 0.0 {
+                return false;
+            }
+            let inside = l.b.h_overlap(r) * l.b.v_overlap(r) / a;
+            inside > 0.15 && inside < 0.85
+        })
+        .count()
+}
+
 /// An image with running text printed over it (decorative artwork behind the
 /// columns) is a background, not a figure: it must not hide the gutters.
-fn is_background(img: &Bounds, lines: &[Line]) -> bool {
+fn is_background(img: &Bounds, lines: &[Line], page: &Bounds) -> bool {
+    if straddling_lines(img, lines) >= 2 {
+        return true;
+    }
     let inside: Vec<&Line> = lines.iter().filter(|l| img.contains_point(l.b.cx(), l.b.cy())).collect();
+    // artwork bleeding off the page with text printed on it (a page-edge strip)
+    if !inside.is_empty() && bleeds(img, page) {
+        return true;
+    }
     if inside.len() < 3 {
         return false;
     }
@@ -633,11 +673,20 @@ fn is_background(img: &Bounds, lines: &[Line]) -> bool {
     covered >= img.area().max(1.0) * 0.1
 }
 
+/// Images that are figures (text flows around them), excluding full-page
+/// backgrounds and artwork printed behind or across the text.
+pub fn figure_images(images: &[Bounds], lines: &[Line], page: &Bounds) -> Vec<Bounds> {
+    images.iter().filter(|b| b.area() < page.area() * 0.8 && !is_background(b, lines, page)).copied().collect()
+}
+
 pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[Bounds], images: &[Bounds], opts: &AnalysisOptions) -> PageLayout {
     let mut ctx = Ctx { lines, obstacles: Vec::new(), opts, page_num, counter: 0, leaves: HashMap::new(), box_kind: None, box_id: None };
 
     // ---- boxes: assign each line to the smallest box containing its centre
     let mut boxes = prepare_boxes(boxes, &page_bounds);
+    // a box that bleeds off the page (ornamental page edge) or whose border
+    // runs through text lines is decoration, not a container
+    boxes.retain(|(b, _)| !bleeds(b, &page_bounds) && straddling_lines(b, lines) < 2);
     boxes.sort_by(|a, b| a.0.area().total_cmp(&b.0.area()));
     let mut owner: Vec<Option<usize>> = vec![None; lines.len()];
     for (i, l) in lines.iter().enumerate() {
@@ -645,6 +694,9 @@ pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[
     }
     let total = lines.len().max(1);
     let mut box_nodes: Vec<LayoutNode> = Vec::new();
+    // text extent of each kept box: the obstacle for the body cuts (the
+    // frame's padding must not narrow a gutter next to the box)
+    let mut box_content: Vec<Bounds> = Vec::new();
     for (k, (bb, kind)) in boxes.iter().enumerate() {
         let members: Vec<usize> = (0..lines.len()).filter(|&i| owner[i] == Some(k)).collect();
         if members.is_empty() {
@@ -654,8 +706,11 @@ pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[
         // a shading behind a single row (highlighted heading) is not a box either
         let single_row = *kind == BoxKind::Sidebar && group_rows(lines, &members).len() <= 1;
         if single_row || (members.len() * 10 >= total * 6 && bb.area() > page_bounds.area() * 0.4) {
+            // the lines go to the next enclosing box (a shaded table row
+            // inside a framed sidebar), or to the body
             for i in members {
-                owner[i] = None;
+                let (cx, cy) = (lines[i].b.cx(), lines[i].b.cy());
+                owner[i] = boxes.iter().enumerate().skip(k + 1).find(|(_, (b, _))| b.contains_point(cx, cy)).map(|(j, _)| j);
             }
             continue;
         }
@@ -663,6 +718,7 @@ pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[
         let id = format!("p{}-box{}", page_num, ctx.counter);
         ctx.box_kind = Some(*kind);
         ctx.box_id = Some(id.clone());
+        box_content.push(ctx.bbox(&members));
         let inner = ctx.subdivide(members, 2);
         ctx.box_kind = None;
         ctx.box_id = None;
@@ -687,13 +743,22 @@ pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[
     }
 
     // ---- body: images and the boxes kept above are obstacles for the cuts
-    ctx.obstacles = images
-        .iter()
-        .filter(|b| b.area() < page_bounds.area() * 0.8 && !is_background(b, lines))
-        .copied()
-        .chain(box_nodes.iter().map(|n| n.bounds))
+    // (ornaments inside a kept box belong to the box: its text extent stands in for them)
+    let in_box = |img: &Bounds| {
+        box_nodes.iter().any(|n| {
+            let f = &n.bounds;
+            img.x >= f.x - 2.0 && img.y >= f.y - 2.0 && img.x1() <= f.x1() + 2.0 && img.y1() <= f.y1() + 2.0
+        })
+    };
+    ctx.obstacles = figure_images(images, lines, &page_bounds)
+        .into_iter()
+        .filter(|img| !in_box(img))
+        .chain(box_content.iter().copied())
         .collect();
-    let body: Vec<usize> = (0..lines.len()).filter(|&i| owner[i].is_none()).collect();
+    // ornamental glyphs (decorative fonts) are one leaf outside the cuts:
+    // they would otherwise widen columns and bridge gutters
+    let decor: Vec<usize> = (0..lines.len()).filter(|&i| owner[i].is_none() && lines[i].decor).collect();
+    let body: Vec<usize> = (0..lines.len()).filter(|&i| owner[i].is_none() && !lines[i].decor).collect();
     let mut root_children: Vec<LayoutNode> = Vec::new();
     let mut root_cut = None;
     let mut root_diag = None;
@@ -706,6 +771,10 @@ pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[
             root_diag = node.diag.clone();
             root_children.extend(node.children.unwrap_or_default());
         }
+    }
+    if !decor.is_empty() {
+        let diag = CutDiag { decision: "leaf: decorative glyphs".into(), lines: decor.len(), ..Default::default() };
+        root_children.push(ctx.leaf(decor, 1, Some(diag)));
     }
     // Boxes interleave by vertical position when the body is a stack of
     // horizontal bands; with a column-first body they are read afterwards.
