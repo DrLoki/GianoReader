@@ -5,7 +5,7 @@ vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: { workerSrc: '' } }));
 
 import {
   genericFamily, selectParagraphs, leadingRatio, segmentStyle, buildDistUnits,
-  PdfLayoutAnalyzer, ANALYSIS_MARGIN_PAGES,
+  PdfLayoutAnalyzer, ANALYSIS_MARGIN_PAGES, createSegmentBox, restyleSegments,
 } from './pdf-layout.js';
 
 const seg = (pageNum, over = {}) => ({
@@ -129,5 +129,30 @@ describe('expandLigatures', () => {
   it('expands typographic ligatures', async () => {
     const { expandLigatures } = await import('./pdf.js');
     expect(expandLigatures('diﬀerent identiﬁed ﬂight oﬃce')).toBe('different identified flight office');
+  });
+});
+
+describe('font of the translation boxes', () => {
+  const seg = { bounds: { x: 10, y: 20, w: 100, h: 30 }, fontSize: 10, fontName: 'Helvetica', lines: [] };
+  const par = { id: 'p1', role: 'body' };
+
+  it('uses the family of the original unless one is chosen', () => {
+    const wrapper = document.createElement('div');
+    const a = createSegmentBox(wrapper, par, seg, 2);
+    expect(a.style.fontFamily).toContain('Arial');
+    expect(a.dataset.basePx).toBe('20');
+    const b = createSegmentBox(wrapper, par, seg, 2, { fontFamily: "'Arial Narrow', sans-serif" });
+    expect(b.style.fontFamily).toContain('Arial Narrow');
+  });
+
+  it('restyle changes the family and goes back to the original with null', () => {
+    const wrapper = document.createElement('div');
+    const el = createSegmentBox(wrapper, par, seg, 2);
+    el.style.fontSize = '12px';
+    restyleSegments(wrapper, 'Verdana, sans-serif');
+    expect(el.style.fontFamily).toContain('Verdana');
+    expect(el.style.fontSize).toBe('20px'); // pending box: back to the original size
+    restyleSegments(wrapper, null);
+    expect(el.style.fontFamily).toContain('Inter');
   });
 });

@@ -105,7 +105,7 @@ export function fitText(el, startPx) {
  * Crea il box (vuoto, "pending") di un segmento dentro il wrapper della sua
  * pagina. Le coordinate sono in punti PDF, `scale` è il rapporto px/punto.
  */
-export function createSegmentBox(wrapper, par, seg, scale) {
+export function createSegmentBox(wrapper, par, seg, scale, { fontFamily = null } = {}) {
   const el = document.createElement('div');
   el.className = 'pdf-tr-seg pending';
   el.dataset.paraId = par.id;
@@ -115,10 +115,29 @@ export function createSegmentBox(wrapper, par, seg, scale) {
   el.style.top = (b.y - pad) * scale + 'px';
   el.style.width = (b.w + 2 * pad) * scale + 'px';
   el.style.height = (b.h + 2 * pad) * scale + 'px';
-  Object.assign(el.style, segmentStyle(seg, par.role));
+  const style = segmentStyle(seg, par.role);
+  Object.assign(el.style, style);
+  // Famiglia dell'originale, per tornarci se l'utente toglie la sua scelta
+  el.dataset.origFamily = style.fontFamily;
+  if (fontFamily) el.style.fontFamily = fontFamily;
+  el.dataset.basePx = String(seg.fontSize * scale);
   el.style.fontSize = seg.fontSize * scale + 'px';
   wrapper.appendChild(el);
   return el;
+}
+
+/**
+ * Cambia la famiglia dei box di traduzione già creati e riadatta il corpo di
+ * quelli tradotti (un font più stretto lascia più spazio). `fontFamily` null
+ * torna alla famiglia dell'originale.
+ */
+export function restyleSegments(container, fontFamily) {
+  for (const el of container.querySelectorAll('.pdf-tr-seg')) {
+    el.style.fontFamily = fontFamily || el.dataset.origFamily || '';
+    const base = parseFloat(el.dataset.basePx);
+    if (el.classList.contains('translated') && base > 0) fitText(el, base);
+    else if (base > 0) el.style.fontSize = base + 'px';
+  }
 }
 
 /** Scrive la traduzione nel box e adatta il corpo. */

@@ -16,6 +16,7 @@ import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from '
 import { observeChunksLazily } from './lazy-chunks.js';
 import { alignByParagraph, syncByParagraph, paragraphOffset } from './paragraph-align.js';
 import { getBasicUsage, usageSummary } from './basic-usage.js';
+import { hideMissingFontOptions } from './font-availability.js';
 import { getReadingPosition, setReadingPosition, samePosition, resolveRestoreTarget } from './reading-positions.js';
 import JSZip from 'jszip';
 
@@ -26,7 +27,7 @@ const TRANSLATION_RETRY_DELAYS_MS = [1500, 4000];
 // eslint-disable-next-line no-undef
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
 import { loadPdf, checkFileSize, validateTextContent, PdfNavigator, extractChapterText, extractPageText, renderPdfCanvas, renderPdfPageShells, renderPdfWithOverlayPlaceholders, renderPdfCoverDataUrl } from './pdf.js';
-import { PdfLayoutAnalyzer, selectParagraphs, paragraphTextsForRange, createSegmentBox, fillSegment } from './pdf-layout.js';
+import { PdfLayoutAnalyzer, selectParagraphs, paragraphTextsForRange, createSegmentBox, fillSegment, restyleSegments } from './pdf-layout.js';
 import { clearSegmentationCache } from './pdf-xycut-segmenter.js';
 import ttsController, { isProModeAvailable, makeDownloadFilename, LANG_TO_BCP47 } from './tts.js';
 
@@ -774,7 +775,13 @@ function applyFont(family) {
   const ctxFontSelect = document.getElementById('ctx-font-select');
   if (ctxFontSelect) ctxFontSelect.value = family;
   if (currentViewMode === 'original') {
-    renderNativeView();
+    if (currentFileType === 'pdf') {
+      // The PDF page itself does not change: only the translation boxes laid
+      // over it take the new family (and are fitted again).
+      restyleSegments(translationViewer, family);
+    } else {
+      renderNativeView();
+    }
   }
 }
 
@@ -1700,6 +1707,9 @@ ttsController._onProgressChange = (pct) => {
   const fontFamily = s.fontFamily || 'Georgia, serif';
   applyFont(fontFamily);
   if (fontFamilySelect) fontFamilySelect.value = fontFamily;
+  // The pickers list fonts of Windows, macOS and Linux: show only the installed ones
+  const missingFonts = hideMissingFontOptions([fontFamilySelect, document.getElementById('ctx-font-select')]);
+  if (missingFonts.length) console.log('[fonts] not installed, hidden:', missingFonts.join(', '));
   // Font size
   const fontSize = s.fontSize || 16;
   applyFontSize(fontSize);
@@ -2971,7 +2981,6 @@ function setViewMode(mode, { skipRender = false } = {}) {
       if (lazyObserver) { lazyObserver.disconnect(); lazyObserver = null; }
       // Remove all overlay placeholders from the Translation Panel DOM (Req 6.2)
       translationViewer.innerHTML = '';
-      disableFontControls(false);
       originalNative.innerHTML = '';
       originalNative.onscroll = null;
     }
@@ -2988,6 +2997,7 @@ function setViewMode(mode, { skipRender = false } = {}) {
   // The scroll sync toggle is useful when the two panels have different layouts
   // (EPUB original view with iframe, or PDF): show it only there.
   updateSyncUi();
+  updateFontControls();
 }
 
 // Updates the visibility of the sync toggle and the visual state of the percentage
@@ -3011,37 +3021,30 @@ function updateSyncUi() {
   }
 }
 
-// ── Font controls disable/enable (PDF canvas mode) ────────────────────────
-function disableFontControls(disabled) {
-  const fontRow = fontFamilySelect ? fontFamilySelect.closest('.settings-row') : null;
+// ── Font controls state ───────────────────────────────────────────────────
+// The font family is always available: in the Original view of a PDF it is
+// applied to the translation boxes laid over the page (a narrow font helps a
+// longer translation fit). The text size is disabled only there, because the
+// boxes take the size of the original text. The state is derived from the
+// current file and view every time, so it cannot stay stuck after a change.
+function updateFontControls() {
+  const sizeDisabled = currentFileType === 'pdf' && currentViewMode === 'original';
   const sizeRow = fontSizeRange ? fontSizeRange.closest('.settings-row-inline') : null;
-  const ctxFontSelect = document.getElementById('ctx-font-select');
   const ctxSizeRange = document.getElementById('ctx-size-range');
-  const ctxFontGroup = ctxFontSelect ? ctxFontSelect.closest('.context-menu-group') : null;
   const ctxSizeGroup = ctxSizeRange ? ctxSizeRange.closest('.context-menu-group') : null;
+  const tooltip = sizeDisabled ? ui('pdf_canvas_tooltip') : '';
+  [sizeRow, ctxSizeGroup].filter(Boolean).forEach(el => {
+    el.classList.toggle('controls-disabled', sizeDisabled);
+    el.title = tooltip;
+  });
+  if (fontSizeRange) fontSizeRange.disabled = sizeDisabled;
+  if (ctxSizeRange) ctxSizeRange.disabled = sizeDisabled;
+}
 
-  const elements = [fontRow, sizeRow, ctxFontGroup, ctxSizeGroup].filter(Boolean);
-
-  if (disabled) {
-    const tooltip = ui('pdf_canvas_tooltip');
-    elements.forEach(el => {
-      el.classList.add('controls-disabled');
-      el.title = tooltip;
-    });
-    if (fontFamilySelect) fontFamilySelect.disabled = true;
-    if (fontSizeRange) fontSizeRange.disabled = true;
-    if (ctxFontSelect) ctxFontSelect.disabled = true;
-    if (ctxSizeRange) ctxSizeRange.disabled = true;
-  } else {
-    elements.forEach(el => {
-      el.classList.remove('controls-disabled');
-      el.title = '';
-    });
-    if (fontFamilySelect) fontFamilySelect.disabled = false;
-    if (fontSizeRange) fontSizeRange.disabled = false;
-    if (ctxFontSelect) ctxFontSelect.disabled = false;
-    if (ctxSizeRange) ctxSizeRange.disabled = false;
-  }
+// Font family of the PDF translation boxes: the one chosen by the user, or
+// (never chosen) the family of the original text.
+function pdfOverlayFontFamily() {
+  return loadSettings().fontFamily || null;
 }
 
 // ── Native view rendering ──────────────────────────────────────────────────
@@ -3066,7 +3069,7 @@ async function renderNativeView() {
       await renderPdfCanvas(pdfDoc.proxy, pageNumbers, originalNative,
         () => myRender === nativeRenderGeneration);
       if (myRender !== nativeRenderGeneration) return;
-      disableFontControls(true);
+      updateFontControls();
     } catch (err) {
       if (myRender !== nativeRenderGeneration) return;
       console.error('[native] PDF canvas rendering error:', err);
@@ -3088,7 +3091,9 @@ async function renderNativeView() {
       const fg = getComputedStyle(document.body).color || '#e0e0e0';
       const font = getComputedStyle(document.documentElement).getPropertyValue('--reader-font-family') || 'Georgia, serif';
       const size = getComputedStyle(document.documentElement).getPropertyValue('--font-size') || '16px';
-      const themeStyle = `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:${font}!important;font-size:${size}!important;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}a{color:inherit;}</style>`;
+      // Fonts bundled with the app (e.g. Roboto Condensed) for the book's iframe
+      const bundledFonts = `<link rel="stylesheet" href="${new URL('/fonts/roboto-condensed/fonts.css', location.href).href}">`;
+      const themeStyle = bundledFonts + `<style>html,body{background:${bg}!important;color:${fg}!important;font-family:${font}!important;font-size:${size}!important;line-height:1.8;padding:1rem;margin:0;max-width:100%;overflow-x:hidden;}img,table,svg{max-width:100%!important;height:auto;}pre{white-space:pre-wrap;overflow-wrap:break-word;}a{color:inherit;}</style>`;
       // Security: EPUB content is untrusted. A srcdoc iframe inherits
       // the parent's origin, so without a sandbox the book's <script>s
       // would run with access to the Tauri APIs (filesystem). "allow-same-origin"
@@ -3627,12 +3632,13 @@ async function translatePdfLayout(startPct = 0, { force = false } = {}) {
 
     // One (empty) box per visible segment of each paragraph
     const boxes = new Map(); // paragraph id → [{ el, seg, scale, index }]
+    const overlayFont = pdfOverlayFontFamily();
     for (const par of paragraphs) {
       const list = [];
       par.segments.forEach((seg, index) => {
         const shell = shellByPage.get(seg.pageNum);
         if (!shell) return;
-        list.push({ el: createSegmentBox(shell.wrapper, par, seg, shell.scale), seg, scale: shell.scale, index });
+        list.push({ el: createSegmentBox(shell.wrapper, par, seg, shell.scale, { fontFamily: overlayFont }), seg, scale: shell.scale, index });
       });
       boxes.set(par.id, list);
     }
@@ -4071,6 +4077,7 @@ async function loadEpub(arrayBuffer, filePath = '', { restorePosition = true } =
   currentChapterParagraphs = [];
   currentChapterBody = null;
   currentFileType = 'epub';
+  updateFontControls();
   pdfDoc = null;
   pdfAnalyzer = null;
   pdfNav = null;
@@ -4397,6 +4404,7 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
     pdfDoc = doc;
     pdfNav = nav;
     currentFileType = 'pdf';
+    updateFontControls();
     currentFilePath = filePath || null;
 
     // Source language for choosing the TTS voice: the one declared by the PDF,
@@ -4458,6 +4466,7 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
     pdfDoc = null;
     pdfNav = null;
     currentFileType = null;
+    updateFontControls();
     hideLoading();
     await showAlert(ui('pdf_error_open') + ' ' + errMsg(err));
   }

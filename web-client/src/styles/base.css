@@ -8,7 +8,9 @@
 html, body {
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: var(--font-size, 16px);
+  /* Fixed: the interface is sized in rem. The "Font size" setting (--font-size)
+     applies only to the book text (card-ui .card-content). */
+  font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
