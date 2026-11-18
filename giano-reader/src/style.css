@@ -894,6 +894,9 @@ body.theme-sepia {
   color: var(--text-muted);
   margin-top: 2px;
 }
+/* EPUB links have no href (data-epub-href), so the browser would show the text cursor */
+.text-panel a[data-epub-href] { cursor: pointer; }
+
 .settings-hint em {
   font-style: italic;
   color: var(--accent);

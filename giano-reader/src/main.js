@@ -3353,39 +3353,44 @@ function renderOriginal(paragraphs) {
     originalViewer.innerHTML = `<p class="placeholder">${ui('noContent')}</p>`;
   }
   originalViewer.scrollTop = 0;
-
-  // Handling of clicks on internal EPUB links in the text panel
-  originalViewer.querySelectorAll('a[data-epub-href]').forEach(a => {
-    a.addEventListener('click', e => {
-      e.preventDefault();
-      const href = a.getAttribute('data-epub-href') || '';
-      if (!href) return;
-      if (isExternalHttpUrl(href)) {
-        openExternalLink(href);
-        return;
-      }
-      // Non-http(s) schemes (javascript:, file:, …) are not followed
-      if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return;
-      const [filePart, anchor] = href.split('#');
-      if (filePart) {
-        const idx = currentSpineItems.findIndex(i =>
-          i.href === filePart || i.href?.endsWith(filePart) || filePart?.endsWith(i.href)
-        );
-        if (idx >= 0) {
-          displayChapter(idx).then(() => {
-            if (anchor) {
-              const target = originalViewer.querySelector(`[id="${anchor}"], [name="${anchor}"]`);
-              if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          });
-        }
-      } else if (anchor) {
-        const target = originalViewer.querySelector(`[id="${anchor}"], [name="${anchor}"]`);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
-  });
 }
+
+// Clicks on EPUB links (<a data-epub-href>) in both text panels: the translation
+// keeps the link when it covers the whole block (applyInlineFormatting).
+// Delegated once on the panels, so it also covers paragraphs translated later.
+// Anchors are looked up in the original panel; the scroll sync moves the other.
+function followEpubTextLink(href) {
+  if (!href) return;
+  if (isExternalHttpUrl(href)) {
+    openExternalLink(href);
+    return;
+  }
+  // Non-http(s) schemes (javascript:, file:, …) are not followed
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return;
+  const [filePart, anchor] = href.split('#');
+  const scrollToAnchor = () => {
+    if (!anchor) return;
+    const target = originalViewer.querySelector(`[id="${CSS.escape(anchor)}"], [name="${CSS.escape(anchor)}"]`);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  if (filePart) {
+    const idx = currentSpineItems.findIndex(i =>
+      i.href === filePart || i.href?.endsWith(filePart) || filePart?.endsWith(i.href)
+    );
+    if (idx >= 0) displayChapter(idx).then(scrollToAnchor);
+  } else {
+    scrollToAnchor();
+  }
+}
+
+[originalViewer, translationViewer].forEach(panel => {
+  panel.addEventListener('click', e => {
+    const a = e.target && e.target.closest ? e.target.closest('a[data-epub-href]') : null;
+    if (!a || !panel.contains(a)) return;
+    e.preventDefault();
+    followEpubTextLink(a.getAttribute('data-epub-href') || '');
+  });
+});
 function renderTranslationPlaceholder(msg) {
   translationViewer.innerHTML = `<p class="placeholder">${msg}</p>`;
   translationViewer.scrollTop = 0;
