@@ -5,7 +5,7 @@ vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: { workerSrc: '' } }));
 
 import {
   genericFamily, selectParagraphs, leadingRatio, segmentStyle, buildDistUnits,
-  PdfLayoutAnalyzer, ANALYSIS_MARGIN_PAGES, createSegmentBox, restyleSegments,
+  PdfLayoutAnalyzer, ANALYSIS_MARGIN_PAGES, createSegmentBox, restyleSegments, segmentBoxGeometry, segmentRotation,
 } from './pdf-layout.js';
 
 const seg = (pageNum, over = {}) => ({
@@ -105,8 +105,16 @@ describe('PdfLayoutAnalyzer', () => {
   it('reports progress', async () => {
     const { an } = setup();
     const onProgress = vi.fn();
-    await an.analyze(1, 1, { onProgress });
-    expect(onProgress).toHaveBeenLastCalledWith(3, 3);
+    const onAnalyze = vi.fn();
+    await an.analyze(1, 1, { onProgress, onAnalyze });
+    expect(onProgress).toHaveBeenNthCalledWith(1, 0, 3, 1); // start, before the first page
+    expect(onProgress).toHaveBeenLastCalledWith(3, 3, 3);  // done, total, last page
+    expect(onAnalyze).toHaveBeenCalledWith(3);
+    // cached result: no progress at all
+    onProgress.mockClear(); onAnalyze.mockClear();
+    await an.analyze(1, 1, { onProgress, onAnalyze });
+    expect(onProgress).not.toHaveBeenCalled();
+    expect(onAnalyze).not.toHaveBeenCalled();
   });
 });
 
@@ -154,5 +162,42 @@ describe('font of the translation boxes', () => {
     expect(el.style.fontSize).toBe('20px'); // pending box: back to the original size
     restyleSegments(wrapper, null);
     expect(el.style.fontFamily).toContain('Inter');
+  });
+});
+
+describe('rotated text boxes', () => {
+  // caption 20pt wide and 100pt tall on the page, reading top→bottom
+  const seg = (rot, lines = []) => ({ bounds: { x: 50, y: 100, w: 20, h: 100 }, fontSize: 8, fontName: 'Helvetica', alignment: 'left', lines, rot });
+
+  it('horizontal boxes keep the page geometry', () => {
+    expect(segmentBoxGeometry(seg(0), 2, 0)).toEqual({ left: 100, top: 200, width: 40, height: 200, rot: 0 });
+    expect(segmentRotation({})).toBe(0);
+    expect(segmentRotation({ rot: 45 })).toBe(0);
+  });
+
+  it('90° and 270° swap width and height around the same centre', () => {
+    for (const rot of [90, 270]) {
+      const g = segmentBoxGeometry(seg(rot), 2, 0);
+      expect(g).toEqual({ left: 20, top: 280, width: 200, height: 40, rot });
+      // same centre as the original box
+      expect(g.left + g.width / 2).toBe(120);
+      expect(g.top + g.height / 2).toBe(300);
+    }
+    expect(segmentBoxGeometry(seg(180), 2, 0)).toMatchObject({ width: 40, height: 200, rot: 180 });
+  });
+
+  it('the box is rotated like the original', () => {
+    const wrapper = document.createElement('div');
+    const el = createSegmentBox(wrapper, { id: 'p', role: 'figure-text' }, seg(270), 1);
+    expect(el.style.transform).toBe('rotate(270deg)');
+    expect(el.dataset.rot).toBe('270');
+    const flat = createSegmentBox(wrapper, { id: 'q', role: 'body' }, seg(0), 1);
+    expect(flat.style.transform).toBe('');
+  });
+
+  it('leading of sideways text is measured along x', () => {
+    const lines = [{ x: 62, y: 100, w: 8, h: 100 }, { x: 52, y: 100, w: 8, h: 100 }];
+    expect(leadingRatio(seg(90, lines))).toBeCloseTo(10 / 8, 5);
+    expect(leadingRatio(seg(0, lines))).toBeCloseTo(1.18, 5); // same y: no step, default
   });
 });

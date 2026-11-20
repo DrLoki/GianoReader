@@ -147,6 +147,7 @@ For a PDF, the same icon shows the original pages on the left and, on the right,
 - The boxes use the font family chosen in **Settings → Font** (or in the right-click menu). If you never chose one, they use the family of the original text. The text size always follows the original page, so the **Font size** control is disabled in this view.
 
 > **Tip: use a condensed font.** Many languages take more room than English: an Italian translation, for example, is often 10–20 % longer. With a condensed font more words fit on each line, so the translated text shrinks less, stays readable and lines up better with the original page. Choose **Roboto Condensed**, which comes with Giano Reader and is available on every system, or a narrow font of your system such as **Arial Narrow**. Changing the font updates the boxes already translated at once.
+- Rotated text, such as a caption running up the side of a picture or a credit along the margin, is translated too, and its translation is written rotated the same way (90°, 180° or 270°). It is read as a caption and kept out of the columns of the main text.
 - Page numbers are not translated.
 - Both panels show the pages at the same size, so with scroll sync on they move together page by page.
 - In the text view, PDF paragraphs come from the same analysis, so the reflowed text and the page overlay use the same translations.

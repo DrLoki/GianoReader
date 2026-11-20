@@ -18,6 +18,9 @@ pub struct Frag {
     pub artifact: bool,
     pub struct_id: Option<u32>,
     pub struct_role: Option<String>,
+    /// Reading direction, quantised: 0 (horizontal), 90 (top→bottom),
+    /// 180 (upside down), 270 (bottom→top).
+    pub rot: u16,
 }
 
 #[derive(Debug, Clone)]
@@ -42,11 +45,39 @@ pub struct Line {
     pub drop_cap: Option<Bounds>,
     /// Ornament set in a symbol/decorative font (see `mark_decorations`).
     pub decor: bool,
+    /// Reading direction of the line (see `Frag::rot`).
+    pub rot: u16,
+    /// Bounds in the line's own reading frame (text horizontal, lines
+    /// stacked downwards): equal to `b` for horizontal text. Row grouping and
+    /// indentation use it, so rotated blocks read in the right order.
+    pub fb: Bounds,
 }
 
 impl Line {
     pub fn chars(&self) -> usize {
         visible_len(&self.text)
+    }
+}
+
+/// Quantised reading direction of a run: the extractor's angle (degrees,
+/// screen coordinates, clockwise), or, for inputs without it, 90 for a tall
+/// multi-character run (direction unknown: assume top→bottom).
+fn rot_class(it: &TextElement, text: &str) -> u16 {
+    match it.rot {
+        Some(a) if a.is_finite() => ((((a.rem_euclid(360.0) + 45.0) / 90.0).floor() as u16) % 4) * 90,
+        _ if it.height > 2.5 * it.width.max(0.1) && visible_len(text) >= 3 => 90,
+        _ => 0,
+    }
+}
+
+/// Page bounds → bounds in the reading frame of `rot` (text runs along +x,
+/// successive lines along +y).
+pub fn to_frame(b: &Bounds, rot: u16) -> Bounds {
+    match rot {
+        90 => Bounds { x: b.y, y: -(b.x + b.w), w: b.h, h: b.w },
+        180 => Bounds { x: -(b.x + b.w), y: -(b.y + b.h), w: b.w, h: b.h },
+        270 => Bounds { x: -(b.y + b.h), y: b.x, w: b.h, h: b.w },
+        _ => *b,
     }
 }
 
@@ -82,6 +113,7 @@ fn to_frags(items: &[TextElement]) -> Vec<Frag> {
             if !(it.x.is_finite() && it.y.is_finite() && it.width.is_finite() && it.height.is_finite()) {
                 return None;
             }
+            let rot = rot_class(it, &text);
             let h = if it.height > 0.1 { it.height } else { it.font_size.max(1.0) };
             let fs = if it.font_size > 0.1 { it.font_size } else { h };
             Some(Frag {
@@ -93,6 +125,7 @@ fn to_frags(items: &[TextElement]) -> Vec<Frag> {
                 artifact: it.artifact,
                 struct_id: it.struct_id,
                 struct_role: it.struct_role.clone(),
+                rot,
             })
         })
         .collect()
@@ -112,7 +145,7 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
     for (i, f) in frags.iter().enumerate() {
         let t = f.text.trim();
         let n = t.chars().count();
-        if n == 0 || n > 2 || !t.chars().any(|c| c.is_alphabetic()) || glyphs.contains(&f.font) {
+        if n == 0 || n > 2 || !t.chars().any(|c| c.is_alphabetic()) || glyphs.contains(&f.font) || f.rot != 0 {
             continue;
         }
         if f.fs < 2.5 * body_fs || f.b.h < 2.0 * body_fs {
@@ -123,6 +156,7 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
             .enumerate()
             .filter(|(j, g)| {
                 *j != i
+                    && g.rot == 0
                     && g.fs < f.fs * 0.6
                     && g.b.x >= f.b.x1() - 2.0
                     && g.b.x <= f.b.x1() + 3.0 * g.fs
@@ -141,51 +175,27 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
     // vertically by at least half the smaller height. Wide gaps (column
     // gutters, table cells) therefore always start a new line, and a tall
     // run in one column can never bridge two lines of another column.
-    let mut order: Vec<usize> = (0..frags.len()).filter(|&i| keep[i]).collect();
-    order.sort_by(|&a, &b| frags[a].b.x.total_cmp(&frags[b].b.x).then(frags[a].b.y.total_cmp(&frags[b].b.y)));
+    let horizontal: Vec<usize> = (0..frags.len()).filter(|&i| keep[i] && frags[i].rot == 0).collect();
+    let mut lines: Vec<Line> = cluster_runs(&frags, horizontal, &glyphs).iter().map(|m| make_line(&frags, m)).collect();
 
-    struct Cluster {
-        core: Bounds,
-        right: f32,
-        fs: f32,
-        /// made of decorative-font glyphs: never mixed with real text
-        glyph: bool,
-        members: Vec<usize>,
-    }
-    let mut clusters: Vec<Cluster> = Vec::new();
-    for i in order {
-        let f = &frags[i];
-        let fg = glyphs.contains(&f.font);
-        let mut best: Option<(usize, f32)> = None;
-        for (k, c) in clusters.iter().enumerate() {
-            if c.glyph != fg {
-                continue;
-            }
-            let gap = f.b.x - c.right;
-            // the allowance follows the *smaller* font: a display heading
-            // next to body text must not stretch it across the gutter
-            if gap > 1.0 * f.fs.min(c.fs) || gap < -0.5 * f.fs.max(c.fs) - f.b.w.min(c.core.w) * 0.5 {
-                continue;
-            }
-            let ov = f.b.v_overlap(&c.core);
-            if ov > 0.0 && ov >= 0.5 * f.b.h.min(c.core.h) && best.map(|(_, o)| ov > o).unwrap_or(true) {
-                best = Some((k, ov));
-            }
+    // ---- 3. rotated runs: the same sweep in their own reading frame
+    for rot in [90u16, 180, 270] {
+        let idxs: Vec<usize> = (0..frags.len()).filter(|&i| keep[i] && frags[i].rot == rot).collect();
+        if idxs.is_empty() {
+            continue;
         }
-        match best {
-            Some((k, _)) => {
-                let c = &mut clusters[k];
-                if f.b.h > c.core.h {
-                    c.core = f.b;
-                    c.fs = f.fs;
-                }
-                c.right = c.right.max(f.b.x1());
-                c.members.push(i);
+        let frame: Vec<Frag> = frags.iter().map(|f| Frag { b: to_frame(&f.b, rot), ..f.clone() }).collect();
+        for m in cluster_runs(&frame, idxs, &glyphs) {
+            let mut l = make_line(&frame, &m);
+            l.fb = l.b;
+            l.rot = rot;
+            l.b = Bounds::union_all(m.iter().map(|&i| &frags[i].b)).unwrap_or_default();
+            for (k, &i) in m.iter().enumerate() {
+                l.frags[k].b = frags[i].b;
             }
-            None => clusters.push(Cluster { core: f.b, right: f.b.x1(), fs: f.fs, glyph: fg, members: vec![i] }),
+            lines.push(l);
         }
     }
-    let mut lines: Vec<Line> = clusters.iter().map(|c| make_line(&frags, &c.members)).collect();
 
     // ---- 4. attach drop caps ---------------------------------------------
     let mut drop_caps = Vec::new();
@@ -211,6 +221,9 @@ pub fn build_lines(items: &[TextElement]) -> PageLines {
         }
     }
 
+    for l in lines.iter_mut().filter(|l| l.rot == 0) {
+        l.fb = l.b; // drop caps widened `b`
+    }
     mark_decorations(&mut lines, &glyphs);
     lines.sort_by(|a, b| a.b.y.total_cmp(&b.b.y).then(a.b.x.total_cmp(&b.b.x)));
     PageLines { lines, drop_caps }
@@ -264,6 +277,56 @@ fn mark_decorations(lines: &mut [Line], glyph_fonts: &[String]) {
     }
 }
 
+/// Sweep runs (indices into `frags`) left→right into lines; returns the
+/// member indices of each line.
+fn cluster_runs(frags: &[Frag], idxs: Vec<usize>, glyphs: &[String]) -> Vec<Vec<usize>> {
+    let mut order = idxs;
+    order.sort_by(|&a, &b| frags[a].b.x.total_cmp(&frags[b].b.x).then(frags[a].b.y.total_cmp(&frags[b].b.y)));
+
+    struct Cluster {
+        core: Bounds,
+        right: f32,
+        fs: f32,
+        /// made of decorative-font glyphs: never mixed with real text
+        glyph: bool,
+        members: Vec<usize>,
+    }
+    let mut clusters: Vec<Cluster> = Vec::new();
+    for i in order {
+        let f = &frags[i];
+        let fg = glyphs.contains(&f.font);
+        let mut best: Option<(usize, f32)> = None;
+        for (k, c) in clusters.iter().enumerate() {
+            if c.glyph != fg {
+                continue;
+            }
+            let gap = f.b.x - c.right;
+            // the allowance follows the *smaller* font: a display heading
+            // next to body text must not stretch it across the gutter
+            if gap > 1.0 * f.fs.min(c.fs) || gap < -0.5 * f.fs.max(c.fs) - f.b.w.min(c.core.w) * 0.5 {
+                continue;
+            }
+            let ov = f.b.v_overlap(&c.core);
+            if ov > 0.0 && ov >= 0.5 * f.b.h.min(c.core.h) && best.map(|(_, o)| ov > o).unwrap_or(true) {
+                best = Some((k, ov));
+            }
+        }
+        match best {
+            Some((k, _)) => {
+                let c = &mut clusters[k];
+                if f.b.h > c.core.h {
+                    c.core = f.b;
+                    c.fs = f.fs;
+                }
+                c.right = c.right.max(f.b.x1());
+                c.members.push(i);
+            }
+            None => clusters.push(Cluster { core: f.b, right: f.b.x1(), fs: f.fs, glyph: fg, members: vec![i] }),
+        }
+    }
+    clusters.into_iter().map(|c| c.members).collect()
+}
+
 fn make_line(frags: &[Frag], idxs: &[usize]) -> Line {
     let mut text = String::new();
     let mut prev_right: Option<f32> = None;
@@ -315,18 +378,22 @@ fn make_line(frags: &[Frag], idxs: &[usize]) -> Line {
         order: idxs.iter().map(|&i| frags[i].src).min().unwrap_or(0),
         drop_cap: None,
         decor: false,
+        rot: 0,
+        fb: b,
     }
 }
 
-/// Group lines (indices) into visual rows: lines sharing a baseline.
-/// Rows are returned top-to-bottom, each row sorted left-to-right.
+/// Group lines (indices) into visual rows: lines sharing a baseline, in each
+/// line's reading frame (`fb`). Rows are returned in reading order (top to
+/// bottom for horizontal text, right to left for text rotated 90°…), each
+/// row sorted along the reading direction.
 pub fn group_rows(lines: &[Line], idxs: &[usize]) -> Vec<Vec<usize>> {
     let mut sorted: Vec<usize> = idxs.to_vec();
-    sorted.sort_by(|&a, &b| lines[a].b.cy().total_cmp(&lines[b].b.cy()));
+    sorted.sort_by(|&a, &b| lines[a].fb.cy().total_cmp(&lines[b].fb.cy()));
     let mut rows: Vec<(Bounds, Vec<usize>)> = Vec::new();
     for i in sorted {
         let l = &lines[i];
-        let core = if l.drop_cap.is_some() { Bounds { y: l.b.y1() - l.fs * 1.2, h: l.fs * 1.2, ..l.b } } else { l.b };
+        let core = if l.drop_cap.is_some() { Bounds { y: l.fb.y1() - l.fs * 1.2, h: l.fs * 1.2, ..l.fb } } else { l.fb };
         match rows.last_mut() {
             Some((rb, members)) if core.v_overlap(rb) >= 0.5 * core.h.min(rb.h) && core.v_overlap(rb) > 0.0 => {
                 members.push(i);
@@ -336,7 +403,7 @@ pub fn group_rows(lines: &[Line], idxs: &[usize]) -> Vec<Vec<usize>> {
     }
     rows.into_iter()
         .map(|(_, mut m)| {
-            m.sort_by(|&a, &b| lines[a].b.x.total_cmp(&lines[b].b.x));
+            m.sort_by(|&a, &b| lines[a].fb.x.total_cmp(&lines[b].fb.x));
             m
         })
         .collect()

@@ -17,6 +17,7 @@ import { observeChunksLazily } from './lazy-chunks.js';
 import { alignByParagraph, syncByParagraph, paragraphOffset } from './paragraph-align.js';
 import { getBasicUsage, usageSummary } from './basic-usage.js';
 import { hideMissingFontOptions } from './font-availability.js';
+import { PdfProgress } from './pdf-progress.js';
 import { getReadingPosition, setReadingPosition, samePosition, resolveRestoreTarget } from './reading-positions.js';
 import JSZip from 'jszip';
 
@@ -2280,6 +2281,44 @@ function showLoading(msg) {
 function hideLoading() {
   loadingOverlay.classList.add('hidden');
 }
+
+// Progress card of PDF work (opening, page extraction, layout analysis): the
+// logic is in pdf-progress.js (ported from PDF X-Ray), this only draws it.
+const pdfProgressEl = document.getElementById('pdf-progress');
+let pdfProgressFadeTimer = null;
+const pdfProgress = new PdfProgress({
+  t: (key, vars) => ui(key, vars),
+  paint: (v) => {
+    if (!pdfProgressEl) return;
+    clearTimeout(pdfProgressFadeTimer);
+    if (!v.visible) {
+      pdfProgressEl.classList.add('fading');
+      pdfProgressFadeTimer = setTimeout(() => pdfProgressEl.classList.add('hidden'), 400);
+      return;
+    }
+    pdfProgressEl.classList.remove('hidden', 'fading');
+    pdfProgressEl.classList.toggle('busy', !!v.busy);
+    pdfProgressEl.classList.toggle('error', v.state === 'error');
+    const pct = Math.max(0, Math.min(100, (v.fraction || 0) * 100));
+    pdfProgressEl.setAttribute('aria-valuenow', String(Math.round(pct)));
+    document.getElementById('pdf-progress-phase').textContent = v.phase || '';
+    document.getElementById('pdf-progress-detail').textContent = v.detail || '';
+    document.getElementById('pdf-progress-eta').textContent = v.eta || '';
+    document.getElementById('pdf-progress-bar').style.width = pct.toFixed(1) + '%';
+  },
+});
+
+/** Analysis callbacks that drive the progress card. */
+const pdfProgressHooks = {
+  onProgress: (done, total, pageNum) => pdfProgress.extract(done, total, pageNum),
+  onAnalyze: (pages) => pdfProgress.analyze(pages),
+};
+
+/** Ends the progress run of an analysis with its summary. */
+function pdfProgressDone(result) {
+  const s = result && result.stats;
+  pdfProgress.done(s ? ui('pdfProgressSummary', { pages: s.pageCount, paragraphs: s.paragraphCount }) : '');
+}
 function hideNoBookPlaceholder() {
   noBookPlaceholder.classList.add('hidden');
 }
@@ -3592,13 +3631,17 @@ async function extractPdfUnitText(range, lang) {
   if (window.__TAURI__ || window.__TAURI_INTERNALS__) {
     try {
       if (!pdfAnalyzer || pdfAnalyzer.doc !== pdfDoc.proxy) pdfAnalyzer = new PdfLayoutAnalyzer(pdfDoc.proxy);
-      const result = await pdfAnalyzer.analyze(range.start, range.end);
+      const result = await pdfAnalyzer.analyze(range.start, range.end, pdfProgressHooks);
+      pdfProgressDone(result);
       const texts = paragraphTextsForRange(result, range.start, range.end);
       if (texts.length) return texts;
     } catch (err) {
-      console.warn('[pdf] layout analysis failed, using the simple text extraction:', err);
+      console.error(`[pdf] layout analysis of pages ${range.start}-${range.end} failed, using the simple text extraction:`, err);
+      pdfProgress.fail(ui('pdfLayoutFailed', { error: errMsg(err) }));
     }
   }
+  // browser or no analysis: the run started on opening ends here
+  if (pdfProgress.active) pdfProgress.done();
   return extractChapterText(pdfDoc.proxy, range, lang);
 }
 
@@ -3629,9 +3672,14 @@ async function translatePdfLayout(startPct = 0, { force = false } = {}) {
     setTranslationStatus(ui('pdf_layout_analyzing'));
     const result = await pdfAnalyzer.analyze(range.start, range.end, {
       signal,
-      onProgress: (done, total) => setTranslationStatus(`${ui('pdf_layout_analyzing')} ${Math.round(done / total * 100)}%`),
+      onProgress: (done, total, pageNum) => {
+        setTranslationStatus(`${ui('pdf_layout_analyzing')} ${Math.round(done / total * 100)}%`);
+        pdfProgress.extract(done, total, pageNum);
+      },
+      onAnalyze: pdfProgressHooks.onAnalyze,
     });
     if (signal.aborted || !result) return true;
+    pdfProgressDone(result);
 
     const paragraphs = selectParagraphs(result, range.start, range.end);
     if (!paragraphs.length) return false; // scanned / no text: let the old path say so
@@ -3695,7 +3743,8 @@ async function translatePdfLayout(startPct = 0, { force = false } = {}) {
     return true;
   } catch (err) {
     if (signal.aborted) return true;
-    console.warn('[translate-pdf-layout] failed, falling back to the simple overlay:', err);
+    console.error('[translate-pdf-layout] failed, falling back to the simple overlay:', err);
+    pdfProgress.fail(ui('pdfLayoutFailed', { error: errMsg(err) }));
     return false;
   }
 }
@@ -4343,6 +4392,10 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
   // validated (further below): an invalid file leaves the one already open untouched.
   // pdf.js transfers the ArrayBuffer to its own worker: the size must be read first.
   const pdfByteLength = arrayBuffer.byteLength;
+  const pdfName = (filePath || '').split(/[\\/]/).pop() || '';
+  const openStart = performance.now();
+  console.info(`[pdf] opening "${pdfName}" (${(pdfByteLength / 1_048_576).toFixed(1)} MB)`);
+  pdfProgress.begin();
 
   try {
     const s = loadSettings();
@@ -4350,6 +4403,8 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
 
     // File size check
     if (!checkFileSize(arrayBuffer.byteLength, maxMB)) {
+      console.warn(`[pdf] "${pdfName}" exceeds the ${maxMB} MB limit`);
+      pdfProgress.hide();
       hideLoading();
       await showAlert(ui('pdf_error_too_large', { size: (arrayBuffer.byteLength / 1024 / 1024).toFixed(1), max: maxMB }));
       return;
@@ -4359,12 +4414,14 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
     let doc;
     try {
       const filename = (filePath || '').split(/[\\/]/).pop() || '';
-      doc = await loadPdf(arrayBuffer, filename);
+      doc = await loadPdf(arrayBuffer, filename, { onProgress: (loaded, total) => pdfProgress.opening(loaded, total) });
     } catch (err) {
+      console.error(`[pdf] cannot open "${pdfName}":`, err);
       hideLoading();
       const msg = (err && err.message && err.message.includes('magic bytes'))
         ? ui('pdf_error_invalid')
         : ui('pdf_error_open');
+      pdfProgress.fail(`${msg} ${errMsg(err)}`);
       await showAlert(msg);
       return;
     }
@@ -4374,7 +4431,9 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
     try {
       const validation = await validateTextContent(doc.proxy);
       if (validation === 'blocked') {
+        console.warn(`[pdf] "${pdfName}" has no extractable text in its first pages`);
         try { doc.proxy.destroy(); } catch (_) { }
+        pdfProgress.hide();
         hideLoading();
         await showAlert(ui('pdf_blocked_dialog'));
         return;
@@ -4383,11 +4442,14 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
       // Create navigator
       nav = await PdfNavigator.create(doc.proxy, doc.outline);
     } catch (err) {
+      console.error(`[pdf] cannot read the structure of "${pdfName}":`, err);
       try { doc.proxy.destroy(); } catch (_) { }
       hideLoading();
+      pdfProgress.fail(ui('pdf_error_open') + ' ' + errMsg(err));
       await showAlert(ui('pdf_error_open') + ' ' + errMsg(err));
       return;
     }
+    console.info(`[pdf] "${pdfName}" opened in ${Math.round(performance.now() - openStart)} ms: ${doc.pageCount} pages, ${nav.totalUnits} ${nav.mode === 'chapter' ? 'chapters' : 'pages'} to navigate`);
 
     // Valid file: now the previous book can be closed
     rememberReadingPosition();
@@ -4478,6 +4540,8 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
     pdfNav = null;
     currentFileType = null;
     updateFontControls();
+    console.error(`[pdf] error while opening "${pdfName}":`, err);
+    pdfProgress.fail(ui('pdf_error_open') + ' ' + errMsg(err));
     hideLoading();
     await showAlert(ui('pdf_error_open') + ' ' + errMsg(err));
   }

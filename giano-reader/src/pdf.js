@@ -1321,14 +1321,16 @@ export function isLibraryFile(filename) {
  * @returns {Promise<PdfDocument>} Parsed PDF document wrapper
  * @throws {Error} If magic bytes invalid or pdfjs fails to parse
  */
-export async function loadPdf(buffer, filename = '') {
+export async function loadPdf(buffer, filename = '', { onProgress } = {}) {
   // Validate magic bytes
   if (!validateMagicBytes(buffer)) {
     throw new Error('Invalid PDF file: magic bytes (%PDF-) not found');
   }
 
   // Load the document with pdfjs
-  const proxy = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const task = pdfjsLib.getDocument({ data: buffer });
+  if (onProgress) task.onProgress = ({ loaded, total }) => onProgress(loaded, total);
+  const proxy = await task.promise;
 
   // Retrieve outline (TOC) — may be null
   const outline = await proxy.getOutline();

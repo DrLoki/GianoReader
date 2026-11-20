@@ -49,7 +49,9 @@ fn make_rows(lines: &[Line], idxs: &[usize]) -> Vec<Row> {
     group_rows(lines, idxs)
         .into_iter()
         .map(|r| {
-            let b = Bounds::union_all(r.iter().map(|&i| &lines[i].b)).unwrap_or_default();
+            // reading-frame bounds: indentation and spacing of rotated text
+            // are measured along its own axes
+            let b = Bounds::union_all(r.iter().map(|&i| &lines[i].fb)).unwrap_or_default();
             let text = r.iter().map(|&i| lines[i].text.as_str()).collect::<Vec<_>>().join(" ");
             let chars: usize = r.iter().map(|&i| lines[i].chars().max(1)).sum();
             let fs = r.iter().map(|&i| lines[i].fs * lines[i].chars().max(1) as f32).sum::<f32>() / chars as f32;

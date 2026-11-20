@@ -52,6 +52,9 @@ pub fn classify_leaf(lines: &[Line], leaf: &Leaf, page: &Bounds, images: &[Bound
     if use_tags {
         let art: usize = ls.iter().filter(|l| l.artifact).map(|l| l.chars().max(1)).sum();
         if art * 10 >= total * 8 {
+            if ls.iter().all(|l| l.rot != 0) {
+                return FIGURE_TEXT; // rotated credit / margin label, not a running head
+            }
             if is_page_number(&text) {
                 return PAGE_NUMBER;
             }
@@ -89,7 +92,10 @@ pub fn classify_leaf(lines: &[Line], leaf: &Leaf, page: &Bounds, images: &[Bound
         None => {}
     }
 
-    // --- vertical text (credits, margin labels): never part of the flow ---
+    // --- rotated text (credits, margin captions): never part of the flow ---
+    if ls.iter().all(|l| l.rot != 0) {
+        return FIGURE_TEXT;
+    }
     if rows == 1 && ls.len() == 1 && b.h > 2.5 * b.w && total > 3 {
         return FIGURE_TEXT;
     }

@@ -4,7 +4,7 @@
 //! (paragraphs / structure elements) → stitched logical paragraphs.
 
 use crate::pdf_layout::flow::{page_units, stitch, PageFlowInput, Unit};
-use crate::pdf_layout::lines::{build_lines, group_rows, weighted_mode, PageLines};
+use crate::pdf_layout::lines::{build_lines, group_rows, weighted_mode, Line, PageLines};
 use crate::pdf_layout::model::*;
 use crate::pdf_layout::roles::{classify_leaf, confirm_running, running_candidates, DECORATION, PAGE_NUMBER};
 use crate::pdf_layout::text::{font_is_bold, font_is_italic, normalize_fragment, visible_len};
@@ -43,6 +43,16 @@ fn make_segment(page: &PageInput, layout: &PageLayout, pl: &PageLines, leaf_idx:
         *fonts.entry(lines[i].font.as_str()).or_insert(0) += lines[i].chars();
     }
     let font = fonts.into_iter().max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(a.0))).map(|(f, _)| f.to_string()).unwrap_or_default();
+    let rot = segment_rot(lines, line_idxs);
+    // Alignment of rotated text is measured in its own reading frame (fb),
+    // where its lines run horizontally like any other text.
+    let align = if rot == 0 {
+        alignment(lines, &rows, &bounds, fs)
+    } else {
+        let framed: Vec<Line> = lines.iter().map(|l| Line { b: l.fb, ..l.clone() }).collect();
+        let fbounds = Bounds::union_all(line_idxs.iter().map(|&i| &lines[i].fb)).unwrap_or_default();
+        alignment(&framed, &rows, &fbounds, fs)
+    };
     Segment {
         page_num: page.page_num,
         block_id: layout.leaves[leaf_idx].id.clone(),
@@ -54,8 +64,18 @@ fn make_segment(page: &PageInput, layout: &PageLayout, pl: &PageLines, leaf_idx:
         bold: font_is_bold(&font),
         italic: font_is_italic(&font),
         font_name: font,
-        alignment: alignment(lines, &rows, &bounds, fs),
+        alignment: align,
+        rot,
     }
+}
+
+/// Prevailing reading direction of a set of lines, weighted by characters.
+fn segment_rot(lines: &[Line], line_idxs: &[usize]) -> u16 {
+    let mut counts: HashMap<u16, usize> = HashMap::new();
+    for &i in line_idxs {
+        *counts.entry(lines[i].rot).or_insert(0) += lines[i].chars().max(1);
+    }
+    counts.into_iter().max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(&a.0))).map(|(r, _)| r).unwrap_or(0)
 }
 
 fn set_reading_order(node: &mut LayoutNode, pos: &HashMap<String, usize>) {
@@ -84,6 +104,8 @@ fn write_back(node: &mut LayoutNode, info: &HashMap<String, (&'static str, Vec<S
 }
 
 pub fn analyze_document(pages: &[PageInput], opts: &AnalysisOptions) -> DocumentResult {
+    let pages: Vec<PageInput> = pages.iter().map(PageInput::sanitized).collect();
+    let pages = &pages[..];
     // 1. lines
     let page_lines: Vec<PageLines> = pages.iter().map(|p| build_lines(&p.items)).collect();
     let body_fs = weighted_mode(page_lines.iter().flat_map(|pl| pl.lines.iter().map(|l| (l.fs, l.chars()))), 10.0);

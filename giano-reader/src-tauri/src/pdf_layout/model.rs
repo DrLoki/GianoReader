@@ -5,13 +5,24 @@
 //! y growing downwards (pdf.js viewport at scale 1). The UI applies the zoom
 //! factor only when drawing.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// JSON has no NaN: a non-finite coordinate computed by the extractor arrives
+/// as `null`. Read it as NaN so one bad run doesn't reject the whole request;
+/// the pipeline drops non-finite geometry on entry (`PageInput::sanitized`).
+fn f32_or_nan<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
+    Ok(Option::<f32>::deserialize(d)?.unwrap_or(f32::NAN))
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub struct Bounds {
+    #[serde(deserialize_with = "f32_or_nan")]
     pub x: f32,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub y: f32,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub w: f32,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub h: f32,
 }
 
@@ -45,6 +56,9 @@ impl Bounds {
     pub fn v_overlap(&self, o: &Bounds) -> f32 {
         (self.y1().min(o.y1()) - self.y.max(o.y)).max(0.0)
     }
+    pub fn is_finite(&self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.w.is_finite() && self.h.is_finite()
+    }
     pub fn area(&self) -> f32 {
         self.w * self.h
     }
@@ -60,10 +74,15 @@ impl Bounds {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TextElement {
     pub text: String,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub x: f32,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub y: f32,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub width: f32,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub height: f32,
+    #[serde(deserialize_with = "f32_or_nan")]
     pub font_size: f32,
     #[serde(default)]
     pub font_name: Option<String>,
@@ -80,6 +99,11 @@ pub struct TextElement {
     /// Role of that structure element (`P`, `H1`, `Caption`, `Note`, …).
     #[serde(default)]
     pub struct_role: Option<String>,
+    /// Direction of the baseline in degrees (screen coordinates, clockwise:
+    /// 0 horizontal, 90 reading top→bottom, 270 bottom→top). Absent in
+    /// older inputs.
+    #[serde(default)]
+    pub rot: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +120,36 @@ pub struct PageInput {
     /// Placed raster images (used to detect captions).
     #[serde(default)]
     pub images: Vec<Bounds>,
+}
+
+impl PageInput {
+    /// Copy without runs, boxes or images whose geometry is not finite
+    /// (they cannot be placed; counting them would break the conservation check).
+    pub fn sanitized(&self) -> PageInput {
+        let ok = |it: &&TextElement| it.x.is_finite() && it.y.is_finite() && it.width.is_finite() && it.height.is_finite();
+        // the same run painted twice at the same place (faux bold, fill +
+        // stroke passes) is one piece of text
+        let mut items: Vec<TextElement> = Vec::with_capacity(self.items.len());
+        for it in self.items.iter().filter(ok) {
+            let dup = items.iter().rev().take(64).any(|o| {
+                o.text == it.text
+                    && (o.x - it.x).abs() < 0.5
+                    && (o.y - it.y).abs() < 0.5
+                    && (o.width - it.width).abs() < 0.5
+                    && (o.height - it.height).abs() < 0.5
+            });
+            if !dup {
+                items.push(it.clone());
+            }
+        }
+        PageInput {
+            page_num: self.page_num,
+            page_bounds: self.page_bounds,
+            items,
+            bordered_boxes: self.bordered_boxes.iter().filter(|b| b.is_finite()).copied().collect(),
+            images: self.images.iter().filter(|b| b.is_finite()).copied().collect(),
+        }
+    }
 }
 
 fn default_page_num() -> u32 {
@@ -281,6 +335,11 @@ pub struct Segment {
     pub bold: bool,
     pub italic: bool,
     pub alignment: String,
+    /// Reading direction of the segment in degrees, clockwise (0, 90, 180,
+    /// 270): the prevailing direction of its lines, weighted by characters.
+    /// GianoReader uses it to rotate the translation box like the original.
+    #[serde(default)]
+    pub rot: u16,
 }
 
 /// How two consecutive segments of the same paragraph are connected.

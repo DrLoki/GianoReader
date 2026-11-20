@@ -229,6 +229,16 @@
           <div class="spinner"></div>
           <p id="loading-text">Loading...</p>
         </div>
+        <!-- PDF progress: opening, page extraction, layout analysis -->
+        <div id="pdf-progress" class="pdf-progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+          aria-live="polite">
+          <div class="pdf-progress-row">
+            <span id="pdf-progress-phase" class="pdf-progress-phase"></span>
+            <span id="pdf-progress-detail" class="pdf-progress-detail"></span>
+            <span id="pdf-progress-eta" class="pdf-progress-eta"></span>
+          </div>
+          <div class="pdf-progress-track"><div id="pdf-progress-bar" class="pdf-progress-bar"></div></div>
+        </div>
         <!-- Placeholder visible when no book is open -->
         <div id="no-book-placeholder">
           <img src="/logo.png" alt="Giano Reader" />

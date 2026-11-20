@@ -56,12 +56,23 @@ export function paragraphTextsForRange(result, first, last) {
     .map(p => p.text);
 }
 
+/** Direzione di lettura del segmento (0, 90, 180, 270), dal motore di layout. */
+export function segmentRotation(seg) {
+  const r = Number(seg && seg.rot);
+  return r === 90 || r === 180 || r === 270 ? r : 0;
+}
+
+/** Testo ruotato di 90° o 270°: le righe si susseguono in orizzontale sulla pagina. */
+const isSideways = (rot) => rot === 90 || rot === 270;
+
 /** Interlinea (rapporto col corpo) misurata sulle righe dell'originale. */
 export function leadingRatio(seg) {
   let lh = 1.18;
   const rows = seg.lines || [];
   if (rows.length >= 2 && seg.fontSize > 0) {
-    const step = (rows[rows.length - 1].y - rows[0].y) / (rows.length - 1);
+    // nel testo ruotato di 90°/270° le righe si susseguono lungo x
+    const at = isSideways(segmentRotation(seg)) ? (r) => r.x : (r) => r.y;
+    const step = Math.abs(at(rows[rows.length - 1]) - at(rows[0])) / (rows.length - 1);
     if (step > 0) lh = Math.min(1.6, Math.max(1.0, step / seg.fontSize));
   }
   return lh;
@@ -102,6 +113,24 @@ export function fitText(el, startPx) {
 }
 
 /**
+ * Posizione del box di un segmento nel wrapper della pagina (px). Il testo
+ * ruotato è impaginato nel suo verso di lettura (larghezza e altezza scambiate
+ * per 90°/270°), centrato sull'originale e poi ruotato: a 90° si legge
+ * dall'alto in basso con la prima riga a destra, a 270° dal basso in alto con
+ * la prima riga a sinistra, come nel PDF.
+ */
+export function segmentBoxGeometry(seg, scale, pad = 1) {
+  const b = seg.bounds;
+  const rot = segmentRotation(seg);
+  const pw = (b.w + 2 * pad) * scale;
+  const ph = (b.h + 2 * pad) * scale;
+  const [width, height] = isSideways(rot) ? [ph, pw] : [pw, ph];
+  const cx = (b.x + b.w / 2) * scale;
+  const cy = (b.y + b.h / 2) * scale;
+  return { left: cx - width / 2, top: cy - height / 2, width, height, rot };
+}
+
+/**
  * Crea il box (vuoto, "pending") di un segmento dentro il wrapper della sua
  * pagina. Le coordinate sono in punti PDF, `scale` è il rapporto px/punto.
  */
@@ -109,12 +138,15 @@ export function createSegmentBox(wrapper, par, seg, scale, { fontFamily = null }
   const el = document.createElement('div');
   el.className = 'pdf-tr-seg pending';
   el.dataset.paraId = par.id;
-  const pad = 1;
-  const b = seg.bounds;
-  el.style.left = (b.x - pad) * scale + 'px';
-  el.style.top = (b.y - pad) * scale + 'px';
-  el.style.width = (b.w + 2 * pad) * scale + 'px';
-  el.style.height = (b.h + 2 * pad) * scale + 'px';
+  const g = segmentBoxGeometry(seg, scale);
+  el.style.left = g.left + 'px';
+  el.style.top = g.top + 'px';
+  el.style.width = g.width + 'px';
+  el.style.height = g.height + 'px';
+  if (g.rot) {
+    el.style.transform = `rotate(${g.rot}deg)`;
+    el.dataset.rot = String(g.rot);
+  }
   const style = segmentStyle(seg, par.role);
   Object.assign(el.style, style);
   // Famiglia dell'originale, per tornarci se l'utente toglie la sua scelta
@@ -184,16 +216,21 @@ export class PdfLayoutAnalyzer {
   /**
    * @param {number} first prima pagina mostrata (1-based)
    * @param {number} last ultima pagina mostrata
-   * @param {{ signal?: AbortSignal, onProgress?: (done:number,total:number)=>void }} [opts]
+   * @param {{ signal?: AbortSignal,
+   *   onProgress?: (done:number,total:number,pageNum:number)=>void,
+   *   onAnalyze?: (pages:number)=>void }} [opts] onProgress: pagine estratte
+   *   (anche 0 all'inizio); onAnalyze: parte l'analisi Rust (non chiamati se il
+   *   risultato è già in cache)
    * @returns {Promise<object|null>} DocumentResult, o null se annullato
    */
-  async analyze(first, last, { signal, onProgress } = {}) {
+  async analyze(first, last, { signal, onProgress, onAnalyze } = {}) {
     const { lo, hi } = this.windowFor(first, last);
     const key = `${lo}-${hi}`;
     if (this._last && this._last.key === key) return this._last.result;
 
     const inputs = [];
     const total = hi - lo + 1;
+    if (onProgress) onProgress(0, total, lo);
     for (let n = lo; n <= hi; n++) {
       if (signal && signal.aborted) return null;
       let data = this._pages.get(n);
@@ -202,9 +239,10 @@ export class PdfLayoutAnalyzer {
         this._pages.set(n, data);
       }
       inputs.push(data);
-      if (onProgress) onProgress(n - lo + 1, total);
+      if (onProgress) onProgress(n - lo + 1, total, n);
     }
     if (signal && signal.aborted) return null;
+    if (onAnalyze) onAnalyze(total);
 
     const result = await this._call('analyze_pdf_layout', { pages: inputs, options: null });
     if (signal && signal.aborted) return null;

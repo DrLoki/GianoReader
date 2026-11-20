@@ -262,3 +262,92 @@ fn decorative_glyphs_stay_out_of_the_text() {
     assert!(!deco.translatable);
     assert_eq!(r.stats.input_chars, r.stats.output_chars);
 }
+
+#[test]
+fn null_coordinates_do_not_reject_the_document() {
+    // the extractor once produced NaN boxes (ZapfDingbats, NaN font metrics),
+    // which JSON serialises as null
+    let json = r#"{"pageNum":1,"pageBounds":{"x":0,"y":0,"w":600,"h":800},
+        "items":[{"text":"Hello world.","x":50,"y":50,"width":80,"height":12,"font_size":10},
+                 {"text":"q","x":null,"y":null,"width":null,"height":null,"font_size":9}],
+        "images":[{"x":null,"y":0,"w":10,"h":10}]}"#;
+    let page: PageInput = serde_json::from_str(json).expect("null coordinates must deserialize");
+    let r = analyze(&[page]);
+    assert_eq!(r.stats.input_chars, r.stats.output_chars);
+    assert_eq!(find(&r, "Hello").text.trim(), "Hello world.");
+}
+
+// ---------------------------------------------------------------------------
+// Rotated text: a two-line caption reading top→bottom beside a column, and a
+// credit reading bottom→top split into small-caps runs.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn rotated_text_reads_in_order_and_stays_out_of_columns() {
+    let mut items = Vec::new();
+    for k in 0..10 {
+        items.push(TextElement {
+            text: format!("Column line {k} with running text that fills the measure"),
+            x: 72.0,
+            y: 100.0 + 12.0 * k as f32,
+            width: 216.0,
+            height: 12.0,
+            font_size: 9.0,
+            ..Default::default()
+        });
+    }
+    // caption rotated 90° (top→bottom): the first line is the rightmost
+    let cap = |text: &str, x: f32| TextElement { text: text.into(), x, y: 100.0, width: 12.0, height: 150.0, font_size: 11.0, rot: Some(90.0), ..Default::default() };
+    items.push(cap("as the poor starve.", 296.0));
+    items.push(cap("Life in Paris: Aristos enjoy their day", 308.0));
+    // credit rotated 270° (bottom→top), small caps in three runs
+    let credit = |text: &str, y: f32, h: f32| TextElement { text: text.into(), x: 40.0, y, width: 9.0, height: h, font_size: 8.0, rot: Some(270.0), ..Default::default() };
+    items.push(credit("GORDON M", 192.0, 40.0));
+    items.push(credit("C", 188.0, 4.0));
+    items.push(credit("ALPIN", 167.0, 21.0));
+    let page = PageInput { page_num: 1, page_bounds: Bounds { x: 0.0, y: 0.0, w: 400.0, h: 600.0 }, items, bordered_boxes: vec![], images: vec![] };
+    let r = analyze(&[page]);
+    let caption = find(&r, "Life in Paris");
+    assert!(caption.text.contains("Life in Paris: Aristos enjoy their day as the poor starve."), "{:?}", caption.text);
+    assert_eq!(caption.role, "figure-text");
+    assert_eq!(find(&r, "GORDON").text.trim(), "GORDON MCALPIN");
+    let column = find(&r, "Column line 0");
+    assert!(column.text.contains("Column line 9") && !column.text.contains("Paris") && !column.text.contains("GORDON"));
+    assert_eq!(r.stats.input_chars, r.stats.output_chars);
+}
+
+#[test]
+fn doubled_runs_are_read_once() {
+    let a = TextElement { text: "A".into(), x: 57.0, y: 108.0, width: 34.0, height: 67.0, font_size: 57.0, ..Default::default() };
+    let mut items = vec![a.clone(), a];
+    for k in 0..4 {
+        let (x, t) = if k == 0 { (95.0, "s you step into the world of Roshar,") } else { (95.0, "you start by creating the character") };
+        items.push(TextElement { text: t.into(), x, y: 110.0 + 13.0 * k as f32, width: 180.0, height: 11.0, font_size: 9.5, ..Default::default() });
+    }
+    let page = PageInput { page_num: 1, page_bounds: Bounds { x: 0.0, y: 0.0, w: 400.0, h: 600.0 }, items, bordered_boxes: vec![], images: vec![] };
+    let r = analyze(&[page]);
+    assert!(r.paragraphs.iter().any(|p| p.text.starts_with("As you step")), "{:#?}", r.paragraphs.iter().map(|p| &p.text).collect::<Vec<_>>());
+    assert_eq!(r.stats.input_chars, r.stats.output_chars);
+}
+
+// GianoReader: each segment carries its reading direction, so the translation
+// box can be rotated like the original text.
+#[test]
+fn segments_carry_their_rotation() {
+    let mut items = Vec::new();
+    for k in 0..6 {
+        items.push(TextElement { text: format!("Body line {k} of running text in the column"), x: 72.0, y: 100.0 + 12.0 * k as f32, width: 216.0, height: 12.0, font_size: 9.0, ..Default::default() });
+    }
+    let cap = |text: &str, x: f32| TextElement { text: text.into(), x, y: 100.0, width: 12.0, height: 150.0, font_size: 11.0, rot: Some(90.0), ..Default::default() };
+    items.push(cap("second line of the caption.", 296.0));
+    items.push(cap("First line of a rotated caption", 308.0));
+    items.push(TextElement { text: "Photo credit".into(), x: 40.0, y: 150.0, width: 9.0, height: 60.0, font_size: 8.0, rot: Some(270.0), ..Default::default() });
+    let page = PageInput { page_num: 1, page_bounds: Bounds { x: 0.0, y: 0.0, w: 400.0, h: 600.0 }, items, bordered_boxes: vec![], images: vec![] };
+    let r = analyze(&[page]);
+    let rot_of = |prefix: &str| find(&r, prefix).segments.iter().map(|s| s.rot).collect::<Vec<_>>();
+    assert_eq!(rot_of("Body line 0"), vec![0]);
+    assert_eq!(rot_of("First line"), vec![90]);
+    assert_eq!(rot_of("Photo credit"), vec![270]);
+    let cap = &find(&r, "First line").segments[0];
+    assert_eq!(cap.alignment, "left");
+}

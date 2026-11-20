@@ -475,6 +475,59 @@ body {
   gap: 16px; color: #fff; z-index: 10;
 }
 #loading-overlay.hidden { display: none; }
+
+/* PDF progress card (from PDF X-Ray): floats at the top of the reader, above
+   the loading overlay, while a PDF is opened or its pages are analysed. */
+.pdf-progress {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  width: min(520px, calc(100% - 32px));
+  z-index: 15;
+  padding: 10px 14px 12px;
+  background: var(--modal-bg, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.4s ease;
+}
+.pdf-progress.hidden { display: none; }
+.pdf-progress.fading { opacity: 0; }
+.pdf-progress-row {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 8px; font-size: 0.75rem;
+}
+.pdf-progress-phase { font-weight: 600; color: var(--text); white-space: nowrap; }
+.pdf-progress-detail {
+  flex: 1; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pdf-progress-eta { color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pdf-progress-track {
+  position: relative; height: 6px; border-radius: 999px;
+  background: var(--border); overflow: hidden;
+}
+.pdf-progress-bar {
+  height: 100%; width: 0; border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+/* a phase without measurable progress: a sheen runs over the bar */
+.pdf-progress.busy .pdf-progress-bar {
+  background-image: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+  background-color: var(--accent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: pdf-progress-sheen 1.2s linear infinite;
+}
+@keyframes pdf-progress-sheen {
+  from { background-position: -40% 0; }
+  to { background-position: 140% 0; }
+}
+.pdf-progress.error .pdf-progress-bar { background: #e74c3c; animation: none; }
+.pdf-progress.error .pdf-progress-eta { color: #e74c3c; }
+@media (prefers-reduced-motion: reduce) {
+  .pdf-progress.busy .pdf-progress-bar { animation: none; background-image: none; }
+}
 .spinner {
   width: 38px; height: 38px;
   border: 4px solid rgba(255,255,255,0.2);

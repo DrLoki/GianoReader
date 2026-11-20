@@ -60,6 +60,7 @@ export async function extractPage(pdfDoc, pageNum) {
       width: box.w,
       height: box.h,
       font_size: box.fs,
+      rot: box.rot,
       font_name: fontName(page, it.fontName, style),
       mcid,
       artifact: stack.some(s => s.tag === 'Artifact'),
@@ -92,12 +93,15 @@ function itemBox(it, style, viewport) {
   const dx = dl ? a / dl : 1, dy = dl ? b / dl : 0;
   const ux = ul ? c / ul : 0, uy = ul ? d / ul : 1;
 
-  let asc = typeof style.ascent === 'number' ? style.ascent : 0.8;
-  let desc = typeof style.descent === 'number' ? style.descent : -0.2;
+  // pdf.js reports NaN metrics for some standard fonts (ZapfDingbats): NaN is
+  // a 'number' and fails every comparison, so test finiteness explicitly
+  let asc = Number.isFinite(style.ascent) ? style.ascent : 0.8;
+  let desc = Number.isFinite(style.descent) ? style.descent : -0.2;
   if (desc > 0) desc = -desc;
-  if (asc - desc < 0.5 || asc - desc > 2.5) { asc = 0.8; desc = -0.2; }
+  if (!(asc - desc >= 0.5 && asc - desc <= 2.5)) { asc = 0.8; desc = -0.2; }
 
-  const len = style.vertical ? (it.height || it.width) : it.width;
+  let len = style.vertical ? (it.height || it.width) : it.width;
+  if (!Number.isFinite(len) || len < 0) len = 0;
   const pts = [];
   for (const t of [0, len]) {
     for (const u of [desc * fs, asc * fs]) {
@@ -108,8 +112,15 @@ function itemBox(it, style, viewport) {
   const xs = pts.filter((_, i) => i % 2 === 0);
   const ys = pts.filter((_, i) => i % 2 === 1);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  if (![x0, x1, y0, y1].every(Number.isFinite)) return null;
+  // baseline direction on screen (degrees, clockwise; 90 = reading top→bottom)
+  const [bx0, by0] = viewport.convertToViewportPoint(e, f);
+  const [bx1, by1] = viewport.convertToViewportPoint(e + dx, f + dy);
+  let rot = Math.atan2(by1 - by0, bx1 - bx0) * 180 / Math.PI;
+  if (!Number.isFinite(rot)) rot = 0;
+  rot = Math.round(((rot % 360) + 360) % 360 * 10) / 10;
   // font size in viewport space (scale 1 → points), independent of rotation
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, fs: fs * Math.hypot(viewport.transform[0], viewport.transform[1]) };
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, rot, fs: fs * Math.hypot(viewport.transform[0], viewport.transform[1]) };
 }
 
 function fontName(page, id, style) {
@@ -173,6 +184,8 @@ function bboxOf(points, viewport) {
   return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
 }
 
+const finiteBox = (b) => [b.x, b.y, b.w, b.h].every(Number.isFinite);
+
 /** Vector rectangles (stroked or filled) and placed images, CTM-aware. */
 export async function extractGraphics(page, viewport) {
   const { OPS } = await import('pdfjs-dist');
@@ -210,7 +223,7 @@ export async function extractGraphics(page, viewport) {
       ctm = stack.pop() || ctm;
     } else if (imageOps.has(fn)) {
       const b = bboxOf([apply(ctm, 0, 0), apply(ctm, 1, 0), apply(ctm, 0, 1), apply(ctm, 1, 1)], viewport);
-      if (b.w > 10 && b.h > 10) images.push(b);
+      if (b.w > 10 && b.h > 10 && finiteBox(b)) images.push(b);
     } else if (fn === OPS.constructPath) {
       const paint = args?.[0];
       const data = args?.[1]?.[0];
@@ -218,7 +231,7 @@ export async function extractGraphics(page, viewport) {
       for (const sub of subpaths(data)) {
         if (!sub.rectLike) continue;
         const b = bboxOf(sub.points.map(([x, y]) => apply(ctm, x, y)), viewport);
-        if (b.w > 3 && b.h > 3) rects.push(b);
+        if (b.w > 3 && b.h > 3 && finiteBox(b)) rects.push(b);
       }
     }
   }

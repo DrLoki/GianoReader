@@ -301,6 +301,13 @@ impl<'a> Ctx<'a> {
         }
         ys.sort_by(|a, b| a.total_cmp(b));
         ys.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+        // Isolating a spanning title or an indented list takes a few cuts;
+        // needing far more cuts than there are voting rows means the
+        // "column" is a local feature (OCR drop-cap debris, a short indented
+        // run) and isolating would shatter running text into single lines.
+        if !ys.is_empty() && crossing.len() > count && ys.len() > 2 * count + 2 {
+            return None;
+        }
         if !ys.is_empty() {
             return Some(Plan { axis: Axis::Y, splits: ys, strength: min_gap, kind: "per-row-isolate" });
         }
@@ -758,7 +765,17 @@ pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[
     // ornamental glyphs (decorative fonts) are one leaf outside the cuts:
     // they would otherwise widen columns and bridge gutters
     let decor: Vec<usize> = (0..lines.len()).filter(|&i| owner[i].is_none() && lines[i].decor).collect();
-    let body: Vec<usize> = (0..lines.len()).filter(|&i| owner[i].is_none() && !lines[i].decor).collect();
+    let body: Vec<usize> = (0..lines.len()).filter(|&i| owner[i].is_none() && !lines[i].decor && lines[i].rot == 0).collect();
+    // rotated text (credits along an illustration, margin captions) is cut
+    // on its own, per reading direction: mixed with horizontal lines it
+    // bridges gutters and joins the nearest column
+    let mut rotated: Vec<(u16, Vec<usize>)> = Vec::new();
+    for i in (0..lines.len()).filter(|&i| owner[i].is_none() && !lines[i].decor && lines[i].rot != 0) {
+        match rotated.iter_mut().find(|(r, _)| *r == lines[i].rot) {
+            Some((_, v)) => v.push(i),
+            None => rotated.push((lines[i].rot, vec![i])),
+        }
+    }
     let mut root_children: Vec<LayoutNode> = Vec::new();
     let mut root_cut = None;
     let mut root_diag = None;
@@ -769,6 +786,14 @@ pub fn layout_page(page_num: u32, page_bounds: Bounds, lines: &[Line], boxes: &[
         } else {
             root_cut = node.cut_direction.clone();
             root_diag = node.diag.clone();
+            root_children.extend(node.children.unwrap_or_default());
+        }
+    }
+    for (_, idxs) in rotated {
+        let node = ctx.subdivide(idxs, 1);
+        if node.node_type == "leaf" {
+            root_children.push(node);
+        } else {
             root_children.extend(node.children.unwrap_or_default());
         }
     }
