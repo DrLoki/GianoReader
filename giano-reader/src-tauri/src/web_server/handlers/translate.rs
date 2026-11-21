@@ -232,7 +232,10 @@ pub async fn post_translate(
     } else {
         None
     };
-    let basic_prefs = prefs.filter(basic_allowed);
+    // Free tier used up with "switch to FREE at 100 %" on: answer with FREE
+    let basic_prefs = prefs
+        .filter(basic_allowed)
+        .filter(|_| !crate::basic_usage::limit_reached());
 
     let result = if let Some(prefs) = basic_prefs {
         // Load Google Cloud API key from preferences

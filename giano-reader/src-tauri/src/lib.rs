@@ -127,6 +127,12 @@ fn record_basic_usage(chars: u64) -> basic_usage::BasicUsage {
     basic_usage::record(chars)
 }
 
+/// "Switch BASIC to FREE at 100 %" option: the web server honours it too.
+#[tauri::command]
+fn set_basic_auto_free(enabled: bool) {
+    basic_usage::set_auto_free(enabled)
+}
+
 /// Validates a URL before handing it to the OS: only absolute http(s) URLs with
 /// a host are accepted, and the normalised (percent-encoded) form is returned.
 /// The URL can come from links inside an untrusted EPUB.
@@ -191,6 +197,7 @@ pub fn run() {
             set_web_server_secrets,
             get_basic_usage,
             record_basic_usage,
+            set_basic_auto_free,
             open_browser_url
         ])
         .setup(|app| {

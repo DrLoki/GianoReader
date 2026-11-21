@@ -462,6 +462,18 @@
           <div class="settings-hint" id="basic-usage-text"></div>
           <div class="settings-hint" id="basic-usage-note">Counted by Giano Reader (desktop and web server). Characters translated with the same key elsewhere are not included; check the Google Cloud console for the billed figure.</div>
         </div>
+        <div class="settings-row">
+          <label for="basic-warn-pct" id="basic-warn-pct-label">Warn at (% of the free tier)</label>
+          <input type="number" id="basic-warn-pct" min="1" max="100" step="1" value="80" />
+        </div>
+        <div class="settings-row">
+          <label for="basic-auto-free" id="basic-auto-free-label">Switch to FREE at 100%</label>
+          <label class="switch">
+            <input type="checkbox" id="basic-auto-free" />
+            <span class="switch-slider"></span>
+          </label>
+          <div class="settings-hint" id="basic-auto-free-hint">When the monthly free tier is used up, BASIC is turned off and FREE is used until next month (web server included).</div>
+        </div>
       </div>
 
       <!-- Panel: PRO -->

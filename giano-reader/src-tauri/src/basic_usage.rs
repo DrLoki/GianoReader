@@ -10,6 +10,7 @@
 //! and starts over every calendar month (local time).
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -24,7 +25,15 @@ pub struct BasicUsage {
     pub chars: u64,
 }
 
+/// Characters per month covered by Google's free tier (same value as
+/// `BASIC_FREE_CHARS` in `basic-usage.js`).
+pub const FREE_CHARS: u64 = 500_000;
+
 static PATH: OnceLock<PathBuf> = OnceLock::new();
+/// "Switch to FREE at 100 %" option of the desktop settings, pushed by the
+/// frontend (`set_basic_auto_free`). When on, the web server stops serving
+/// BASIC once the free tier is used up.
+static AUTO_FREE: AtomicBool = AtomicBool::new(false);
 static LOCK: Mutex<()> = Mutex::new(());
 
 /// Sets the data directory (called once at startup).
@@ -84,6 +93,23 @@ pub fn record(chars: u64) -> BasicUsage {
     usage
 }
 
+/// Sets the "switch to FREE at 100 %" option.
+pub fn set_auto_free(enabled: bool) {
+    AUTO_FREE.store(enabled, Ordering::Relaxed);
+}
+
+/// Whether the option is on and `chars` has used up the free tier.
+fn limit_reached_for(auto_free: bool, chars: u64) -> bool {
+    auto_free && chars >= FREE_CHARS
+}
+
+/// True when BASIC must not be used any more this month (option on and the
+/// free tier used up).
+pub fn limit_reached() -> bool {
+    let auto = AUTO_FREE.load(Ordering::Relaxed);
+    auto && limit_reached_for(auto, get().chars)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,6 +127,13 @@ mod tests {
         assert_eq!(for_month(Some(old.clone()), "2026-11").chars, 0);
         assert_eq!(for_month(Some(old), "2026-10").chars, 900);
         assert_eq!(for_month(None, "2026-11").month, "2026-11");
+    }
+
+    #[test]
+    fn limit_only_with_the_option_on() {
+        assert!(!limit_reached_for(false, FREE_CHARS * 2));
+        assert!(!limit_reached_for(true, FREE_CHARS - 1));
+        assert!(limit_reached_for(true, FREE_CHARS));
     }
 
     #[test]

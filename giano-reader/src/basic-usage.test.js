@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   BASIC_FREE_CHARS, monthKey, billedChars, usageForMonth, usageSummary,
-  getBasicUsage, recordBasicUsage,
+  getBasicUsage, recordBasicUsage, normalizeWarnPct, basicQuotaStatus,
+  DEFAULT_BASIC_WARN_PCT, BASIC_USAGE_EVENT,
 } from './basic-usage.js';
 
 describe('basic-usage', () => {
@@ -36,5 +37,43 @@ describe('basic-usage', () => {
     await recordBasicUsage(50);
     await recordBasicUsage(0);
     expect(await getBasicUsage()).toEqual({ month: monthKey(), chars: 150 });
+  });
+
+  it('warning threshold defaults to 80 and is clamped to 1-100', () => {
+    expect(DEFAULT_BASIC_WARN_PCT).toBe(80);
+    expect(normalizeWarnPct(undefined)).toBe(80);
+    expect(normalizeWarnPct('')).toBe(80);
+    expect(normalizeWarnPct('abc')).toBe(80);
+    expect(normalizeWarnPct('90')).toBe(90);
+    expect(normalizeWarnPct(0)).toBe(1);
+    expect(normalizeWarnPct(150)).toBe(100);
+  });
+
+  it('warns once per month at the threshold', () => {
+    const month = '2026-11';
+    expect(basicQuotaStatus(399999, { month }).warn).toBe(false);
+    expect(basicQuotaStatus(400000, { month }).warn).toBe(true);
+    expect(basicQuotaStatus(400000, { month, warnedMonth: month }).warn).toBe(false);
+    expect(basicQuotaStatus(400000, { month, warnedMonth: '2026-10' }).warn).toBe(true);
+    expect(basicQuotaStatus(300000, { month, warnPct: 50 }).warn).toBe(true);
+  });
+
+  it('limit reached only with auto switch on, and then no separate warning', () => {
+    const month = '2026-11';
+    expect(basicQuotaStatus(BASIC_FREE_CHARS, { month }).limitReached).toBe(false);
+    expect(basicQuotaStatus(BASIC_FREE_CHARS - 1, { month, autoFree: true }).limitReached).toBe(false);
+    const st = basicQuotaStatus(BASIC_FREE_CHARS, { month, autoFree: true });
+    expect(st.limitReached).toBe(true);
+    expect(st.warn).toBe(false);
+  });
+
+  it('recording fires the usage event with the new count', async () => {
+    const seen = [];
+    const onUsage = e => seen.push(e.detail.chars);
+    window.addEventListener(BASIC_USAGE_EVENT, onUsage);
+    await recordBasicUsage(10);
+    await recordBasicUsage(5);
+    window.removeEventListener(BASIC_USAGE_EVENT, onUsage);
+    expect(seen).toEqual([10, 15]);
   });
 });

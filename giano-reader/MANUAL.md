@@ -139,7 +139,7 @@ Click the **image** icon (file-image) to toggle the original EPUB view: the chap
 
 ### PDF Original View
 
-For a PDF, the same icon shows the original pages on the left and, on the right, **the same pages with the translation written over the original text** (desktop app only).
+A PDF opens in this view: the original pages on the left and, on the right, **the same pages with the translation written over the original text** (desktop app only). The same icon switches to the text view.
 
 - Before translating, Giano Reader analyses the layout of the pages: columns, boxes and tables, headings, captions, footnotes, running heads and page numbers, and the reading order. The status in the translation header shows *Analyzing page layout…* with a percentage while this happens.
 - A paragraph interrupted by a column break, a page break, a figure or a box is recognised as one paragraph: it is translated as a whole, and the translation is divided among its pieces on the page. Hyphenated words split at the end of a line are joined again.
@@ -185,6 +185,8 @@ For higher-quality translations without requiring an LLM, you can activate **BAS
 - **Activation:** Configure your Google Cloud API Key in **Settings → Basic** tab. Once configured, the **BASIC** option appears in the translation mode dropdown in the sidebar.
 - **Advantages over FREE:** The official API provides more accurate NMT translations, is not subject to CORS restrictions or aggressive rate limiting of the free endpoint, and uses native array-based translation (no paragraph joining/splitting workaround), supporting batches of up to ~25,000 characters and 128 paragraphs per request.
 - **Cost:** Approximately $0.01–0.02 per average novel. Free tier includes 500,000 characters/month. See the [Google Cloud Setup Guide](GOOGLE_CLOUD_SETUP.md) for detailed pricing.
+- **Quota warning:** the **Basic** tab shows the characters translated this month against the free tier. When the usage reaches the **Warn at** threshold (80 % by default), a notice appears once a month.
+- **Switch to FREE at 100%:** with this switch on, once the free tier is used up BASIC is turned off and FREE is used until next month. The web server follows it too, so phones get FREE translations as well.
 
 > **Setup:** See [`GOOGLE_CLOUD_SETUP.md`](GOOGLE_CLOUD_SETUP.md) for a complete step-by-step guide on creating a Google Cloud project, enabling the API, and obtaining an API key.
 

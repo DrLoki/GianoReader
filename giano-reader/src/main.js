@@ -15,7 +15,10 @@ import { BookTranslationCache, textKey, variantKey, parseVariant, mergeCacheData
 import { buildTranslatedEpub, buildEpubFromChapters, translatedFileName } from './book-export.js';
 import { observeChunksLazily } from './lazy-chunks.js';
 import { alignByParagraph, syncByParagraph, paragraphOffset } from './paragraph-align.js';
-import { getBasicUsage, usageSummary } from './basic-usage.js';
+import {
+  getBasicUsage, usageSummary, basicQuotaStatus, normalizeWarnPct, setBasicAutoFree,
+  monthKey, BASIC_USAGE_EVENT,
+} from './basic-usage.js';
 import { hideMissingFontOptions } from './font-availability.js';
 import { PdfProgress } from './pdf-progress.js';
 import { getReadingPosition, setReadingPosition, samePosition, resolveRestoreTarget } from './reading-positions.js';
@@ -145,6 +148,10 @@ const translationModeSelect = document.getElementById('translation-mode-select')
 const openrouterKeyInput = document.getElementById('openrouter-key-input');
 const openrouterModelSelect = document.getElementById('openrouter-model-select');
 const gcloudApiKeyInput = document.getElementById('gcloud-api-key-input');
+const basicWarnPctInput = document.getElementById('basic-warn-pct');
+const basicAutoFreeToggle = document.getElementById('basic-auto-free');
+/** How long the BASIC quota notices stay on screen. */
+const BASIC_NOTICE_MS = 8000;
 
 // Web Server Mode
 const webServerSettings = document.getElementById('web-server-settings');
@@ -984,6 +991,12 @@ function applyUiLang(lang) {
   if (_basicUsageLabel) _basicUsageLabel.textContent = t(lang, 'basicUsageLabel');
   const _basicUsageNote = document.getElementById('basic-usage-note');
   if (_basicUsageNote) _basicUsageNote.textContent = t(lang, 'basicUsageNote');
+  const _basicWarnPctLabel = document.getElementById('basic-warn-pct-label');
+  if (_basicWarnPctLabel) _basicWarnPctLabel.textContent = t(lang, 'basicWarnPctLabel');
+  const _basicAutoFreeLabel = document.getElementById('basic-auto-free-label');
+  if (_basicAutoFreeLabel) _basicAutoFreeLabel.textContent = t(lang, 'basicAutoFreeLabel');
+  const _basicAutoFreeHint = document.getElementById('basic-auto-free-hint');
+  if (_basicAutoFreeHint) _basicAutoFreeHint.textContent = t(lang, 'basicAutoFreeHint');
   refreshBasicUsage();
   // Cloudflare subdomain label
   const _cfLabel = document.getElementById('cloudflare-subdomain-label');
@@ -1740,6 +1753,9 @@ ttsController._onProgressChange = (pct) => {
 
   // Google Cloud (Basic mode) settings init
   if (gcloudApiKeyInput) gcloudApiKeyInput.value = s.gcloudApiKey || '';
+  if (basicWarnPctInput) basicWarnPctInput.value = normalizeWarnPct(s.basicWarnPct);
+  if (basicAutoFreeToggle) basicAutoFreeToggle.checked = !!s.basicAutoFree;
+  setBasicAutoFree(!!s.basicAutoFree);
 
 
   const translationMode = s.translationMode || 'free';
@@ -1939,13 +1955,20 @@ if (openrouterFetchBtn) {
 }
 
 if (translationModeSelect) {
-  translationModeSelect.addEventListener('change', () => {
+  translationModeSelect.addEventListener('change', async () => {
+    // BASIC chosen with its free tier used up and "switch to FREE at 100%" on:
+    // stay on FREE
+    if (translationModeSelect.value === 'basic' && await basicLimitReached()) {
+      translationModeSelect.value = 'free';
+      showNotice(ui('basicQuotaSwitchedToFree'), BASIC_NOTICE_MS);
+    }
     const s = loadSettings();
     s.translationMode = translationModeSelect.value;
     saveSettings(s);
 
     // Trigger re-translation
     retranslateCurrentChapter();
+    refreshBookTranslationModal();
   });
 }
 
@@ -1966,6 +1989,93 @@ async function refreshBasicUsage() {
   });
   fillEl.style.width = `${Math.min(100, sum.pct)}%`;
   fillEl.classList.toggle('over', sum.over);
+  // The count also includes the web server's BASIC translations
+  checkBasicQuota(usage);
+}
+
+// ── BASIC quota: warning threshold and automatic switch to FREE ──────────
+
+/** True when "switch to FREE at 100%" is on and this month's free tier is used up. */
+async function basicLimitReached() {
+  const s = loadSettings();
+  if (!s.basicAutoFree) return false;
+  const usage = await getBasicUsage();
+  return basicQuotaStatus(usage.chars, { autoFree: true, month: usage.month }).limitReached;
+}
+
+/** Leaves BASIC for FREE (quota used up): stops BASIC work and re-translates. */
+function switchBasicToFree() {
+  const s = loadSettings();
+  if ((s.translationMode || 'free') !== 'basic') return;
+  s.translationMode = 'free';
+  saveSettings(s);
+  // A background "complete the book" job would keep spending BASIC
+  if (bookTranslationJob && bookTranslationJob.kind === 'complete') bookTranslationJob.controller.abort();
+  updateTranslationModeSelect();
+  if (translationModeSelect) translationModeSelect.value = 'free';
+  showNotice(ui('basicQuotaSwitchedToFree'), BASIC_NOTICE_MS);
+  retranslateCurrentChapter();
+  refreshBookTranslationModal();
+}
+
+/**
+ * Checks the month's BASIC count against the settings: the warning is shown
+ * once a month when the threshold is reached; with "switch to FREE at 100%"
+ * a used-up free tier moves the reader from BASIC to FREE.
+ */
+async function checkBasicQuota(usage) {
+  let s = loadSettings();
+  if (!(s.gcloudApiKey || '').trim()) return;
+  if (!usage) usage = await getBasicUsage();
+  s = loadSettings();
+  const month = usage.month || monthKey();
+  const status = basicQuotaStatus(usage.chars, {
+    warnPct: s.basicWarnPct,
+    autoFree: !!s.basicAutoFree,
+    warnedMonth: s.basicWarnedMonth,
+    month,
+  });
+  if (status.limitReached) {
+    switchBasicToFree();
+    return;
+  }
+  if (status.warn) {
+    s.basicWarnedMonth = month;
+    saveSettings(s);
+    const sum = usageSummary(usage.chars);
+    const lang = s.uiLang || 'en';
+    showNotice(ui('basicQuotaWarning', {
+      pct: sum.pct.toLocaleString(lang, { maximumFractionDigits: 1 }),
+      used: sum.used.toLocaleString(lang),
+      free: sum.freeChars.toLocaleString(lang),
+    }), BASIC_NOTICE_MS);
+  }
+}
+
+// Every BASIC request sent by the desktop updates the count
+window.addEventListener(BASIC_USAGE_EVENT, (e) => { checkBasicQuota(e.detail); });
+
+if (basicWarnPctInput) {
+  basicWarnPctInput.addEventListener('change', () => {
+    const val = normalizeWarnPct(basicWarnPctInput.value);
+    basicWarnPctInput.value = val;
+    const s = loadSettings();
+    // A new threshold gets its own warning this month
+    if (s.basicWarnPct !== val) delete s.basicWarnedMonth;
+    s.basicWarnPct = val;
+    saveSettings(s);
+    checkBasicQuota();
+  });
+}
+
+if (basicAutoFreeToggle) {
+  basicAutoFreeToggle.addEventListener('change', () => {
+    const s = loadSettings();
+    s.basicAutoFree = basicAutoFreeToggle.checked;
+    saveSettings(s);
+    setBasicAutoFree(s.basicAutoFree);
+    checkBasicQuota();
+  });
 }
 
 settingsBtn.addEventListener('click', () => { updateWebServerBasicHint(); refreshBasicUsage(); settingsModal.classList.remove('hidden'); });
@@ -4520,7 +4630,8 @@ async function loadPdfFile(arrayBuffer, filePath = '', { restorePosition = true 
     if (bookTranslationBtn) bookTranslationBtn.disabled = false;
     enableTTSControls(true);
     populateTTSVoices();
-    setViewMode('text'); // Normal view mode — old pipeline handles rendering
+    // PDFs open in the original view (displayPdfUnit below renders it)
+    setViewMode('original', { skipRender: true });
     viewToggleBtn.disabled = false;
 
     // Initialize PDF progress bar and navigation UI, at the unit where the
