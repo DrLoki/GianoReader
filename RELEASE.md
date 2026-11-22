@@ -4,7 +4,7 @@ This release brings **full PDF support** to side-by-side translation. The layout
 
 Translations are now **saved per book**, so reopening a chapter costs no new requests. The new **Book translation** window shows how much of the book is translated, completes the translation in the background and **downloads the translated book as an EPUB** (from an EPUB or from a PDF).
 
-Books now **reopen where you left off**, and the two panels stay **aligned paragraph by paragraph** while you scroll. Settings shows how much of your **Google Cloud free quota** you used this month.
+Books now **reopen where you left off**, and the two panels stay **aligned paragraph by paragraph** while you scroll. Settings shows how much of your **Google Cloud free quota** you used this month, **warns you** when it is nearly used up and can **switch to FREE** by itself when it runs out.
 
 It also makes library scans incremental and adds sorting to the library, makes translation and data saving more reliable, and hardens the web server used by the mobile PWA.
 
@@ -42,6 +42,8 @@ It also makes library scans incremental and adds sorting to the library, makes t
 
 - **Free quota at a glance**: Settings → BASIC shows the characters translated with your Google Cloud key this month, against the 500,000 characters per month of Google's free tier, with a bar that turns red when you go over it.
 - **Counted by the app**: Google does not let a key read its own usage, so Giano Reader counts the characters it sends, the way Google bills them (every character, spaces included, once a request is accepted). The count includes the translations made on the desktop and the BASIC translations the web server makes for the phone, and starts over every month. Characters translated with the same key outside Giano Reader are not included: the Google Cloud console has the billed figure.
+- **Quota warning**: When this month's usage reaches a threshold of the free tier, a notice appears for a few seconds, once a month. The threshold is 80 % by default and can be changed in Settings → BASIC (**Warn at**, 1–100 %). Choosing a new threshold gives a new warning.
+- **Switch to FREE at 100%**: A new switch in Settings → BASIC, off by default. When it is on and the free tier is used up, the reader moves from BASIC to FREE with a notice, translates the chapter on screen again with FREE and stops a "Complete translation" running with BASIC. Choosing BASIC again in the same month keeps FREE. The web server follows the same switch, so phones get FREE translations too. BASIC can be chosen again from the next month, when the count starts over.
 
 ### 🌍 Translation Reliability
 
@@ -66,6 +68,7 @@ It also makes library scans incremental and adds sorting to the library, makes t
 
 ### 📄 PDF
 
+- **PDFs open in Original view**: A PDF now opens with its original pages on the left and the translation laid over the page on the right. The view icon still switches to the Text view.
 - **Translation laid over the page**: In Original view, the right panel shows the PDF pages with the translation written over the original text, in the same position, with the original font family, weight, italic, alignment and line spacing. When the translation is longer than the original, the text shrinks (down to 45 %) to fit its box, and a box that still overflows gets a dashed orange outline. Page numbers are not translated. This needs the desktop app; in a browser the previous simple overlay is used.
 - **New layout engine**: The PDF layout analysis of the companion project PDF X-Ray now runs inside the app (Rust). It rebuilds lines and blocks with a recursive XY-Cut, recognises columns, boxes, tables, headings, captions, footnotes, running heads and page numbers, works out the reading order, and stitches paragraphs split across columns, pages, figures or boxes, rejoining hyphenated words. Tagged PDFs use their structure tree. Each logical paragraph is translated once, as a whole, and the translation is split over its pieces on the page. Pages are analysed together with the 2 pages before and after the ones shown, so a paragraph that continues on the next page is handled correctly.
 - **Your font on the page**: In Original view, the translation boxes laid over the page use the font family you chose (for example a narrow one, so that less text has to shrink). Changing it updates the boxes already translated without redrawing the page. If you never chose a font, the boxes keep the family of the original text. Text size stays tied to the original in this view.
