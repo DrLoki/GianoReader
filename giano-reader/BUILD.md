@@ -113,8 +113,8 @@ Each installer format must be compiled on its native OS:
 The repository includes `.github/workflows/release.yml`. Push a version tag to trigger a full multi-platform build and draft release:
 
 ```bash
-git tag v0.9.5
-git push origin v0.9.5
+git tag v0.10.0
+git push origin v0.10.0
 ```
 
 GitHub Actions will:
